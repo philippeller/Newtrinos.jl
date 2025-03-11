@@ -16,15 +16,20 @@ export Darkdim_L
 #using CUDA
 const ftype = Float64
 
-# # Oscillation Kernel
-# function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real)
-#     phase_factors = exp.(2.5338653580781976 * 1im * (l / e) .* H)
-#     p = U * Diagonal(phase_factors) * U'
-#     abs2.(p)
-# end
+# TODO: implement neutrino vs. antineutrino
+# TODO: implement NMO
+# TODO: implement matter effects / NSI
+
+
+# Oscillation Kernel Simple
+function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real)
+    phase_factors = exp.(2.5338653580781976 * 1im * (l / e) .* H)
+    p = U * Diagonal(phase_factors) * U'
+    abs2.(p)
+end
 
 # Oscillation Kernel
-function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real; cutoff=Inf, damping=0, add=true)
+function osc_kernel_lowpass(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real; cutoff=Inf, damping=0, add=true)
 
     #cut off inaccessible states
     mask = sqrt.(abs.(H)) .< cutoff;
@@ -318,7 +323,7 @@ module Darkdim
     function osc_prob(E, L, params)
         U, H = get_matrices(params);
     
-        p = stack(broadcast((e, l) -> osc_kernel(U, H, e, l, cutoff=0.5), E, L'))
+        p = stack(broadcast((e, l) -> osc_kernel_lowpass(U, H, e, l, cutoff=0.5), E, L'))
     
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
@@ -426,7 +431,7 @@ module Darkdim_L
     function osc_prob(E, L, params)
         U, H = get_matrices(params);
     
-        p = stack(broadcast((e, l) -> osc_kernel(U, H, e, l, damping=2.), E, L'))
+        p = stack(broadcast((e, l) -> osc_kernel_lowpass(U, H, e, l, damping=2.), E, L'))
     
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
