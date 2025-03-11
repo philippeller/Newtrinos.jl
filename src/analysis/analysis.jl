@@ -1,4 +1,3 @@
-
 using LinearAlgebra
 using Distributions
 using DensityInterface
@@ -6,14 +5,12 @@ using InverseFunctions
 using Base
 using Zygote
 using BAT
-using Optim
 using Optimization
-using OptimizationNLopt
 using IterTools
 using DataStructures
 using ADTypes
-using OptimizationEvolutionary
 using AutoDiffOperators
+using ContentHashes
 import ValueShapes
 using FileIO
 import JLD2
@@ -135,9 +132,12 @@ function _profile(llh, scanpoints, v_init_dict, cache_dir)
     for i in eachindex(scanpoints)
 
         result = nothing
+        scanpoint = scanpoints[i]
+
+        h = ContentHashes.hash([scanpoint, v_init_dict])
 
         if !isnothing(cache_dir)
-            fname = joinpath(cache_dir, "idx_$i.jld2")
+            fname = joinpath(cache_dir, "$h.jld2")
             if isfile(fname)
                 cached = FileIO.load(fname)
                 result = (cached["llh"], cached["result"])
@@ -145,12 +145,12 @@ function _profile(llh, scanpoints, v_init_dict, cache_dir)
         end
         
         if isnothing(result)
-            prior = scanpoints[i]
+            prior = scanpoint
 	        result = find_mle(llh, prior, copy(v_init_dict))
         end
 
         if !isnothing(cache_dir)
-            fname = joinpath(cache_dir, "idx_$i.jld2")
+            fname = joinpath(cache_dir, "$h.jld2")
             FileIO.save(fname, Dict("llh"=>result[1], "result"=>result[2]))
         end
 

@@ -4,7 +4,7 @@ using CSV
 using LinearAlgebra
 using Distributions
 
-include("../../../theory/osc.jl")
+import Newtrinos.osc
 
 # Import the data
 const datadir = @__DIR__ 
@@ -77,7 +77,7 @@ for EH in EH_list
 end
 
 # Paramnaters for DayaBay bestfit to recalculate unoscillated spectrum
-best_fit_params_dayabay = Dict()
+best_fit_params_dayabay = copy(osc.standard.params)
 best_fit_params_dayabay[:θ₁₂] = asin(sqrt(0.307))
 best_fit_params_dayabay[:θ₁₃] = asin(sqrt(0.0851)) * 0.5
 best_fit_params_dayabay[:θ₂₃] = asin(sqrt(0.57))
@@ -105,7 +105,7 @@ for period in period_list
     L_arr = vec(Matrix(L_matrix))
 
     Npred_EH3_after_best_fit_osc = dfIBD_dict["dfIBD_EH3"][:, "Npred_$(periods_dict[period])AD"]
-    best_fit_prob_arr = osc.osc_prob_SM(E_arr, L_arr, best_fit_params_dayabay)[:, :, 1, 1]'
+    best_fit_prob_arr = osc.standard.osc_prob(E_arr, L_arr, best_fit_params_dayabay)[:, :, 1, 1]'
     baseline_average_best_fit_prob_arr = vec(sum(best_fit_prob_arr ./ (L_arr .^ 2), dims=1) ./ sum(1 ./(L_arr .^ 2)))
     # unoscillated N predicted EH3:
     Npred_EH3_noosc = Npred_EH3_after_best_fit_osc ./ baseline_average_best_fit_prob_arr
