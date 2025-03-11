@@ -6,6 +6,7 @@ using Base
 using Zygote
 using BAT
 using Optimization
+using Optim
 using IterTools
 using DataStructures
 using ADTypes
@@ -36,8 +37,6 @@ function find_mle(llh, prior, v_init_dict)
 
     posterior = PosteriorMeasure(llh, prior)
 
-    println(prior)
-
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
     
     for key in keys(prior)
@@ -47,10 +46,16 @@ function find_mle(llh, prior, v_init_dict)
     end
 
     v_init = NamedTuple(v_init_dict)
-    println(v_init)
 
     # THIS ONE WORKS:
-    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init])))#, kwargs = (reltol=1e-7, maxiters=10000)))
+    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init])))#, kwargs = (reltol=1e-7, maxiters=10000)))
+
+    # This one also works, and IS thread safe:
+    adsel = AutoZygote()
+    set_batcontext(ad = adsel)
+    res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init])))
+
+    
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), kwargs = ()))#reltol=1e-7, maxiters=10000)))
 
     # target = posterior
@@ -124,38 +129,40 @@ function generate_scanpoints(vars_to_scan, prior_dict)
     values, scanpoints
 end
 
+function find_mle_cached(llh, prior, v_init_dict, cache_dir)
+    opt_result = nothing
+
+    h = ContentHashes.hash([prior, v_init_dict])
+
+    if !isnothing(cache_dir)
+        fname = joinpath(cache_dir, "$h.jld2")
+        if isfile(fname)
+            println("using cached file $fname")
+            cached = FileIO.load(fname)
+            opt_result = (cached["llh"], cached["result"])
+        end
+    end
+    
+    if isnothing(opt_result)
+        opt_result = find_mle(llh, prior, copy(v_init_dict))
+    end
+
+    if !isnothing(cache_dir)
+        fname = joinpath(cache_dir, "$h.jld2")
+        FileIO.save(fname, Dict("llh"=>opt_result[1], "result"=>opt_result[2]))
+    end
+
+    opt_result
+end
+
 function _profile(llh, scanpoints, v_init_dict, cache_dir)
     results = Array{Any}(undef, size(scanpoints))
     llhs = Array{Any}(undef, size(scanpoints))
 
-    #Threads.@threads
-    for i in eachindex(scanpoints)
-
-        result = nothing
-        scanpoint = scanpoints[i]
-
-        h = ContentHashes.hash([scanpoint, v_init_dict])
-
-        if !isnothing(cache_dir)
-            fname = joinpath(cache_dir, "$h.jld2")
-            if isfile(fname)
-                cached = FileIO.load(fname)
-                result = (cached["llh"], cached["result"])
-            end
-        end
-        
-        if isnothing(result)
-            prior = scanpoint
-	        result = find_mle(llh, prior, copy(v_init_dict))
-        end
-
-        if !isnothing(cache_dir)
-            fname = joinpath(cache_dir, "$h.jld2")
-            FileIO.save(fname, Dict("llh"=>result[1], "result"=>result[2]))
-        end
-
-        llhs[i] = result[1]
-        results[i] = result[2]
+    Threads.@threads for i in eachindex(scanpoints)
+        opt_result = find_mle_cached(llh, scanpoints[i], v_init_dict, cache_dir)
+        llhs[i] = opt_result[1]
+        results[i] = opt_result[2]
     end
     s = Dict(key=>[x[key] for x in results] for key in keys(first(results)))
     s[:llh] = llhs
@@ -166,7 +173,6 @@ end
 function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
     values, scanpoints = generate_scanpoints(vars_to_scan, prior_dict)
     if !isnothing(cache_dir)
-        println(cache_dir)
         if !isdir(cache_dir)
             mkdir(cache_dir)
         end
