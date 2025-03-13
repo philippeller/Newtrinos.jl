@@ -17,8 +17,6 @@ export Darkdim_L
 const ftype = Float64
 
 # TODO: implement neutrino vs. antineutrino
-# TODO: implement NMO
-# TODO: implement matter effects / NSI
 
 
 # Oscillation Kernel Simple
@@ -29,7 +27,7 @@ function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::
 end
 
 # Oscillation Kernel
-function osc_kernel_lowpass(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real; cutoff=Inf, damping=0, add=true)
+function osc_kernel_smoothed(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real; cutoff=Inf, damping=0, add=true)
 
     #cut off inaccessible states
     mask = sqrt.(abs.(H)) .< cutoff;
@@ -101,15 +99,16 @@ module standard
     end
     
     # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params; use_cuda=false)
+    function osc_prob(E, L, params; anti=false, use_cuda=false)
         U, H = get_matrices(params);
+        Uc = anti ? conj.(U) : U
         #p = stack(map(e -> stack(map(l -> osc_kernel(U, diag(H), e, l), L)), E))
         #p = stack(map(x -> osc_kernel(U, diag(H), x[1], x[2]), Iterators.product(E, L)))
     
         if use_cuda
-            p = stack(Array(broadcast((e, l) -> osc_kernel(U, diag(H), e, l), cu(E), cu(L'))))
+            p = stack(Array(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), cu(E), cu(L'))))
         else
-            p = stack(broadcast((e, l) -> osc_kernel(U, diag(H), e, l), E, L'))
+            p = stack(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), E, L'))
         end
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
@@ -119,18 +118,26 @@ module standard
     params[:θ₁₃] = ftype(asin(sqrt(0.021)))
     params[:θ₂₃] = ftype(asin(sqrt(0.57)))
     params[:δCP] = ftype(1.)
-    params[:Δm²₂₁] = ftype(7.53e-5)
-    params[:Δm²₃₁] = ftype(2.4e-3 + params[:Δm²₂₁])
     params[:H] = 1
+    params[:Δm²₂₁] = ftype(7.53e-5)
+    if params[:H] > 0
+        params[:Δm²₃₁] = ftype(2.4e-3 + params[:Δm²₂₁])
+    else
+        params[:Δm²₃₁] = ftype(-2.4e-3)
+    end
     
     priors = OrderedDict()
-    priors[:θ₁₂] = Uniform(ftype(0.5), ftype(0.7))
+    priors[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
     priors[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
     priors[:θ₂₃] = Uniform(ftype(pi/4 *2/3), ftype(pi/4 *4/3))
     priors[:δCP] = Uniform(ftype(0), ftype(2*π))
-    priors[:Δm²₂₁] = Uniform(ftype(7.e-5), ftype(8e-5))
-    priors[:Δm²₃₁] = Uniform(ftype(2e-3), ftype(3e-3))
-    priors[:H] = 1
+    priors[:H] = params[:H]
+    priors[:Δm²₂₁] = Uniform(ftype(6.5e-5), ftype(9e-5))
+    if params[:H] > 0
+        priors[:Δm²₃₁] = Uniform(ftype(2e-3), ftype(3e-3))
+    else
+        priors[:Δm²₃₁] = Uniform(ftype(-3e-3), ftype(-2e-3))
+    end
 end
 
 module sterile
@@ -221,10 +228,10 @@ module ADD
     end
 
     # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params)
+    function osc_prob(E, L, params; anti=false)
         U, H = get_matrices(params);
-    
-        p = stack(broadcast((e, l) -> osc_kernel(U, H, e, l), E, L'))
+        Uc = anti ? conj.(U) : U
+        p = stack(broadcast((e, l) -> osc_kernel(Uc, H, e, l), E, L'))
     
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
@@ -320,10 +327,10 @@ module Darkdim
 
 
     # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params)
+    function osc_prob(E, L, params; anti=false)
         U, H = get_matrices(params);
-    
-        p = stack(broadcast((e, l) -> osc_kernel_lowpass(U, H, e, l, cutoff=0.5), E, L'))
+        Uc = anti ? conj.(U) : U
+        p = stack(broadcast((e, l) -> osc_kernel_smoothed(Uc, H, e, l, cutoff=0.5), E, L'))
     
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
@@ -428,10 +435,11 @@ module Darkdim_L
     end 
     
     # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params)
+    function osc_prob(E, L, params; anti=false)
         U, H = get_matrices(params);
+        Uc = anti ? conj.(U) : U
     
-        p = stack(broadcast((e, l) -> osc_kernel_lowpass(U, H, e, l, damping=2.), E, L'))
+        p = stack(broadcast((e, l) -> osc_kernel_smoothed(Uc, H, e, l, damping=2.), E, L'))
     
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end

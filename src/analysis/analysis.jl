@@ -86,7 +86,7 @@ function find_mle(llh, prior, v_init_dict)
     #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
     #res = bat_findmode(posterior, OptimizationAlg(optalg=NLopt.GN_CRS2_LM()))
 
-    return logdensityof(llh, res.result), res.result
+    return logdensityof(llh, res.result), logdensityof(posterior, res.result), res.result
 
     # posterior = PosteriorMeasure(llh, prior)
 
@@ -139,7 +139,7 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
         if isfile(fname)
             println("using cached file $fname")
             cached = FileIO.load(fname)
-            opt_result = (cached["llh"], cached["result"])
+            opt_result = (cached["llh"], cached["posterior"], cached["result"])
         end
     end
     
@@ -149,7 +149,7 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
 
     if !isnothing(cache_dir)
         fname = joinpath(cache_dir, "$h.jld2")
-        FileIO.save(fname, Dict("llh"=>opt_result[1], "result"=>opt_result[2]))
+        FileIO.save(fname, Dict("llh"=>opt_result[1], "posterior"=>opt_result[2], "result"=>opt_result[3]))
     end
 
     opt_result
@@ -158,14 +158,17 @@ end
 function _profile(llh, scanpoints, v_init_dict, cache_dir)
     results = Array{Any}(undef, size(scanpoints))
     llhs = Array{Any}(undef, size(scanpoints))
+    posteriors = Array{Any}(undef, size(scanpoints))
 
     Threads.@threads for i in eachindex(scanpoints)
         opt_result = find_mle_cached(llh, scanpoints[i], v_init_dict, cache_dir)
         llhs[i] = opt_result[1]
-        results[i] = opt_result[2]
+        posteriors[i] = opt_result[2]
+        results[i] = opt_result[3]
     end
     s = Dict(key=>[x[key] for x in results] for key in keys(first(results)))
     s[:llh] = llhs
+    s[:log_posterior] = posteriors
     NamedTuple(s)
 end
 
@@ -182,7 +185,7 @@ function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
 end
 
 "Run simple llh scan"
-function scan(llh, param_dict, prior_dict, vars_to_scan)
+function scan(llh, prior_dict, vars_to_scan, param_dict)
     vars = collect(keys(vars_to_scan))
     values = [quantile(prior_dict[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
     mesh = collect(IterTools.product(values...))

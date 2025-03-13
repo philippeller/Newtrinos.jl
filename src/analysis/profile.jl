@@ -24,18 +24,31 @@ end
 dayabay_llh = let osc_prob = osc.osc_prob, observed = Newtrinos.dayabay.observed
     params -> logpdf(Newtrinos.dayabay.forward_model(params, osc_prob), observed)
 end 
+kamland_llh = let osc_prob = osc.osc_prob, observed = Newtrinos.kamland.observed
+    params -> logpdf(Newtrinos.kamland.forward_model(params, osc_prob), observed)
+end 
 
-llh = logfuncdensity(params -> dayabay_llh(params) + minos_llh(params))
+llh = logfuncdensity(params -> kamland_llh(params)) # dayabay_llh(params) + minos_llh(params))
+
+priors_dict = merge(osc.priors, Newtrinos.kamland.priors)
+params_dict = merge(osc.params, Newtrinos.kamland.params)
+
+params_dict[:θ₁₃] = 0.
 
 vars_to_scan = OrderedDict()
 #vars_to_scan[:Darkdim_radius] = 10
-vars_to_scan[:Δm²₃₁] = 10
-vars_to_scan[:θ₂₃] = 10
+vars_to_scan[:θ₁₂] = 30
+vars_to_scan[:Δm²₂₁] = 30
 
-v_init_dict = copy(osc.params)
+vars_not_to_fit = [:θ₂₃, :δCP, :Δm²₃₁, :θ₁₃]
 
-name = "julia_test_2d"
+for var in vars_not_to_fit
+    priors_dict[var] = params_dict[var]
+end
 
-vals, results = Newtrinos.profile(llh, osc.priors, vars_to_scan, v_init_dict, cache_dir=name)
+name = "julia_test_kamland"
+
+vals, results = Newtrinos.profile(llh, priors_dict, vars_to_scan, params_dict, cache_dir=name)
+#vals, results = Newtrinos.scan(llh, priors_dict, vars_to_scan, params_dict)
 
 FileIO.save(name * ".jld2", Dict("vals" => vals, "results" => results))

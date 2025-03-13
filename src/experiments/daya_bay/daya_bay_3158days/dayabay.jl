@@ -105,7 +105,7 @@ for period in period_list
     L_arr = vec(Matrix(L_matrix))
 
     Npred_EH3_after_best_fit_osc = dfIBD_dict["dfIBD_EH3"][:, "Npred_$(periods_dict[period])AD"]
-    best_fit_prob_arr = osc.standard.osc_prob(E_arr, L_arr, best_fit_params_dayabay)[:, :, 1, 1]'
+    best_fit_prob_arr = osc.standard.osc_prob(E_arr, L_arr, best_fit_params_dayabay, anti=true)[:, :, 1, 1]'
     baseline_average_best_fit_prob_arr = vec(sum(best_fit_prob_arr ./ (L_arr .^ 2), dims=1) ./ sum(1 ./(L_arr .^ 2)))
     # unoscillated N predicted EH3:
     Npred_EH3_noosc = Npred_EH3_after_best_fit_osc ./ baseline_average_best_fit_prob_arr
@@ -127,7 +127,7 @@ const observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N);
 function get_expected_per_period(params, period, osc_prob)
     E = E_arrs[period]
     L = L_arrs[period]
-    prob_arr = osc_prob(E, L, params)[:, :, 1, 1]'
+    prob_arr = osc_prob(E, L, params, anti=true)[:, :, 1, 1]'
     L2 = L .^ 2
     prob = vec(sum(prob_arr./L2, dims=1) ./ sum(1 ./L2))
     Npred_EH3_with_osc = Npred_EH3_nooscs[period] .* prob
