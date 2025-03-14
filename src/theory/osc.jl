@@ -71,11 +71,11 @@ function get_PMNS(params)
 end
 
 function get_abs_masses(params)
-    if params.H > 0
+    if params.Δm²₃₁ > 0
         m1 = params.m₀
         m2 = sqrt(params.Δm²₂₁ + params.m₀^2)
         m3 = sqrt(params.Δm²₃₁ + params.m₀^2)
-    elseif params.H < 0
+    elseif params.Δm²₃₁ < 0
         m1 = sqrt(params.Δm²₃₁ + params.m₀^2)
         m2 = sqrt(params.Δm²₂₁ + params.Δm²₃₁ + params.m₀^2)
         m3 = params.m₀
@@ -113,31 +113,33 @@ module standard
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
     
-    params = OrderedDict()
-    params[:θ₁₂] = ftype(asin(sqrt(0.307)))
-    params[:θ₁₃] = ftype(asin(sqrt(0.021)))
-    params[:θ₂₃] = ftype(asin(sqrt(0.57)))
-    params[:δCP] = ftype(1.)
-    params[:H] = 1
-    params[:Δm²₂₁] = ftype(7.53e-5)
-    if params[:H] > 0
-        params[:Δm²₃₁] = ftype(2.4e-3 + params[:Δm²₂₁])
-    else
-        params[:Δm²₃₁] = ftype(-2.4e-3)
-    end
-    
-    priors = OrderedDict()
-    priors[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
-    priors[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
-    priors[:θ₂₃] = Uniform(ftype(pi/4 *2/3), ftype(pi/4 *4/3))
-    priors[:δCP] = Uniform(ftype(0), ftype(2*π))
-    priors[:H] = params[:H]
-    priors[:Δm²₂₁] = Uniform(ftype(6.5e-5), ftype(9e-5))
-    if params[:H] > 0
-        priors[:Δm²₃₁] = Uniform(ftype(2e-3), ftype(3e-3))
-    else
-        priors[:Δm²₃₁] = Uniform(ftype(-3e-3), ftype(-2e-3))
-    end
+    params_no = OrderedDict()
+    params_no[:θ₁₂] = ftype(asin(sqrt(0.307)))
+    params_no[:θ₁₃] = ftype(asin(sqrt(0.021)))
+    params_no[:θ₂₃] = ftype(asin(sqrt(0.57)))
+    params_no[:δCP] = ftype(1.)
+    params_no[:Δm²₂₁] = ftype(7.53e-5)
+    params_no[:Δm²₃₁] = ftype(2.4e-3 + params_no[:Δm²₂₁])
+
+    params_io = copy(params_no)
+    params_io[:Δm²₃₁] = ftype(-2.4e-3)
+
+    priors_no = OrderedDict()
+    priors_no[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
+    priors_no[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
+    priors_no[:θ₂₃] = Uniform(ftype(pi/4 *2/3), ftype(pi/4 *4/3))
+    priors_no[:δCP] = Uniform(ftype(0), ftype(2*π))
+    priors_no[:Δm²₂₁] = Uniform(ftype(6.5e-5), ftype(9e-5))
+    priors_no[:Δm²₃₁] = Uniform(ftype(2e-3), ftype(3e-3))
+
+    priors_io = copy(priors_no)
+    priors_io[:Δm²₃₁] = Uniform(ftype(-3e-3), ftype(-2e-3))
+
+    # if not specified, assume normal ordering
+    params = params_no
+    priors = priors_no
+
+
 end
 
 module sterile
@@ -447,7 +449,6 @@ module Darkdim_L
     params = copy(standard.params)
     pop!(params, :Δm²₂₁)
     pop!(params, :Δm²₃₁)
-    pop!(params, :H)
     
     # params[:Darkdim_radius] = ftype(1.9/5.067730716156395)
     # params[:ca1] = ftype(0.43)
@@ -487,7 +488,6 @@ module Darkdim_L
     priors = copy(standard.priors)
     pop!(priors, :Δm²₂₁)
     pop!(priors, :Δm²₃₁)
-    pop!(priors, :H)
     priors[:Darkdim_radius] = LogUniform(ftype(4),ftype(6))
     
     priors[:ca1] = Uniform(ftype(1e-7), ftype(10)) #LogUniform(ftype(1e-5), ftype(100))

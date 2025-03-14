@@ -1,214 +1,80 @@
 using LinearAlgebra
 using Distributions
 using DensityInterface
-using InverseFunctions
 using Base
 using Zygote
 using BAT
-using Optimization
-using Optim
 using IterTools
 using DataStructures
+using MeasureBase
 using ADTypes
-using AutoDiffOperators
-using ContentHashes
-import ValueShapes
+using Newtrinos
 using FileIO
 import JLD2
 
 adsel = AutoZygote()
+context = set_batcontext(ad = adsel)
 
-#set_batcontext(ad = AutoForwardDiff())
-set_batcontext(ad = adsel)
+###### CONFIG ######
 
-function build_optimizationfunction(f, adsel::AutoDiffOperators.ADSelector)
-    adm = convert(ADTypes.AbstractADType, reverse_ad_selector(adsel))
-    optimization_function = Optimization.OptimizationFunction(f, adm)
-    return optimization_function
+# Name for output files etc
+name = "test"
+
+# Choice of MCMC, Profile, Scan
+task = "MCMC"
+
+# Choose oscillation model
+osc = Newtrinos.osc.standard
+
+# Choose experiments to include
+modules = [Newtrinos.kamland, Newtrinos.dayabay, Newtrinos.minos]
+
+# Variables to condition on (=fix)
+conditional_vars = [] #:θ₂₃, :δCP, :Δm²₃₁, :θ₁₃]
+
+# For profile / scan task only: choose scan grid
+vars_to_scan = OrderedDict()
+vars_to_scan[:θ₁₂] = 10
+vars_to_scan[:Δm²₂₁] = 10
+
+###### END CONFIG ######
+
+
+
+@kwdef struct NewtrinosResult
+    axes::NamedTuple
+    values::NamedTuple
 end
 
-function build_optimizationfunction(f, adsel::BAT._NoADSelected)
-    optimization_function = Optimization.OptimizationFunction(f)
-    return optimization_function
+llhs = [let osc_prob = osc.osc_prob, observed = m.observed 
+        params -> logpdf(m.forward_model(osc_prob)(params), observed)
+        end
+        for m in modules]
+
+llh = logfuncdensity(params -> sum([f(params) for f in llhs]))
+
+params_dict = merge(osc.params, [m.params for m in modules]...)
+priors_dict = merge(osc.priors, [m.priors for m in modules]...)
+
+for var in conditional_vars
+    priors_dict[var] = params_dict[var]
 end
 
-"Find Maximum Likelihood Estimator (MLE)"
-function find_mle(llh, prior, v_init_dict)
-
+if task == "MCMC"
+    prior = distprod(;priors_dict...)
     posterior = PosteriorMeasure(llh, prior)
+    samples = bat_sample(posterior, MCMCSampling(mcalg = MetropolisHastings(), nsteps = 10^5, nchains = 4)).result
+    FileIO.save(name * ".jld2", Dict("samples" => samples))
 
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
-    
-    for key in keys(prior)
-    	if prior[key] isa ValueShapes.ConstValueDist
-    	    v_init_dict[key] = prior[key].value
-    	end
+else
+    if task == "Profile"
+        ax, values = Newtrinos.profile(llh, priors_dict, vars_to_scan, params_dict, cache_dir=name)
+
+    elseif task == "Scan"
+        ax, values = Newtrinos.scan(llh, priors_dict, vars_to_scan, params_dict)
+
+    axes = NamedTuple{tuple(keys(vars_to_scan)...)}(ax)
+    result = NewtrinosResult(axes=axes, values=values)
+    FileIO.save(name * ".jld2", Dict("result" => result))
     end
-
-    v_init = NamedTuple(v_init_dict)
-
-    # THIS ONE WORKS:
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init])))#, kwargs = (reltol=1e-7, maxiters=10000)))
-
-    # This one also works, and IS thread safe:
-    adsel = AutoZygote()
-    set_batcontext(ad = adsel)
-    res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-12, iterations=10000)))
-
-    
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), kwargs = ()))#reltol=1e-7, maxiters=10000)))
-
-    # target = posterior
-    # context = get_batcontext()
-    # transformed_m, f_pretransform = BAT.transform_and_unshape(PriorToUniform(), target, context)
-    # target_uneval = BAT.unevaluated(target)
-    # inv_trafo = inverse(f_pretransform)
-    # initalg = BAT.apply_trafo_to_init(f_pretransform, InitFromTarget())
-    # x_init = collect(bat_initval(transformed_m, initalg, context).result)
-    # # Maximize density of original target, but run in transformed space, don't apply LADJ:
-    # f = BAT.fchain(inv_trafo, logdensityof(target_uneval), -)
-    # target_f = (x, p) -> f(x)
-    # adsel = BAT.get_adselector(context)
-    # optimization_function = build_optimizationfunction(target_f, adsel)
-    # optimization_problem = Optimization.OptimizationProblem(optimization_function, x_init, (), lb=zeros(size(x_init)), ub=ones(size(x_init)))
-    # #algopts = (maxiters = algorithm.maxiters, maxtime = algorithm.maxtime, abstol = algorithm.abstol, reltol = algorithm.reltol)
-    # # Not all algorithms support abstol, just filter all NaN-valued opts out:
-    # #filtered_algopts = NamedTuple(filter(p -> !isnan(p[2]), ))
-    # optimization_result = Optimization.solve(optimization_problem, Evolutionary.CMAES(μ = 40, λ = 100)) #NLopt.GN_CRS2_LM()) 
-    # transformed_mode =  optimization_result.u
-    # result_mode = inv_trafo(transformed_mode)
-    # res = (result = result_mode, result_trafo = transformed_mode, f_pretransform = f_pretransform, info = optimization_result)
-
-    println(res)
-
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init]), kwargs = (reltol=1e-7, maxiters=10000)))
-    #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
-    #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=NLopt.GN_CRS2_LM()))
-
-    return logdensityof(llh, res.result), logdensityof(posterior, res.result), res.result
-
-    # posterior = PosteriorMeasure(llh, prior)
-
-    # tr_pstr, f_trafo = bat_transform(PriorToGaussian(), posterior)
-
-    # v0 = mean(posterior.prior.dist)
-    # x0 = f_trafo(v0)
-
-    # tr_neg_log_likelihood = (-) ∘ logdensityof(posterior.likelihood) ∘ inverse(f_trafo)
-
-    # tr_neg_log_likelihood(x0)
-
-    # r = Optim.optimize(tr_neg_log_likelihood, x0, Optim.LBFGS(), Optim.Options(f_tol=1e-13), autodiff = :forward)
-
-    # x_opt = Optim.minimizer(r)
-    # v_opt = inverse(f_trafo)(x_opt)
-    # f_opt = -Optim.minimum(r)
-    # return f_opt, v_opt
-end
-
-
-function generate_scanpoints(vars_to_scan, prior_dict)
-    vars = collect(keys(vars_to_scan))
-    values = [quantile(prior_dict[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
-    mesh = collect(IterTools.product(values...))
-    scanpoints = Array{Any}(undef, size(mesh))
-
-    function make_prior(vals)
-        p = copy(prior_dict)
-        for i in 1:length(vars_to_scan)
-            p[vars[i]] = vals[i]
-        end
-        distprod(;p...)
-    end
-
-    for i in eachindex(mesh)
-        scanpoints[i] = make_prior(mesh[i])
-    end
-
-    values, scanpoints
-end
-
-function find_mle_cached(llh, prior, v_init_dict, cache_dir)
-    opt_result = nothing
-
-    h = ContentHashes.hash([prior, v_init_dict])
-
-    if !isnothing(cache_dir)
-        fname = joinpath(cache_dir, "$h.jld2")
-        if isfile(fname)
-            println("using cached file $fname")
-            cached = FileIO.load(fname)
-            opt_result = (cached["llh"], cached["posterior"], cached["result"])
-        end
-    end
-    
-    if isnothing(opt_result)
-        opt_result = find_mle(llh, prior, copy(v_init_dict))
-    end
-
-    if !isnothing(cache_dir)
-        fname = joinpath(cache_dir, "$h.jld2")
-        FileIO.save(fname, Dict("llh"=>opt_result[1], "posterior"=>opt_result[2], "result"=>opt_result[3]))
-    end
-
-    opt_result
-end
-
-function _profile(llh, scanpoints, v_init_dict, cache_dir)
-    results = Array{Any}(undef, size(scanpoints))
-    llhs = Array{Any}(undef, size(scanpoints))
-    posteriors = Array{Any}(undef, size(scanpoints))
-
-    Threads.@threads for i in eachindex(scanpoints)
-        opt_result = find_mle_cached(llh, scanpoints[i], v_init_dict, cache_dir)
-        llhs[i] = opt_result[1]
-        posteriors[i] = opt_result[2]
-        results[i] = opt_result[3]
-    end
-    s = Dict(key=>[x[key] for x in results] for key in keys(first(results)))
-    s[:llh] = llhs
-    s[:log_posterior] = posteriors
-    NamedTuple(s)
-end
-
-"Run Profile llh scan"
-function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
-    values, scanpoints = generate_scanpoints(vars_to_scan, prior_dict)
-    if !isnothing(cache_dir)
-        if !isdir(cache_dir)
-            mkdir(cache_dir)
-        end
-    end
-    res = _profile(llh, scanpoints, v_init_dict, cache_dir)
-    return values, res
-end
-
-"Run simple llh scan"
-function scan(llh, prior_dict, vars_to_scan, param_dict)
-    vars = collect(keys(vars_to_scan))
-    values = [quantile(prior_dict[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
-    mesh = collect(IterTools.product(values...))
-    scanpoints = Array{Any}(undef, size(mesh))
-
-    function make_params(vals)
-        p = copy(param_dict)
-        for i in 1:length(vars_to_scan)
-            p[vars[i]] = vals[i]
-        end
-        NamedTuple(p)
-    end
-
-    for i in eachindex(mesh)
-        scanpoints[i] = make_params(mesh[i])
-    end
-
-    llhs = Array{Any}(undef, size(scanpoints))
-
-    Threads.@threads for i in eachindex(scanpoints)
-        params = scanpoints[i]
-        llhs[i] = logdensityof(llh, params)
-    end
-
-    values, (llh = llhs,)
 end
