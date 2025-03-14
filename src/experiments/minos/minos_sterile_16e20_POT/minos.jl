@@ -4,6 +4,7 @@ using LinearAlgebra
 using Distributions
 using HDF5
 using BAT
+using DataStructures
 
 function prepare_data(datadir = @__DIR__)
 
@@ -38,16 +39,15 @@ function prepare_data(datadir = @__DIR__)
         ch_data = ch_data,
         TotalCCCovar = (x->reshape(x, fill(Int(sqrt(length(x))), 2)...))(read(h5file["TotalCCCovar"])),
         TotalNCCovar = (x->reshape(x, fill(Int(sqrt(length(x))), 2)...))(read(h5file["TotalNCCovar"])),
-        observed = (
+    ), (
             CC = ch_data["FDCC"].observed,
             NC = ch_data["FDNC"].observed,
         )
-    )
 end
 
-data = prepare_data()
-std_params = Dict()
-std_priors = Dict()
+const data, observed = prepare_data()
+params = OrderedDict()
+priors = OrderedDict()
 
 
 function get_expected_per_channel(params, osc_prob, data)
@@ -96,7 +96,6 @@ function forward_model(osc_prob)
             NC = forward_model_per_channel(params, osc_prob, "NC", this_data),
         )
         end
-    #(forward_model_per_channel(params, osc_prob, "CC"), forward_model_per_channel(params, osc_prob, "NC"))
 end
 
 

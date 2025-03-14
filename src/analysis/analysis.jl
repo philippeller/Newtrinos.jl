@@ -53,7 +53,7 @@ function find_mle(llh, prior, v_init_dict)
     # This one also works, and IS thread safe:
     adsel = AutoZygote()
     set_batcontext(ad = adsel)
-    res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init])))
+    res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-12, iterations=10000)))
 
     
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), kwargs = ()))#reltol=1e-7, maxiters=10000)))

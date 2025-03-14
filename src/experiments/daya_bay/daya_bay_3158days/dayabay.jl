@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 using LinearAlgebra
 using Distributions
-
+using DataStructures
 import Newtrinos.osc
 
 # Import the data
@@ -124,6 +124,9 @@ const normalized_ad_contribs_to_far_hall = ad_contribs_to_far_hall ./ sum(ad_con
 const covmat_prefactor = sum(normalized_ad_contribs_to_far_hall .^ 2)
 const observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N);
 
+params = OrderedDict()
+priors = OrderedDict()
+
 function get_expected_per_period(params, period, osc_prob)
     E = E_arrs[period]
     L = L_arrs[period]
@@ -138,16 +141,13 @@ function get_expected(params, osc_prob)
     sum([get_expected_per_period(params, period, osc_prob) for period in 1:length(period_list)])
 end
 
-function forward_model(params, osc_prob)
-    exp_events = get_expected(params, osc_prob)
-    cov = Symmetric(Diagonal(exp_events .* rel_unc_diag) * corr_mat * Diagonal(exp_events .* rel_unc_diag)) * covmat_prefactor + Diagonal(exp_events)
-    Distributions.MvNormal(exp_events, cov)
+function forward_model(osc_prob)
+    model = params -> begin
+        exp_events = get_expected(params, osc_prob)
+        cov = Symmetric(Diagonal(exp_events .* rel_unc_diag) * corr_mat * Diagonal(exp_events .* rel_unc_diag)) * covmat_prefactor + Diagonal(exp_events)
+        Distributions.MvNormal(exp_events, cov)
+    end
 end
 
-# Define negative log-likelihood function:
-function nllh(params, observed, osc_prob)
-    m = forward_model(params, osc_prob)
-    -logpdf(m, observed)
-end
 
 end
