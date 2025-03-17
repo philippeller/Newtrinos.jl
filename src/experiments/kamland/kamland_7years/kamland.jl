@@ -9,6 +9,7 @@ using DataStructures
 using Zygote
 using DataStructures
 using BAT
+using CairoMakie
 
 # Important global constants
 const ENERGY_RESOL_1MEV = 0.065 # Reduces as 1/sqrt(visible energy in MeV)
@@ -89,6 +90,50 @@ function forward_model(osc_prob)
         distprod(Poisson.(exp_events))
     end
 end
+
+function plot(params, osc_prob)
+
+    m = mean(forward_model(osc_prob)(params))
+    v = var(forward_model(osc_prob)(params))
+    
+    energy = Ep
+    energy_bins = Ep_bins
+
+    f = Figure()
+    ax = Axis(f[1,1])
+    
+    plot!(ax, energy, observed, color=:black, label="Observed")
+    stephist!(ax, energy, weights=m, bins=energy_bins, label="Expected")
+    barplot!(ax, energy, m .+ sqrt.(v), width=diff(energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+    
+    ax.ylabel="Counts"
+    ax.title="KamLAND"
+    axislegend(ax, framevisible = false)
+    
+    
+    ax2 = Axis(f[2,1])
+    plot!(ax2, energy, observed ./ m, color=:black, label="Observed")
+    hlines!(ax2, 1, label="Expected")
+    barplot!(ax2, energy, 1 .+ sqrt.(v) ./ m, width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+    ylims!(ax2, 0.3, 1.7)
+    
+    ax.xticksvisible = false
+    ax.xticklabelsvisible = false
+    
+    rowsize!(f.layout, 1, Relative(3/4))
+    rowgap!(f.layout, 1, 0)
+    
+    ax2.xlabel="Eₚ (MeV)"
+    ax2.ylabel="Counts/Expected"
+    
+    xlims!(ax, minimum(energy_bins), maximum(energy_bins))
+    xlims!(ax2, minimum(energy_bins), maximum(energy_bins))
+    
+    ylims!(ax, 0, 300)
+    
+    f
+end
+
 
 params = OrderedDict()
 params[:kamland_energy_scale] = 0.

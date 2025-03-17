@@ -5,12 +5,12 @@ using Distributions
 using DataStructures
 using CairoMakie
 using BAT
-using Newtrinos
 using ArraysOfArrays
 using ColorSchemes
 using PairPlots
 
-export plot
+import Newtrinos.NewtrinosResult
+
 
 function quantile_plot(ax, vals, weight, levels; nbins=10, cmap=:heat, rev=true)
     edges = LinRange(minimum(vals), maximum(vals), nbins)

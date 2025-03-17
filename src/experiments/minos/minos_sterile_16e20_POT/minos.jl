@@ -5,6 +5,7 @@ using Distributions
 using HDF5
 using BAT
 using DataStructures
+using CairoMakie
 
 function prepare_data(datadir = @__DIR__)
 
@@ -98,5 +99,51 @@ function forward_model(osc_prob)
         end
 end
 
+function plot(params, osc_prob)
+    f = Figure()
+
+    m = mean(forward_model(osc_prob)(params))
+    v = var(forward_model(osc_prob)(params))
+    
+    for (i, ch) in enumerate([:CC, :NC])
+    
+        ax = Axis(f[1,i])
+        energy_bins = data.ch_data["FD"*String(ch)].bin_edges
+        energy = 0.5 .* (energy_bins[1:end-1] .+ energy_bins[2:end])
+        
+        plot!(ax, energy, observed[ch] ./ diff(energy_bins), color=:black, label="Observed")
+        stephist!(ax, energy, weights=m[ch] ./ diff(energy_bins), bins=energy_bins, label="Expected")
+        barplot!(ax, energy, (m[ch] .+ sqrt.(v[ch])) ./ diff(energy_bins), width=diff(energy_bins), gap=0, fillto= (m[ch] .- sqrt.(v[ch])) ./ diff(energy_bins), alpha=0.5, label="Standard Deviation")
+        
+        ax.ylabel="Counts / GeV"
+        ax.title="MINOS/MINOS+ Far Detector "*String(ch)
+        axislegend(ax, framevisible = false)
+        
+        
+        ax2 = Axis(f[2,i])
+        plot!(ax2, energy, observed[ch] ./ m[ch], color=:black, label="Observed")
+        hlines!(ax2, 1, label="Expected")
+        barplot!(ax2, energy, 1 .+ sqrt.(v[ch]) ./ m[ch], width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v[ch])./m[ch], alpha=0.5, label="Standard Deviation")
+        ylims!(ax2, 0.7, 1.3)
+        
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+        
+        rowsize!(f.layout, 1, Relative(3/4))
+        rowgap!(f.layout, 1, 0)
+        
+        ax2.xlabel="Reconstructed Energy (GeV)"
+        ax2.ylabel="Counts/Expected"
+        
+        xlims!(ax, minimum(energy_bins), maximum(energy_bins))
+        xlims!(ax2, minimum(energy_bins), maximum(energy_bins))
+    
+    end
+    
+    ylims!(f.content[1], 0, 800)
+    ylims!(f.content[4], 0, 600)
+    
+    f
+end
 
 end

@@ -4,6 +4,7 @@ using CSV
 using LinearAlgebra
 using Distributions
 using DataStructures
+using CairoMakie
 import Newtrinos.osc
 
 # Import the data
@@ -84,7 +85,6 @@ best_fit_params_dayabay[:θ₂₃] = asin(sqrt(0.57))
 best_fit_params_dayabay[:δCP] = 0.
 best_fit_params_dayabay[:Δm²₂₁] = 7.53e-5
 best_fit_params_dayabay[:Δm²₃₁] = 2.466e-3 + best_fit_params_dayabay[:Δm²₂₁]
-best_fit_params_dayabay[:H] = 1
 best_fit_params_dayabay = NamedTuple(best_fit_params_dayabay)
 
 const ad_contribs_to_far_hall = Float64[]
@@ -124,6 +124,10 @@ const normalized_ad_contribs_to_far_hall = ad_contribs_to_far_hall ./ sum(ad_con
 const covmat_prefactor = sum(normalized_ad_contribs_to_far_hall .^ 2)
 const observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N);
 
+energy_bins = copy(dfBKG_dict["dfBKG_Six_EH3"].Emin)
+energy = copy(dfBKG_dict["dfBKG_Six_EH3"].Ec)
+push!(energy_bins, dfBKG_dict["dfBKG_Six_EH3"].Emax[end])
+
 params = OrderedDict()
 priors = OrderedDict()
 
@@ -149,5 +153,45 @@ function forward_model(osc_prob)
     end
 end
 
+function plot(params, osc_prob)
+    
+    m = mean(forward_model(osc_prob)(params))
+    v = var(forward_model(osc_prob)(params))
+
+    f = Figure()
+    ax = Axis(f[1,1])
+    
+    plot!(ax, energy, observed, color=:black, label="Observed")
+    stephist!(ax, energy, weights=m, bins=energy_bins, label="Expected")
+    barplot!(ax, energy, m .+ sqrt.(v), width=diff(energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+    
+    ax.ylabel="Counts"
+    ax.title="Daya Bay"
+    axislegend(ax, framevisible = false)
+    
+    
+    ax2 = Axis(f[2,1])
+    plot!(ax2, energy, observed ./ m, color=:black, label="Observed")
+    hlines!(ax2, 1, label="Expected")
+    barplot!(ax2, energy, 1 .+ sqrt.(v) ./ m, width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+    ylims!(ax2, 0.9, 1.1)
+    
+    ax.xticksvisible = false
+    ax.xticklabelsvisible = false
+    
+    rowsize!(f.layout, 1, Relative(3/4))
+    rowgap!(f.layout, 1, 0)
+    
+    ax2.xlabel="Eₚ (MeV)"
+    ax2.ylabel="Counts/Expected"
+
+    xlims!(ax, minimum(energy_bins), maximum(energy_bins))
+    xlims!(ax2, minimum(energy_bins), maximum(energy_bins))
+    
+    ylims!(ax, 0, 60000)
+    
+    f
+
+end
 
 end
