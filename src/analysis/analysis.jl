@@ -66,8 +66,7 @@ else
     elseif task == "Scan"
         ax, values = Newtrinos.scan(llh, priors_dict, vars_to_scan, params_dict)
 
-    axes = NamedTuple{tuple(keys(vars_to_scan)...)}(ax)
-    result = NewtrinosResult(axes=axes, values=values)
+
     FileIO.save(name * ".jld2", Dict("result" => result))
     end
 end

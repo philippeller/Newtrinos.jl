@@ -14,6 +14,7 @@ using AutoDiffOperators
 using ContentHashes
 import ValueShapes
 using FileIO
+using FillArrays
 import JLD2
 
 adsel = AutoZygote()
@@ -84,7 +85,7 @@ function find_mle(llh, prior, v_init_dict)
     # result_mode = inv_trafo(transformed_mode)
     # res = (result = result_mode, result_trafo = transformed_mode, f_pretransform = f_pretransform, info = optimization_result)
 
-    println(res)
+    #println(res)
 
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init]), kwargs = (reltol=1e-7, maxiters=10000)))
     #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
@@ -144,7 +145,7 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
         if isfile(fname)
             println("using cached file $fname")
             cached = FileIO.load(fname)
-            opt_result = (cached["llh"], cached["posterior"], cached["result"])
+            opt_result = (cached["llh"], cached["log_posterior"], cached["result"])
         end
     end
     
@@ -154,7 +155,7 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
 
     if !isnothing(cache_dir)
         fname = joinpath(cache_dir, "$h.jld2")
-        FileIO.save(fname, Dict("llh"=>opt_result[1], "posterior"=>opt_result[2], "result"=>opt_result[3]))
+        FileIO.save(fname, Dict("llh"=>opt_result[1], "log_posterior"=>opt_result[2], "result"=>opt_result[3]))
     end
 
     opt_result
@@ -163,22 +164,29 @@ end
 function _profile(llh, scanpoints, v_init_dict, cache_dir)
     results = Array{Any}(undef, size(scanpoints))
     llhs = Array{Any}(undef, size(scanpoints))
-    posteriors = Array{Any}(undef, size(scanpoints))
+    log_posteriors = Array{Any}(undef, size(scanpoints))
 
     Threads.@threads for i in eachindex(scanpoints)
         opt_result = find_mle_cached(llh, scanpoints[i], v_init_dict, cache_dir)
         llhs[i] = opt_result[1]
-        posteriors[i] = opt_result[2]
+        log_posteriors[i] = opt_result[2]
         results[i] = opt_result[3]
     end
     s = Dict(key=>[x[key] for x in results] for key in keys(first(results)))
     s[:llh] = llhs
-    s[:log_posterior] = posteriors
+    s[:log_posterior] = log_posteriors
     NamedTuple(s)
 end
 
 "Run Profile llh scan"
 function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
+
+    #check if there is actually any variable to be profiled over, or if they all or just Numbers
+    if all([isa(prior_dict[var], Number) for var in setdiff(keys(prior_dict), keys(vars_to_scan))])
+        # so all variables are just numbers and it reduces to a simple scan
+        return scan(llh, prior_dict, vars_to_scan, v_init_dict)
+    end
+    
     values, scanpoints = generate_scanpoints(vars_to_scan, prior_dict)
     if !isnothing(cache_dir)
         if !isdir(cache_dir)
@@ -186,7 +194,10 @@ function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
         end
     end
     res = _profile(llh, scanpoints, v_init_dict, cache_dir)
-    return values, res
+
+    axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
+    result = NewtrinosResult(axes=axes, values=res)
+
 end
 
 "Run simple llh scan"
@@ -215,5 +226,35 @@ function scan(llh, prior_dict, vars_to_scan, param_dict)
         llhs[i] = logdensityof(llh, params)
     end
 
-    values, (llh = llhs,)
+    s = OrderedDict{Symbol, Array}(key=>Fill(param_dict[key], size(mesh)) for key in setdiff(keys(param_dict), keys(vars_to_scan)))
+    s[:llh] = llhs
+    s[:log_posterior] = llhs
+    res = NamedTuple(s)
+
+    axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
+    result = NewtrinosResult(axes=axes, values=res)
+    
+end
+
+function bestfit(result::NewtrinosResult)
+    idx = argmax(result.values.log_posterior)
+    bf = OrderedDict(var=>result.values[var][idx] for var in keys(result.values))
+    for i in 1:length(result.axes)
+        bf[keys(result.axes)[i]] = result.axes[i][idx[i]]
+    end
+    NamedTuple(bf)
+end
+
+function generate_likelihood_observed(modules, osc)
+    llhs = [let osc_prob = osc.osc_prob, observed = m.observed 
+        params -> logpdf(m.forward_model(osc_prob)(params), observed)
+        end
+        for m in modules]
+
+    llh = logfuncdensity(params -> sum([f(params) for f in llhs]))
+    
+    param_dict = merge(osc.params, [m.params for m in modules]...)
+    prior_dict = merge(osc.priors, [m.priors for m in modules]...)
+
+    return llh, param_dict, prior_dict
 end
