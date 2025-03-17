@@ -21,6 +21,11 @@ adsel = AutoZygote()
 #set_batcontext(ad = AutoForwardDiff())
 set_batcontext(ad = adsel)
 
+@kwdef struct NewtrinosResult
+    axes::NamedTuple
+    values::NamedTuple
+end
+
 function build_optimizationfunction(f, adsel::AutoDiffOperators.ADSelector)
     adm = convert(ADTypes.AbstractADType, reverse_ad_selector(adsel))
     optimization_function = Optimization.OptimizationFunction(f, adm)

@@ -39,13 +39,6 @@ vars_to_scan[:Δm²₂₁] = 10
 
 ###### END CONFIG ######
 
-
-
-@kwdef struct NewtrinosResult
-    axes::NamedTuple
-    values::NamedTuple
-end
-
 llhs = [let osc_prob = osc.osc_prob, observed = m.observed 
         params -> logpdf(m.forward_model(osc_prob)(params), observed)
         end
