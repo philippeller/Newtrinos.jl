@@ -4,6 +4,7 @@ using StaticArrays
 
 export ftype
 export osc_kernel
+export osc_kernel_smoothed
 export get_PMNS
 export get_abs_masses
 

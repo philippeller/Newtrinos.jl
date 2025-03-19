@@ -11,8 +11,6 @@ function prepare_data(datadir = @__DIR__)
 
     h5file = h5open(joinpath(datadir, "dataRelease.h5"), "r")
 
-    data = Dict()
-
     channels = ["FDCC", "FDNC", "NDCC", "NDNC"]
     experiments = ["minos", "minosPlus"]
 
@@ -46,15 +44,15 @@ function prepare_data(datadir = @__DIR__)
         )
 end
 
-const data, observed = prepare_data()
+const assets, observed = prepare_data()
 params = OrderedDict()
 priors = OrderedDict()
 
 
-function get_expected_per_channel(params, osc_prob, data)
+function get_expected_per_channel(params, osc_prob, assets)
     # Minos baseline:
-    s = data.smearings
-    p = osc_prob(s.E, [data.L], params)
+    s = assets.smearings
+    p = osc_prob(s.E, [assets.L], params)
     NuMu = s.NuMu * p[:,[1],2,2]
     TrueNC = s.TrueNC * dropdims(sum(p[:,[1],2,1:3], dims=3), dims=3)
     BeamNue = s.BeamNue * p[:,[1],1,1]
@@ -63,14 +61,14 @@ function get_expected_per_channel(params, osc_prob, data)
     dropdims(NuMu + TrueNC + BeamNue + AppNue + AppNuTau, dims=2)
 end
 
-function forward_model_per_channel(params, osc_prob, channel, data)
+function forward_model_per_channel(params, osc_prob, channel, assets)
    
-    observed_far = data.ch_data["FD"*channel].observed
-    expected_far = get_expected_per_channel(params, osc_prob, data.ch_data["FD"*channel])
-    observed_near = data.ch_data["ND"*channel].observed
-    expected_near = get_expected_per_channel(params, osc_prob, data.ch_data["ND"*channel])
+    observed_far = assets.ch_data["FD"*channel].observed
+    expected_far = get_expected_per_channel(params, osc_prob, assets.ch_data["FD"*channel])
+    observed_near = assets.ch_data["ND"*channel].observed
+    expected_near = get_expected_per_channel(params, osc_prob, assets.ch_data["ND"*channel])
     
-    cov = channel == "CC" ? data.TotalCCCovar : data.TotalNCCovar
+    cov = channel == "CC" ? assets.TotalCCCovar : assets.TotalNCCovar
 
     tot = vcat(expected_far, expected_near)
     cov = (tot * tot') .* cov + diagm(tot)
@@ -91,15 +89,15 @@ function forward_model_per_channel(params, osc_prob, channel, data)
 end
 
 function forward_model(osc_prob)
-    model = let this_data = data
+    model = let this_assets = assets
         params -> distprod(
-            CC = forward_model_per_channel(params, osc_prob, "CC", this_data),
-            NC = forward_model_per_channel(params, osc_prob, "NC", this_data),
+            CC = forward_model_per_channel(params, osc_prob, "CC", this_assets),
+            NC = forward_model_per_channel(params, osc_prob, "NC", this_assets),
         )
         end
 end
 
-function plot(params, osc_prob)
+function plot(params, osc_prob, d=observed)
     f = Figure()
 
     m = mean(forward_model(osc_prob)(params))
@@ -108,10 +106,10 @@ function plot(params, osc_prob)
     for (i, ch) in enumerate([:CC, :NC])
     
         ax = Axis(f[1,i])
-        energy_bins = data.ch_data["FD"*String(ch)].bin_edges
+        energy_bins = assets.ch_data["FD"*String(ch)].bin_edges
         energy = 0.5 .* (energy_bins[1:end-1] .+ energy_bins[2:end])
         
-        plot!(ax, energy, observed[ch] ./ diff(energy_bins), color=:black, label="Observed")
+        plot!(ax, energy, d[ch] ./ diff(energy_bins), color=:black, label="Observed")
         stephist!(ax, energy, weights=m[ch] ./ diff(energy_bins), bins=energy_bins, label="Expected")
         barplot!(ax, energy, (m[ch] .+ sqrt.(v[ch])) ./ diff(energy_bins), width=diff(energy_bins), gap=0, fillto= (m[ch] .- sqrt.(v[ch])) ./ diff(energy_bins), alpha=0.5, label="Standard Deviation")
         
@@ -121,7 +119,7 @@ function plot(params, osc_prob)
         
         
         ax2 = Axis(f[2,i])
-        plot!(ax2, energy, observed[ch] ./ m[ch], color=:black, label="Observed")
+        plot!(ax2, energy, d[ch] ./ m[ch], color=:black, label="Observed")
         hlines!(ax2, 1, label="Expected")
         barplot!(ax2, energy, 1 .+ sqrt.(v[ch]) ./ m[ch], width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v[ch])./m[ch], alpha=0.5, label="Standard Deviation")
         ylims!(ax2, 0.7, 1.3)

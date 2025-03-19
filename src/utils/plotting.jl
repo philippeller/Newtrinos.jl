@@ -3,6 +3,8 @@ using StatsBase
 using LinearAlgebra
 using Distributions
 using DataStructures
+using Makie
+import Makie
 using CairoMakie
 using BAT
 using ArraysOfArrays
@@ -10,6 +12,36 @@ using ColorSchemes
 using PairPlots
 
 import Newtrinos.NewtrinosResult
+
+
+
+
+@recipe(CLPlot, NewtrinosResult) do scene
+    Attributes(
+        test_statistic = :log_posterior,
+        filled = false,
+        color = :black,
+        colormap = (Reverse(:Blues), 0.7),
+        alpha=0.7,
+        levels=1 .- 2*ccdf(Normal(), 1:3),
+    )
+end
+
+
+function Makie.plot!(p::CLPlot{<:Tuple{<:NewtrinosResult}})
+    result = p[:NewtrinosResult][]
+    ts = x = getproperty(result.values, p[:test_statistic][])
+    dLLH = 2 * (maximum(ts) .- ts);
+    if p[:filled][]
+        contourf!(p, result.axes[1], result.axes[2], dLLH, levels=quantile(Chisq(2), p[:levels][]), colormap=p[:colormap][])
+    end
+    contour!(p, result.axes[1], result.axes[2], dLLH, levels=quantile(Chisq(2), p[:levels][]), color=p[:color][])
+    return p
+
+end
+
+
+
 
 
 function quantile_plot(ax, vals, weight, levels; nbins=10, cmap=:heat, rev=true)

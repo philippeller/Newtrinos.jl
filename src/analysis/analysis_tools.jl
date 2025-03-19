@@ -245,16 +245,12 @@ function bestfit(result::NewtrinosResult)
     NamedTuple(bf)
 end
 
-function generate_likelihood_observed(modules, osc)
-    llhs = [let osc_prob = osc.osc_prob, observed = m.observed 
-        params -> logpdf(m.forward_model(osc_prob)(params), observed)
+function generate_likelihood(modules, osc, data)
+    llhs = [let osc_prob = osc.osc_prob, observed = data[i] 
+        params -> logpdf(modules[i].forward_model(osc_prob)(params), observed)
         end
-        for m in modules]
+        for i in 1:length(modules)]
 
-    llh = logfuncdensity(params -> sum([f(params) for f in llhs]))
-    
-    param_dict = merge(osc.params, [m.params for m in modules]...)
-    prior_dict = merge(osc.priors, [m.priors for m in modules]...)
+    logfuncdensity(params -> sum([f(params) for f in llhs]))
 
-    return llh, param_dict, prior_dict
 end

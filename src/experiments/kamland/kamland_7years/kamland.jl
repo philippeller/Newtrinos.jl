@@ -91,7 +91,7 @@ function forward_model(osc_prob)
     end
 end
 
-function plot(params, osc_prob)
+function plot(params, osc_prob, data=observed)
 
     m = mean(forward_model(osc_prob)(params))
     v = var(forward_model(osc_prob)(params))
@@ -102,7 +102,7 @@ function plot(params, osc_prob)
     f = Figure()
     ax = Axis(f[1,1])
     
-    plot!(ax, energy, observed, color=:black, label="Observed")
+    plot!(ax, energy, data, color=:black, label="Observed")
     stephist!(ax, energy, weights=m, bins=energy_bins, label="Expected")
     barplot!(ax, energy, m .+ sqrt.(v), width=diff(energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
     
@@ -112,7 +112,7 @@ function plot(params, osc_prob)
     
     
     ax2 = Axis(f[2,1])
-    plot!(ax2, energy, observed ./ m, color=:black, label="Observed")
+    plot!(ax2, energy, data ./ m, color=:black, label="Observed")
     hlines!(ax2, 1, label="Expected")
     barplot!(ax2, energy, 1 .+ sqrt.(v) ./ m, width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
     ylims!(ax2, 0.3, 1.7)
