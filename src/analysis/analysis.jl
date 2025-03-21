@@ -2,7 +2,7 @@ using LinearAlgebra
 using Distributions
 using DensityInterface
 using Base
-using Zygote
+using ForwardDiff
 using BAT
 using IterTools
 using DataStructures
@@ -12,7 +12,7 @@ using Newtrinos
 using FileIO
 import JLD2
 
-adsel = AutoZygote()
+adsel = AutoForwardDiff()
 context = set_batcontext(ad = adsel)
 
 ###### CONFIG ######

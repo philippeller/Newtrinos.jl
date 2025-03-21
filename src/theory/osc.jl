@@ -62,8 +62,8 @@ function osc_kernel(U::AbstractMatrix, H::AbstractMatrix, e::Real, l::Real)
 end
 
 function get_PMNS(params)
-    #T = float(typeof(params.θ₂₃))
-    T = ftype
+    T = typeof(params.θ₂₃)
+    #T = ftype
 
     U1 = SMatrix{3,3}(one(T), zero(T), zero(T), zero(T), cos(params.θ₂₃), -sin(params.θ₂₃), zero(T), sin(params.θ₂₃), cos(params.θ₂₃))
     U2 = SMatrix{3,3}(cos(params.θ₁₃), zero(T), -sin(params.θ₁₃)*exp(1im*params.δCP), zero(T), one(T), zero(T), sin(params.θ₁₃)*exp(-1im*params.δCP), zero(T), cos(params.θ₁₃))
@@ -95,7 +95,7 @@ module standard
 
     function get_matrices(params)
         U = get_PMNS(params)
-        H = Diagonal(SVector(zero(ftype),params.Δm²₂₁,params.Δm²₃₁));
+        H = Diagonal(SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁));
         return U, H
     end
     
@@ -111,7 +111,7 @@ module standard
         else
             p = stack(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), E, L'))
         end
-        Float64.(permutedims(p, (3, 4, 1, 2)))
+        permutedims(p, (3, 4, 1, 2))
     end
     
     params_no = OrderedDict()
@@ -177,7 +177,6 @@ module ADD
     using Distributions
     using ..osc
     using LinearAlgebra
-    using Zygote
 
     function get_matrices(params)
         N_KK = 5
@@ -191,8 +190,8 @@ module ADD
         # MD is the Dirac mass matrix that appears in the Lagrangian.
         MD = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
     
-        aM1 = Zygote.Buffer(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-        aM2 = Zygote.Buffer(PMNS, 3*(N_KK+1), 3*(N_KK+1))
+        aM1 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
+        aM2 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
     
         # init buffers
         for i in 1:3*(N_KK+1)
@@ -253,7 +252,6 @@ module Darkdim
     using Distributions
     using ..osc
     using LinearAlgebra
-    using Zygote
 
     function get_matrices(params)
         N_KK = 5
@@ -274,8 +272,8 @@ module Darkdim
         MDc00 = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
     
         # Initialize aM1 matrix
-        aM1 = Zygote.Buffer(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-        aM2 = Zygote.Buffer(PMNS, 3*(N_KK+1), 3*(N_KK+1))
+        aM1 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
+        aM2 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
         # init buffers
         for i in 1:3*(N_KK+1)
             for j in 1:3*(N_KK+1)
@@ -358,7 +356,6 @@ module Darkdim_L
     using Distributions
     using ..osc
     using LinearAlgebra
-    using Zygote
 
     function get_matrices(params)
     
@@ -384,8 +381,8 @@ module Darkdim_L
         MDc00 = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
     
         # Initialize aM1 matrix
-        aM1 = Zygote.Buffer(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-        aM2 = Zygote.Buffer(PMNS, 3*(N_KK+1), 3*(N_KK+1))
+        aM1 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
+        aM2 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
         # init buffers
         for i in 1:3*(N_KK+1)
             for j in 1:3*(N_KK+1)

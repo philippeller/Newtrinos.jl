@@ -3,7 +3,7 @@ using Distributions
 using DensityInterface
 using InverseFunctions
 using Base
-using Zygote
+using ForwardDiff
 using BAT
 using Optimization
 using Optim
@@ -17,9 +17,7 @@ using FileIO
 using FillArrays
 import JLD2
 
-adsel = AutoZygote()
-
-#set_batcontext(ad = AutoForwardDiff())
+adsel = AutoForwardDiff()
 set_batcontext(ad = adsel)
 
 @kwdef struct NewtrinosResult
@@ -41,6 +39,9 @@ end
 "Find Maximum Likelihood Estimator (MLE)"
 function find_mle(llh, prior, v_init_dict)
 
+    adsel = AutoForwardDiff()
+    set_batcontext(ad = adsel)
+    
     posterior = PosteriorMeasure(llh, prior)
 
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
@@ -57,8 +58,7 @@ function find_mle(llh, prior, v_init_dict)
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init])))#, kwargs = (reltol=1e-7, maxiters=10000)))
 
     # This one also works, and IS thread safe:
-    adsel = AutoZygote()
-    set_batcontext(ad = adsel)
+
     res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-12, iterations=10000)))
 
     
@@ -201,7 +201,7 @@ function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
 end
 
 "Run simple llh scan"
-function scan(llh, prior_dict, vars_to_scan, param_dict)
+function scan(llh, prior_dict, vars_to_scan, param_dict; gradient_map=false)
     vars = collect(keys(vars_to_scan))
     values = [quantile(prior_dict[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
     mesh = collect(IterTools.product(values...))
@@ -220,13 +220,23 @@ function scan(llh, prior_dict, vars_to_scan, param_dict)
     end
 
     llhs = Array{Any}(undef, size(scanpoints))
+    if gradient_map
+        grads = Array{Any}(undef, size(scanpoints))
+    end
 
     Threads.@threads for i in eachindex(scanpoints)
         params = scanpoints[i]
         llhs[i] = logdensityof(llh, params)
+        if gradient_map
+            grads[i] = ForwardDiff.gradient(x -> logdensityof(llh, x),  params)
+        end
     end
 
     s = OrderedDict{Symbol, Array}(key=>Fill(param_dict[key], size(mesh)) for key in setdiff(keys(param_dict), keys(vars_to_scan)))
+    if gradient_map
+        g = Dict(Symbol(key, "_grad")=>[x[key] for x in grads] for key in keys(first(grads)))
+        s = merge(s, g)
+    end
     s[:llh] = llhs
     s[:log_posterior] = llhs
     res = NamedTuple(s)

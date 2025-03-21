@@ -6,7 +6,6 @@ using Distributions
 using LinearAlgebra
 using Statistics
 using DataStructures
-using Zygote
 using DataStructures
 using BAT
 using CairoMakie
@@ -20,7 +19,7 @@ const NEUTRINO_POSITRON_ENERGY_SHIFT = 0.782 # MeV: energy shift between true ne
 
 function smear(E, p, sigma, weights; width=10, E_scale=1.0, E_bias=0.0)
     l = length(p)
-    out = Zygote.Buffer(p, l)
+    out = similar(p, l)
     for i in 1:l
         out[i] = 0.
         e = E[i] * E_scale + E_bias
