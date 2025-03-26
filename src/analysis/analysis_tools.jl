@@ -155,7 +155,7 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
 
     if !isnothing(cache_dir)
         fname = joinpath(cache_dir, "$h.jld2")
-        FileIO.save(fname, Dict("llh"=>opt_result[1], "log_posterior"=>opt_result[2], "result"=>opt_result[3]))
+        FileIO.save(fname, OrderedDict("llh"=>opt_result[1], "log_posterior"=>opt_result[2], "result"=>opt_result[3]))
     end
 
     opt_result
@@ -172,7 +172,7 @@ function _profile(llh, scanpoints, v_init_dict, cache_dir)
         log_posteriors[i] = opt_result[2]
         results[i] = opt_result[3]
     end
-    s = Dict(key=>[x[key] for x in results] for key in keys(first(results)))
+    s = OrderedDict(key=>[x[key] for x in results] for key in keys(first(results)))
     s[:llh] = llhs
     s[:log_posterior] = log_posteriors
     NamedTuple(s)
@@ -234,7 +234,7 @@ function scan(llh, prior_dict, vars_to_scan, param_dict; gradient_map=false)
 
     s = OrderedDict{Symbol, Array}(key=>Fill(param_dict[key], size(mesh)) for key in setdiff(keys(param_dict), keys(vars_to_scan)))
     if gradient_map
-        g = Dict(Symbol(key, "_grad")=>[x[key] for x in grads] for key in keys(first(grads)))
+        g = OrderedDict(Symbol(key, "_grad")=>[x[key] for x in grads] for key in keys(first(grads)))
         s = merge(s, g)
     end
     s[:llh] = llhs

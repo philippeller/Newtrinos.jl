@@ -3,8 +3,11 @@ using LinearAlgebra
 using StaticArrays
 
 export ftype
+export Layer
 export osc_kernel
+export osc_kernel_matter
 export osc_kernel_smoothed
+export osc_reduce
 export get_PMNS
 export get_abs_masses
 
@@ -14,17 +17,47 @@ export ADD
 export Darkdim
 export Darkdim_L
 
+
 #using CUDA
 const ftype = Float64
 
-# TODO: implement neutrino vs. antineutrino
+# struct for matter layers
+struct Layer{T}
+    length::T
+    p_density::T
+    n_density::T
+end
 
+const N_A = 6.022e23 #[mol^-1]
+const G_F = 8.961877245622253e-38 #[eV*cm^3]
 
 # Oscillation Kernel Simple
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real)
     phase_factors = exp.(2.5338653580781976 * 1im * (l / e) .* H)
     p = U * Diagonal(phase_factors) * U'
-    abs2.(p)
+end
+
+function osc_kernel_matter(H_eff::AbstractMatrix{<:Number}, e::Real, layer::Layer, anti::Bool)
+    H = MMatrix{3, 3}(H_eff)
+    A = sqrt(2) * G_F * N_A
+    if anti
+        H[1,1] -= A * layer.p_density * 2 * e * 1e9
+        for i in 1:3
+            H[i,i] += A * layer.n_density * e * 1e9
+        end
+    else
+        H[1,1] += A * layer.p_density * 2 * e * 1e9
+        for i in 1:3
+            H[i,i] -= A * layer.n_density * e * 1e9
+        end
+    end
+    tmp = eigen(Hermitian(H))
+    osc_kernel(tmp.vectors, tmp.values, e, layer.length)    
+end
+
+function osc_reduce(H_eff::AbstractMatrix{<:Number}, e::Real, layers::AbstractVector{Layer}, anti::Bool)
+    ps = [osc_kernel_matter(H_eff, e, layer, anti) for layer in layers]
+    reduce(*, ps)
 end
 
 # Oscillation Kernel
@@ -53,13 +86,14 @@ function osc_kernel_smoothed(U::AbstractMatrix{<:Number}, H::AbstractVector, e::
         p = p .+ abs2.(U_rest) * abs2.(U_rest)' .+ abs2.(U) * Diagonal((1 .- decay)) * abs2.(U)'
     end
 
+    # We need the aplitude now, not probabilities anymore because of matter osc
     p
 end
 
-function osc_kernel(U::AbstractMatrix, H::AbstractMatrix, e::Real, l::Real)
-    p = U * exp(2.5338653580781976 * 1im * (l/e) * H) * U'
-    abs2.(p)
-end
+# function osc_kernel(U::AbstractMatrix, H::AbstractMatrix, e::Real, l::Real)
+#     p = U * exp(2.5338653580781976 * 1im * (l/e) * H) * U'
+#     abs2.(p)
+# end
 
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
@@ -91,6 +125,7 @@ module standard
     using DataStructures
     using StaticArrays
     using Distributions
+    using ArraysOfArrays, StructArrays
     using ..osc
 
     function get_matrices(params)
@@ -100,18 +135,26 @@ module standard
     end
     
     # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params; anti=false, use_cuda=false)
+    function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false, use_cuda=false)
         U, H = get_matrices(params);
         Uc = anti ? conj.(U) : U
         #p = stack(map(e -> stack(map(l -> osc_kernel(U, diag(H), e, l), L)), E))
         #p = stack(map(x -> osc_kernel(U, diag(H), x[1], x[2]), Iterators.product(E, L)))
     
-        if use_cuda
-            p = stack(Array(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), cu(E), cu(L'))))
-        else
-            p = stack(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), E, L'))
-        end
+        #if use_cuda
+        #    p = stack(Array(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), cu(E), cu(L'))))
+        #else
+        p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, diag(H), e, l)), E, L'))
+        #end
         permutedims(p, (3, 4, 1, 2))
+    end
+
+    function osc_prob(E::AbstractVector{<:Real}, layers::VectorOfVectors{Layer}, params::NamedTuple; anti=false)
+        U, H = get_matrices(params);
+        Uc = anti ? conj.(U) : U
+        H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
+        p = stack(broadcast((layer, e) -> abs2.(osc_reduce(H_eff, e, layer, anti)), layers, E'))
+        permutedims(p, (4, 3, 1, 2))
     end
     
     params_no = OrderedDict()
@@ -233,7 +276,7 @@ module ADD
     function osc_prob(E, L, params; anti=false)
         U, H = get_matrices(params);
         Uc = anti ? conj.(U) : U
-        p = stack(broadcast((e, l) -> osc_kernel(Uc, H, e, l), E, L'))
+        p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l)), E, L'))
     
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
