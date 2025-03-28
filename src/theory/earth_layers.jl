@@ -7,29 +7,30 @@ using DataStructures
 
 using ..osc
 export compute_layers
+export compute_paths
 
 const datadir = @__DIR__ 
 
-PREM = CSV.read(joinpath(datadir, "PREM_1s.csv"), DataFrame, header=["radius","depth","density","Vpv","Vph","Vsv","Vsh","eta","Q-mu","Q-kappa"])
 
-# Radius at which the detector is sitting
-r_detector = 6369
-# height of the atmosphere to include
-atm_heihgt = 20
-# density boundaries to define the constant density zones
-zones = [0, 4, 7.5, 12.5, 13.1]
-
-
-radii = []
-ave_densities = []
-
-push!(radii, 6371+20.)
-push!(ave_densities, 0.)
-
-for i in 1:length(zones)-1
-    mask = (PREM.density .< zones[i+1]) .& (PREM.density .>= zones[i])
-    push!(radii, maximum(PREM.radius[mask]))
-    push!(ave_densities, mean(PREM.density[mask]))
+function compute_layers(;p_fractions=0.5, atm_heihgt = 20.)
+    
+    PREM = CSV.read(joinpath(datadir, "PREM_1s.csv"), DataFrame, header=["radius","depth","density","Vpv","Vph","Vsv","Vsh","eta","Q-mu","Q-kappa"])
+    # density boundaries to define the constant density zones
+    zones = [0, 4, 7.5, 12.5, 13.1]
+    
+    radii = []
+    ave_densities = []
+    
+    push!(radii, 6371+atm_heihgt)
+    push!(ave_densities, 0.)
+    
+    for i in 1:length(zones)-1
+        mask = (PREM.density .< zones[i+1]) .& (PREM.density .>= zones[i])
+        push!(radii, maximum(PREM.radius[mask]))
+        push!(ave_densities, mean(PREM.density[mask]))
+    end
+    
+    layers = StructArray{Layer}((radii, ave_densities .* p_fractions, ave_densities .* (1 .- p_fractions)))
 end
 
 function ray_circle_path_length(r, y, cz)    
@@ -55,52 +56,50 @@ function ray_circle_path_length(r, y, cz)
     L
 end
 
+# ToDo: could probably skip layers smaller than few km and "absorb" those into the next outer layer
 
-function compute_layers(cz::Number; p_fraction=0.5)
+function compute_paths(cz::Number, layers, r_detector)
+    radii = layers.radius
     intersections = ray_circle_path_length.(radii, r_detector, cz)
     for i in 1:length(intersections) - 1
         intersections[i] -= intersections[i+1]
     end
     mask = intersections .> 0.
-    intersections = intersections[mask]
     rs = radii[mask]
-    ds = ave_densities[mask]
-
-    intersections, rs, ds
+    intersections = intersections[mask]
 
     n_layers_outside = sum(radii .>= r_detector)
 
     n_layers = 2 * (length(intersections) - n_layers_outside) + n_layers_outside
 
     lengths_traversed = zeros(n_layers)
-    densities_traversed = zeros(n_layers)
+    layer_idx_traversed = zeros(Int, n_layers)
 
     for i in 1:length(intersections)
         if (i < n_layers_outside) | (i == length(intersections))
             lengths_traversed[i] = intersections[i]
-            densities_traversed[i] = ds[i]
+            layer_idx_traversed[i] = i
         elseif i == n_layers_outside
             len_det = -cz * (rs[i] - r_detector)
             inter = intersections[i] - len_det
             lengths_traversed[i] = inter/2 + len_det
-            densities_traversed[i] = ds[i]
+            layer_idx_traversed[i] = i
             lengths_traversed[end-i+n_layers_outside] = inter/2
-            densities_traversed[end-i+n_layers_outside] = ds[i]              
+            layer_idx_traversed[end-i+n_layers_outside] = i              
         else
             lengths_traversed[i] = intersections[i]/2
-            densities_traversed[i] = ds[i]
+            layer_idx_traversed[i] = i
             lengths_traversed[end-i+n_layers_outside] = intersections[i]/2
-            densities_traversed[end-i+n_layers_outside] = ds[i]
+            layer_idx_traversed[end-i+n_layers_outside] = i
         end
     end
-    
-    lengths_traversed , densities_traversed
-    la = StructArray{Layer}((lengths_traversed, densities_traversed .* p_fraction, densities_traversed .* (1-p_fraction)))
+
+    la = StructArray{Path}((lengths_traversed, layer_idx_traversed))
     
 end
 
-function compute_layers(cz::AbstractArray; p_fraction=0.5)
-    VectorOfVectors{Layer}(compute_layers.(cz));
+function compute_paths(cz::AbstractArray, layers; r_detector = 6369)
+    VectorOfVectors{Path}(compute_paths.(cz, Ref(layers), r_detector));
 end
 
 end

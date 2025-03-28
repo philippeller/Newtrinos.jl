@@ -98,14 +98,14 @@ function CairoMakie.plot(samples::DensitySampleVector; variables=nothing, fig=no
 end
 
 
-function CairoMakie.plot(result::NewtrinosResult)
+function CairoMakie.plot(result::NewtrinosResult; levels=1 .- 2*ccdf(Normal(), 0:3))
 
     dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior);
     #dLLH = 2 * (maximum(result.values.llh) .- result.values.llh);
     f = Figure()
     ax = Axis(f[1, 1], xlabel = String(keys(result.axes)[1]), ylabel = String(keys(result.axes)[2]), xminorticksvisible = true, xminorgridvisible = true, yminorticksvisible = true, yminorgridvisible = true)
-    contourf!(ax, result.axes[1], result.axes[2], dLLH, levels=quantile(Chisq(2), 1 .- 2*ccdf(Normal(), 0:3)), colormap=(Reverse(:Blues), 0.7))
-    contour!(ax, result.axes[1], result.axes[2], dLLH, levels=quantile(Chisq(2), 1 .- 2*ccdf(Normal(), 0:3)), color=:black)
+    contourf!(ax, result.axes[1], result.axes[2], dLLH, levels=quantile(Chisq(2), levels), colormap=(Reverse(:Blues), 0.7))
+    contour!(ax, result.axes[1], result.axes[2], dLLH, levels=quantile(Chisq(2), levels), color=:black)
     f
 end
 

@@ -10,6 +10,7 @@ include("utils/autodiff.jl")
 
 include("experiments/daya_bay/daya_bay_3158days/dayabay.jl")
 include("experiments/minos/minos_sterile_16e20_POT/minos.jl")
-include("experiments//kamland/kamland_7years/kamland.jl")
+include("experiments/kamland/kamland_7years/kamland.jl")
+include("experiments/icecube/deepcore_3y_highstats_sample_b/deepcore.jl")
 
 end

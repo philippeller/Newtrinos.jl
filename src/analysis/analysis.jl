@@ -18,7 +18,7 @@ context = set_batcontext(ad = adsel)
 ###### CONFIG ######
 
 # Name for output files etc
-name = "test"
+name = "test_deepcore_mcmc"
 
 # Choice of MCMC, Profile, Scan
 task = "MCMC"
@@ -27,15 +27,15 @@ task = "MCMC"
 osc = Newtrinos.osc.standard
 
 # Choose experiments to include
-modules = [Newtrinos.kamland, Newtrinos.dayabay, Newtrinos.minos]
+modules = [Newtrinos.deepcore,] #kamland, Newtrinos.dayabay, Newtrinos.minos]
 
 # Variables to condition on (=fix)
-conditional_vars = [] #:θ₂₃, :δCP, :Δm²₃₁, :θ₁₃]
+conditional_vars = [:θ₁₂, :θ₁₃, :δCP, :Δm²₂₁]
 
 # For profile / scan task only: choose scan grid
 vars_to_scan = OrderedDict()
-vars_to_scan[:θ₁₂] = 10
-vars_to_scan[:Δm²₂₁] = 10
+vars_to_scan[:θ₂₃] = 10
+vars_to_scan[:Δm²₃₁] = 10
 
 ###### END CONFIG ######
 
@@ -61,12 +61,12 @@ if task == "MCMC"
 
 else
     if task == "Profile"
-        ax, values = Newtrinos.profile(llh, priors_dict, vars_to_scan, params_dict, cache_dir=name)
+        result = Newtrinos.profile(llh, priors_dict, vars_to_scan, params_dict, cache_dir=name)
 
     elseif task == "Scan"
-        ax, values = Newtrinos.scan(llh, priors_dict, vars_to_scan, params_dict)
+        result = Newtrinos.scan(llh, priors_dict, vars_to_scan, params_dict)
 
-
+    end 
     FileIO.save(name * ".jld2", Dict("result" => result))
-    end
+
 end

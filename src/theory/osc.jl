@@ -4,6 +4,7 @@ using StaticArrays
 
 export ftype
 export Layer
+export Path
 export osc_kernel
 export osc_kernel_matter
 export osc_kernel_smoothed
@@ -16,49 +17,34 @@ export sterile
 export ADD
 export Darkdim
 export Darkdim_L
-
+export A
 
 #using CUDA
 const ftype = Float64
 
 # struct for matter layers
 struct Layer{T}
-    length::T
+    radius::T
     p_density::T
     n_density::T
 end
 
+# struct for matter paths
+struct Path{T}
+    length::T
+    layer_idx::Int
+end 
+
 const N_A = 6.022e23 #[mol^-1]
 const G_F = 8.961877245622253e-38 #[eV*cm^3]
+const A = sqrt(2) * G_F * N_A
 
 # Oscillation Kernel Simple
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real)
     phase_factors = exp.(2.5338653580781976 * 1im * (l / e) .* H)
     p = U * Diagonal(phase_factors) * U'
 end
-
-function osc_kernel_matter(H_eff::AbstractMatrix{<:Number}, e::Real, layer::Layer, anti::Bool)
-    H = MMatrix{3, 3}(H_eff)
-    A = sqrt(2) * G_F * N_A
-    if anti
-        H[1,1] -= A * layer.p_density * 2 * e * 1e9
-        for i in 1:3
-            H[i,i] += A * layer.n_density * e * 1e9
-        end
-    else
-        H[1,1] += A * layer.p_density * 2 * e * 1e9
-        for i in 1:3
-            H[i,i] -= A * layer.n_density * e * 1e9
-        end
-    end
-    tmp = eigen(Hermitian(H))
-    osc_kernel(tmp.vectors, tmp.values, e, layer.length)    
-end
-
-function osc_reduce(H_eff::AbstractMatrix{<:Number}, e::Real, layers::AbstractVector{Layer}, anti::Bool)
-    ps = [osc_kernel_matter(H_eff, e, layer, anti) for layer in layers]
-    reduce(*, ps)
-end
+  
 
 # Oscillation Kernel
 function osc_kernel_smoothed(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real; cutoff=Inf, damping=0, add=true)
@@ -127,13 +113,14 @@ module standard
     using Distributions
     using ArraysOfArrays, StructArrays
     using ..osc
+    include("eigen_hermitian_3x3.jl")
 
     function get_matrices(params)
         U = get_PMNS(params)
         H = Diagonal(SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁));
         return U, H
     end
-    
+
     # Oscillation over arrays of Energy (E) and Lnegth (L)
     function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false, use_cuda=false)
         U, H = get_matrices(params);
@@ -149,11 +136,41 @@ module standard
         permutedims(p, (3, 4, 1, 2))
     end
 
-    function osc_prob(E::AbstractVector{<:Real}, layers::VectorOfVectors{Layer}, params::NamedTuple; anti=false)
+    function compute_matter_matrices(H_eff, e, layer, anti)
+        H = MMatrix{3, 3}(H_eff)
+        if anti
+            H[1,1] -= A * layer.p_density * 2 * e * 1e9
+            for i in 1:3
+                H[i,i] += A * layer.n_density * e * 1e9
+            end
+        else
+            H[1,1] += A * layer.p_density * 2 * e * 1e9
+            for i in 1:3
+                H[i,i] -= A * layer.n_density * e * 1e9
+            end
+        end
+        H = Hermitian(SMatrix(H))
+        #tmp = eigen(H)
+        tmp = fast_eigen(H)
+        tmp.vectors, tmp.values
+    end    
+
+    function osc_reduce(matter_matrices, path, e, anti::Bool)
+        ps = [osc_kernel(matter_matrices[section.layer_idx]..., e, section.length) for section in path]
+        reduce(*, ps)
+    end
+        
+    function matter_osc_per_e(H_eff, e, layers, paths, anti)
+        matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
+        stack([(osc_reduce(matter_matrices, path, e, anti)) for path in paths])
+    end
+
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
         U, H = get_matrices(params);
         Uc = anti ? conj.(U) : U
         H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
-        p = stack(broadcast((layer, e) -> abs2.(osc_reduce(H_eff, e, layer, anti)), layers, E'))
+    
+        p = abs2.(stack([matter_osc_per_e(H_eff, e, layers, paths, anti) for e in E]) )
         permutedims(p, (4, 3, 1, 2))
     end
     

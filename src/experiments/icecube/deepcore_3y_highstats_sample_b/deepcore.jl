@@ -13,6 +13,7 @@ using Newtrinos
 using BAT
 
 const datadir = @__DIR__ 
+using Printf
 
 
 
@@ -29,7 +30,10 @@ const cz_fine = midpoints(cz_fine_bins);
 const log10e_fine = midpoints(log10e_fine_bins);
 const e_fine = 10 .^log10e_fine;
 
-layers = Newtrinos.earth_layers.compute_layers(cz_fine);
+e_ticks = (reco_energy_bin_edges, [@sprintf("%.1f",b) for b in reco_energy_bin_edges])
+
+layers = Newtrinos.earth_layers.compute_layers()
+paths = Newtrinos.earth_layers.compute_paths(cz_fine, layers);
 
 
 # ------- READ IN DATA FILES ----------
@@ -277,7 +281,7 @@ function calc_sys_flux(flux, params)
 end
 
 function reweight(mc, params, osc_prob)
-    p = [osc_prob(e_fine, layers, params), osc_prob(e_fine, layers, params, anti=true)]
+    p = [osc_prob(e_fine, paths, layers, params), osc_prob(e_fine, paths, layers, params, anti=true)]
     f = calc_sys_flux(flux, params)
     res = OrderedDict()    
     for (i, flav) in enumerate(flavs)
