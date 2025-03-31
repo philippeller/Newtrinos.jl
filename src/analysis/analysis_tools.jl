@@ -59,7 +59,7 @@ function find_mle(llh, prior, v_init_dict)
 
     # This one also works, and IS thread safe:
 
-    res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-7, iterations=100)))
+    res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-5, iterations=100)))
 
     
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), kwargs = ()))#reltol=1e-7, maxiters=10000)))

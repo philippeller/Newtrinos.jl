@@ -30,8 +30,8 @@ struct Layer{T}
 end
 
 # struct for matter paths
-struct Path{T}
-    length::T
+struct Path
+    length::Float64
     layer_idx::Int
 end 
 
@@ -72,7 +72,7 @@ function osc_kernel_smoothed(U::AbstractMatrix{<:Number}, H::AbstractVector, e::
         p = p .+ abs2.(U_rest) * abs2.(U_rest)' .+ abs2.(U) * Diagonal((1 .- decay)) * abs2.(U)'
     end
 
-    # We need the aplitude now, not probabilities anymore because of matter osc
+    # We need the aplitude now, not probabilities anymore because of matter osc, needs to be corrected here
     p
 end
 

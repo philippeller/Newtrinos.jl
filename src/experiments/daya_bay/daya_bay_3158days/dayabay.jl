@@ -5,7 +5,7 @@ using LinearAlgebra
 using Distributions
 using DataStructures
 using CairoMakie
-import Newtrinos.osc
+import ..osc
 
 # Import the data
 const datadir = @__DIR__ 

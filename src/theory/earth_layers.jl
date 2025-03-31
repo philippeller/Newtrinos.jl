@@ -18,8 +18,8 @@ function compute_layers(;p_fractions=0.5, atm_heihgt = 20.)
     # density boundaries to define the constant density zones
     zones = [0, 4, 7.5, 12.5, 13.1]
     
-    radii = []
-    ave_densities = []
+    radii = Float64[]
+    ave_densities = Float64[]
     
     push!(radii, 6371+atm_heihgt)
     push!(ave_densities, 0.)
