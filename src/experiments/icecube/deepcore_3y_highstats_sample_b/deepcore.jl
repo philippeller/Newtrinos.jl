@@ -185,7 +185,7 @@ params[:deepcore_opt_eff_headon] = 0.
 params[:nc_norm] = 1.
 params[:nutau_cc_norm] = 1.
 params[:atm_flux_nunubar_ratio] = 1.
-params[:atm_flux_nueumu_ratio] = 1.
+params[:atm_flux_nuenumu_ratio] = 1.
 params[:atm_flux_spectral_index] = 0.
 params[:Barr_uphor_ratio] = 0.0
 params[:Barr_nu_nubar_ratio ] = 0.
@@ -201,7 +201,7 @@ priors[:deepcore_opt_eff_headon] = Uniform(-5, 2.)
 priors[:nc_norm] = Truncated(Normal(1, 0.2), 0.4, 1.6)
 priors[:nutau_cc_norm] = Uniform(0., 2.)
 priors[:atm_flux_nunubar_ratio] = 1.
-priors[:atm_flux_nueumu_ratio] = Truncated(Normal(1., 0.05), 0.85, 1.15)
+priors[:atm_flux_nuenumu_ratio] = Truncated(Normal(1., 0.05), 0.85, 1.15)
 priors[:atm_flux_spectral_index] = Truncated(Normal(0., 0.1), -0.3, 0.3)
 priors[:Barr_uphor_ratio] = Truncated(Normal(0., 1.), -3, 3)
 priors[:Barr_nu_nubar_ratio] = Truncated(Normal(0., 1.), -3, 3)
@@ -269,15 +269,15 @@ function calc_sys_flux(flux, params)
     flux_numu1, flux_numubar1 = scale_flux(flux[:numu].flux, flux[:numubar].flux, params.atm_flux_nunubar_ratio)
     
     # nue-numu ratio:
-    flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, params.atm_flux_nueumu_ratio)
-    flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, params.atm_flux_nueumu_ratio)
+    flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, params.atm_flux_nuenumu_ratio)
+    flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, params.atm_flux_nuenumu_ratio)
 
     # spectral
     f_spectral_shift = (flux[:nue].true_energy ./ 24.0900951261) .^ params.atm_flux_spectral_index
 
     # Barr modifiers
     f_Barr_nue, f_Barr_nuebar = Barr_factor_nue(flux[:nue].Barr_Ave, flux[:nue].Barr_LogLog, flux[:nue].Barr_norm_fcn, params.Barr_nu_nubar_ratio, params.Barr_uphor_ratio)
-    f_Barr_numu, f_Barr_numubarr = Barr_factor_nue(flux[:numu].Barr_Ave, flux[:numu].Barr_LogLog, flux[:numu].Barr_norm_fcn, params.Barr_nu_nubar_ratio, params.Barr_uphor_ratio)
+    f_Barr_numu, f_Barr_numubarr = Barr_factor_numu(flux[:numu].Barr_Ave, flux[:numu].Barr_LogLog, flux[:numu].Barr_norm_fcn, params.Barr_nu_nubar_ratio, params.Barr_uphor_ratio)
 
     # apply:
     f_nue3 = flux_nue2 .* f_spectral_shift .* f_Barr_nue
@@ -293,24 +293,17 @@ end
 
 
 function reweight(mc, flux, params, osc_prob)
-    p = osc_prob(e_fine, paths, layers, params)
-    sys_flux = calc_sys_flux(flux, params)
+    sys_flux, sys_flux_anti = calc_sys_flux(flux, params)
 
-    nus = NamedTuple(ch=>begin
-                osc_flux = sys_flux[1][1] .* p[:, :, 1, i] .+ sys_flux[1][2] .* p[:, :, 2, i]
-                [osc_flux[ef_idx, cf_idx] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)]
-            end
-        for (i, ch) in enumerate([:nue, :numu, :nutau])
-        )
+    p = osc_prob(e_fine, paths, layers, params)
+    p_flux = sys_flux[1] .* p[:, :, 1, :] .+ sys_flux[2] .* p[:, :, 2, :]
+    
+    nus = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nue, :numu, :nutau]))
 
     p = osc_prob(e_fine, paths, layers, params, anti=true)
-    
-    nubars = NamedTuple(ch=>begin
-                osc_flux = sys_flux[2][1] .* p[:, :, 1, i] .+ sys_flux[2][2] .* p[:, :, 2, i]
-                [osc_flux[ef_idx, cf_idx] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)]
-            end
-        for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar])
-        )
+    p_flux = sys_flux_anti[1] .* p[:, :, 1, :] .+ sys_flux_anti[2] .* p[:, :, 2, :]
+
+    nubars = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar])        )
 
     merge(nus, nubars)
 end
