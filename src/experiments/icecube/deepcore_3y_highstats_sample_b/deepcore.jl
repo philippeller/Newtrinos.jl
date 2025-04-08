@@ -113,7 +113,7 @@ function prepare_data(datadir = @__DIR__)
     
     flux_splines = get_hkkm_flux(joinpath(datadir, "spl-nu-20-01-000.d"))
     
-    function LogLogParam(true_energy, y1, y2, x1, x2, use_cutoff, cutoff_value)
+    function LogLogParam(true_energy::Real, y1::Real, y2::Real, x1::Real, x2::Real, use_cutoff::Bool, cutoff_value::Real)
         """ From https://github.com/icecube/pisa/blob/master/pisa/utils/barr_parameterization.py """
         nu_nubar = sign(y2)
         y1 = sign(y1) * log10(abs(y1) + 0.0001)
@@ -126,7 +126,7 @@ function prepare_data(datadir = @__DIR__)
     end
     
     
-    function norm_fcn(x, sigma)
+    function norm_fcn(x::Real, sigma::Real)
         """ From https://github.com/icecube/pisa/blob/master/pisa/utils/barr_parameterization.py """
         return 1. / sqrt(2 * pi * sigma^2) * exp(-x^2 / (2 * sigma^2))
     end
@@ -146,11 +146,11 @@ function prepare_data(datadir = @__DIR__)
             f.flux = flux_splines[fkey].(f.log10_true_energy, f.true_coszen);
             if key == :nue
                 f.Barr_Ave = LogLogParam.(f.true_energy, 5.5, 53., 0.5, 3., false, 0.)
-                f.Barr_LogLog = LogLogParam.(f.true_energy, 0.9, 10., 0.5, 2, true, 650.)
+                f.Barr_LogLog = LogLogParam.(f.true_energy, 0.9, 10., 0.5, 2., true, 650.)
                 f.Barr_norm_fcn = norm_fcn.(f.true_coszen, 0.36)
             else
-                f.Barr_Ave = LogLogParam.(f.true_energy, 3, 43, 0.5, 3., false, 0.)
-                f.Barr_LogLog = LogLogParam.(f.true_energy, 0.6, 5, 0.5, 2., true, 1000.)
+                f.Barr_Ave = LogLogParam.(f.true_energy, 3., 43., 0.5, 3., false, 0.)
+                f.Barr_LogLog = LogLogParam.(f.true_energy, 0.6, 5., 0.5, 2., true, 1000.)
                 f.Barr_norm_fcn = norm_fcn.(f.true_coszen, 0.36)
             end
             flux[fkey] = Table(f)
@@ -161,7 +161,7 @@ function prepare_data(datadir = @__DIR__)
     return (
             mc = mc,
             hyperplanes = hyperplanes,
-            flux = flux,
+            flux = NamedTuple(flux),
             muons = muons
             ),(
             data.count
@@ -226,7 +226,7 @@ function make_hist_per_channel(mc, osc_flux, lifetime_seconds)
     make_hist(mc.e_idx, mc.c_idx, mc.p_idx, mc.t_idx, w)
 end
 
-function scale_flux(A::AbstractVector, B::AbstractVector, scale::Real)
+function scale_flux(A::AbstractVector{<:Real}, B::AbstractVector{<:Real}, scale::Real)
     r = A ./ B
     total = A .+ B
     mod_B = total ./ (1 .+ r .* scale)
@@ -290,6 +290,14 @@ function calc_sys_flux(flux, params)
     return (reshape(f_nue3, s), reshape(f_numu3, s)), (reshape(f_nuebar3, s), reshape(f_numubar3, s)) 
 end
 
+# Function that should NOT allocate
+function gather_flux(p_flux, ef, cf, j)
+    result = Vector{eltype(p_flux)}(undef, length(ef))
+    @inbounds for i in eachindex(ef)
+        result[i] = p_flux[ef[i], cf[i], j]
+    end
+    result
+end
 
 
 function reweight(mc, flux, params, osc_prob)
@@ -298,12 +306,15 @@ function reweight(mc, flux, params, osc_prob)
     p = osc_prob(e_fine, paths, layers, params)
     p_flux = sys_flux[1] .* p[:, :, 1, :] .+ sys_flux[2] .* p[:, :, 2, :]
     
-    nus = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nue, :numu, :nutau]))
+    #nus = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nue, :numu, :nutau]))
 
+    nus = NamedTuple(ch=>gather_flux(p_flux, mc[ch].ef_idx, mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
+    
     p = osc_prob(e_fine, paths, layers, params, anti=true)
     p_flux = sys_flux_anti[1] .* p[:, :, 1, :] .+ sys_flux_anti[2] .* p[:, :, 2, :]
 
-    nubars = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar])        )
+    #nubars = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar])        )
+    nubars = NamedTuple(ch=>gather_flux(p_flux, mc[ch].ef_idx, mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
 
     merge(nus, nubars)
 end
