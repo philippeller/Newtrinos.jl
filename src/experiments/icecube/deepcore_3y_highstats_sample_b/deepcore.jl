@@ -113,25 +113,6 @@ function prepare_data(datadir = @__DIR__)
     
     flux_splines = get_hkkm_flux(joinpath(datadir, "spl-nu-20-01-000.d"))
     
-    function LogLogParam(true_energy::Real, y1::Real, y2::Real, x1::Real, x2::Real, use_cutoff::Bool, cutoff_value::Real)
-        """ From https://github.com/icecube/pisa/blob/master/pisa/utils/barr_parameterization.py """
-        nu_nubar = sign(y2)
-        y1 = sign(y1) * log10(abs(y1) + 0.0001)
-        y2 = log10(abs(y2 + 0.0001))
-        modification = nu_nubar * 10. ^(((y2 - y1) / (x2 - x1)) * (log10(true_energy) - x1) + y1 - 2.)
-        if use_cutoff
-            modification *= exp(-1. * true_energy / cutoff_value)
-        end
-        return modification
-    end
-    
-    
-    function norm_fcn(x::Real, sigma::Real)
-        """ From https://github.com/icecube/pisa/blob/master/pisa/utils/barr_parameterization.py """
-        return 1. / sqrt(2 * pi * sigma^2) * exp(-x^2 / (2 * sigma^2))
-    end
-    
-    
     flux = OrderedDict{Symbol, Table}()
 
     # make fine grid
@@ -144,15 +125,6 @@ function prepare_data(datadir = @__DIR__)
             fkey = Symbol(key, anti)
             f = FlexTable(true_energy=[(e...)...], log10_true_energy=[(log10e...)...], true_coszen=[(cz...)...])
             f.flux = flux_splines[fkey].(f.log10_true_energy, f.true_coszen);
-            if key == :nue
-                f.Barr_Ave = LogLogParam.(f.true_energy, 5.5, 53., 0.5, 3., false, 0.)
-                f.Barr_LogLog = LogLogParam.(f.true_energy, 0.9, 10., 0.5, 2., true, 650.)
-                f.Barr_norm_fcn = norm_fcn.(f.true_coszen, 0.36)
-            else
-                f.Barr_Ave = LogLogParam.(f.true_energy, 3., 43., 0.5, 3., false, 0.)
-                f.Barr_LogLog = LogLogParam.(f.true_energy, 0.6, 5., 0.5, 2., true, 1000.)
-                f.Barr_norm_fcn = norm_fcn.(f.true_coszen, 0.36)
-            end
             flux[fkey] = Table(f)
         end
     end
@@ -184,11 +156,10 @@ params[:deepcore_opt_eff_lateral] = 0.
 params[:deepcore_opt_eff_headon] = 0.
 params[:nc_norm] = 1.
 params[:nutau_cc_norm] = 1.
-params[:atm_flux_nunubar_ratio] = 1.
-params[:atm_flux_nuenumu_ratio] = 1.
-params[:atm_flux_spectral_index] = 0.
-params[:Barr_uphor_ratio] = 0.0
-params[:Barr_nu_nubar_ratio ] = 0.
+params[:atm_flux_nunubar_sigma] = 0.
+params[:atm_flux_nuenumu_sigma] = 0.
+params[:atm_flux_delta_spectral_index] = 0.
+params[:atm_flux_uphorizonzal_sigma] = 0.
 
 priors = OrderedDict()
 priors[:deepcore_lifetime] = Uniform(2, 4)
@@ -200,11 +171,10 @@ priors[:deepcore_opt_eff_lateral] = Truncated(Normal(0, 1.), -2, 2)
 priors[:deepcore_opt_eff_headon] = Uniform(-5, 2.)
 priors[:nc_norm] = Truncated(Normal(1, 0.2), 0.4, 1.6)
 priors[:nutau_cc_norm] = Uniform(0., 2.)
-priors[:atm_flux_nunubar_ratio] = 1.
-priors[:atm_flux_nuenumu_ratio] = Truncated(Normal(1., 0.05), 0.85, 1.15)
-priors[:atm_flux_spectral_index] = Truncated(Normal(0., 0.1), -0.3, 0.3)
-priors[:Barr_uphor_ratio] = Truncated(Normal(0., 1.), -3, 3)
-priors[:Barr_nu_nubar_ratio] = Truncated(Normal(0., 1.), -3, 3)
+priors[:atm_flux_nunubar_sigma] = Truncated(Normal(0., 1.), -3, 3)
+priors[:atm_flux_nuenumu_sigma] = Truncated(Normal(0., 1.), -3, 3)
+priors[:atm_flux_delta_spectral_index] = Truncated(Normal(0., 0.1), -0.3, 0.3)
+priors[:atm_flux_uphorizonzal_sigma] = Truncated(Normal(0., 1.), -3, 3)
 
 
 # ------------- Define Model --------
@@ -226,7 +196,8 @@ function make_hist_per_channel(mc, osc_flux, lifetime_seconds)
     make_hist(mc.e_idx, mc.c_idx, mc.p_idx, mc.t_idx, w)
 end
 
-function scale_flux(A::AbstractVector{<:Real}, B::AbstractVector{<:Real}, scale::Real)
+function scale_flux(A, B, scale)
+    # scale a ratio between A and B
     r = A ./ B
     total = A .+ B
     mod_B = total ./ (1 .+ r .* scale)
@@ -234,60 +205,55 @@ function scale_flux(A::AbstractVector{<:Real}, B::AbstractVector{<:Real}, scale:
     return mod_A, mod_B  # Returns two separate vectors instead of tuples
 end
 
-function Barr_factor_nue(Barr_Ave, Barr_LogLog, Barr_norm_fcn, nubar_sys, uphor)
-    """ From https://github.com/icecube/pisa/blob/master/pisa/utils/barr_parameterization.py """
-    # These parameters are obtained from fits to the paper of Barr
-    # E dependent ratios, max differences per flavor (Fig.7)
-    
-    r_uphor = 1. .- 0.3 .* uphor .* Barr_LogLog .* Barr_norm_fcn
-    r = Barr_Ave .- (1.5 .* Barr_norm_fcn .- 0.7) .* Barr_LogLog
-    modfactor = nubar_sys .* r
-
-    # nue, nuebar:
-    return max.(0., 1. .+ 0.5 .* modfactor) .* r_uphor, max.(0., 1. ./ (1 .+ 0.5 .* modfactor)) .* r_uphor
-        
-    
-end
-
-function Barr_factor_numu(Barr_Ave, Barr_LogLog, Barr_norm_fcn, nubar_sys, uphor)
-    """ From https://github.com/icecube/pisa/blob/master/pisa/utils/barr_parameterization.py """
-    # These parameters are obtained from fits to the paper of Barr
-    # E dependent ratios, max differences per flavor (Fig.7)
-
-    r = Barr_Ave .- (Barr_norm_fcn .- 0.6) .* 2.5 .* Barr_LogLog
-    modfactor = nubar_sys .* r
-
-    # numu, numubar:
-    max.(0., 1. .+ 0.5 .* modfactor), max.(0., 1. ./ (1 .+ 0.5 .* modfactor))
-    
+function uphorizontal(coszen, rel_error)
+    # ratio of an ellipse to a circle
+    b = rel_error
+    a = 1/rel_error
+    1 / sqrt((b^2 - a^2) * coszen^2 + a^2)
 end
 
 function calc_sys_flux(flux, params)
 
-    # nu-nubar ratio:
-    flux_nue1, flux_nuebar1 = scale_flux(flux[:nue].flux, flux[:nuebar].flux, params.atm_flux_nunubar_ratio)
-    flux_numu1, flux_numubar1 = scale_flux(flux[:numu].flux, flux[:numubar].flux, params.atm_flux_nunubar_ratio)
-    
-    # nue-numu ratio:
-    flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, params.atm_flux_nuenumu_ratio)
-    flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, params.atm_flux_nuenumu_ratio)
+    # we can do this because all grids are identical
+    e = flux[:nue].true_energy
+    log10e = flux[:nue].log10_true_energy
+    cz = flux[:nue].true_coszen
 
     # spectral
-    f_spectral_shift = (flux[:nue].true_energy ./ 24.0900951261) .^ params.atm_flux_spectral_index
+    f_spectral_shift = (e ./ 24.0900951261) .^ params.atm_flux_delta_spectral_index
 
-    # Barr modifiers
-    f_Barr_nue, f_Barr_nuebar = Barr_factor_nue(flux[:nue].Barr_Ave, flux[:nue].Barr_LogLog, flux[:nue].Barr_norm_fcn, params.Barr_nu_nubar_ratio, params.Barr_uphor_ratio)
-    f_Barr_numu, f_Barr_numubarr = Barr_factor_numu(flux[:numu].Barr_Ave, flux[:numu].Barr_LogLog, flux[:numu].Barr_norm_fcn, params.Barr_nu_nubar_ratio, params.Barr_uphor_ratio)
 
-    # apply:
-    f_nue3 = flux_nue2 .* f_spectral_shift .* f_Barr_nue
-    f_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_Barr_nuebar
-    f_numu3 = flux_numu2 .* f_spectral_shift .* f_Barr_numu
-    f_numubar3 = flux_numubar2 .* f_spectral_shift .* f_Barr_numubarr
+    # all coefficients below come from fits to the Figs. 7 & 9 in Uncertainties in Atmospheric Neutrino Fluxes by Barr & Robbins
+    
+    # nue - nuebar
+    uncert = ((0.73 * e) .^(0.59) .+ 4.8) / 100.
+    flux_nue1, flux_nuebar1 = scale_flux(flux[:nue].flux, flux[:nuebar].flux, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))
+    
+    # numu - numubar
+    uncert = ((9.6 * e) .^(0.41) .-0.8) / 100.
+    flux_numu1, flux_numubar1 = scale_flux(flux[:numu].flux, flux[:numubar].flux, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))        
+
+    # nue - numu
+    uncert = ((0.051 * e) .^(0.63) .+ 0.73) / 100.
+    flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
+    flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
+
+    # up/horizontal
+    # nue
+    uncert = (-0.43*log10e.^5 .+ 1.17*log10e.^4 .+ 0.89*log10e.^3 .- 0.36*log10e.^2 .- 1.59*log10e .+ 1.96) / 100.
+    f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
+    flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal
+    flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal
+    
+    #numu
+    uncert = (-0.16*log10e.^5 .+ 0.45*log10e.^4 .+ 0.48*log10e.^3 .+ 0.17*log10e.^2 .- 1.88*log10e .+ 1.88) / 100.
+    f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
+    flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal
+    flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal
 
     s = (size(e_fine)[1], size(cz_fine)[1])
 
-    return (reshape(f_nue3, s), reshape(f_numu3, s)), (reshape(f_nuebar3, s), reshape(f_numubar3, s)) 
+    return (reshape(flux_nue3, s), reshape(flux_numu3, s)), (reshape(flux_nuebar3, s), reshape(flux_numubar3, s)) 
 end
 
 # Function that should NOT allocate
@@ -306,14 +272,11 @@ function reweight(mc, flux, params, osc_prob)
     p = osc_prob(e_fine, paths, layers, params)
     p_flux = sys_flux[1] .* p[:, :, 1, :] .+ sys_flux[2] .* p[:, :, 2, :]
     
-    #nus = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nue, :numu, :nutau]))
-
     nus = NamedTuple(ch=>gather_flux(p_flux, mc[ch].ef_idx, mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
     
     p = osc_prob(e_fine, paths, layers, params, anti=true)
     p_flux = sys_flux_anti[1] .* p[:, :, 1, :] .+ sys_flux_anti[2] .* p[:, :, 2, :]
 
-    #nubars = NamedTuple(ch=>[p_flux[ef_idx, cf_idx, i] for (ef_idx, cf_idx) in zip(mc[ch].ef_idx, mc[ch].cf_idx)] for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar])        )
     nubars = NamedTuple(ch=>gather_flux(p_flux, mc[ch].ef_idx, mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
 
     merge(nus, nubars)
@@ -357,8 +320,9 @@ function get_expected(params, osc_prob, assets)
     hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds) for ch in keys(assets.mc))
     
     expected_nu = apply_hyperplanes(hists, params, assets.hyperplanes)
-    
-    expected = (expected_nu .+ params.deepcore_atm_muon_scale .* assets.muons.count)
+
+    # set minimum number of events per bin to 1 for Poisson not to crash
+    expected = max.(1., (expected_nu .+ params.deepcore_atm_muon_scale .* assets.muons.count))
 end
 
 
