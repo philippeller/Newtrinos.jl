@@ -18,7 +18,7 @@ context = set_batcontext(ad = adsel)
 ###### CONFIG ######
 
 # Name for output files etc
-name = "test_deepcore_new"
+name = "deepcore_test_new_flux"
 
 # Choice of MCMC, Profile, Scan
 task = "Profile"
@@ -27,15 +27,15 @@ task = "Profile"
 osc = Newtrinos.osc.standard
 
 # Choose experiments to include
-modules = [Newtrinos.deepcore,] #kamland, Newtrinos.dayabay, Newtrinos.minos]
+modules = [Newtrinos.deepcore]#, Newtrinos.kamland, Newtrinos.dayabay, Newtrinos.minos]
 
 # Variables to condition on (=fix)
 conditional_vars = [:θ₁₂, :θ₁₃, :δCP, :Δm²₂₁, :nutau_cc_norm]
 
 # For profile / scan task only: choose scan grid
 vars_to_scan = OrderedDict()
-vars_to_scan[:θ₂₃] = 10
-vars_to_scan[:Δm²₃₁] = 10
+vars_to_scan[:θ₂₃] = 31
+vars_to_scan[:Δm²₃₁] = 31
 
 ###### END CONFIG ######
 
@@ -56,7 +56,7 @@ end
 if task == "MCMC"
     prior = distprod(;priors_dict...)
     posterior = PosteriorMeasure(llh, prior)
-    samples = bat_sample(posterior, MCMCSampling(mcalg = MetropolisHastings(), nsteps = 10^4, nchains = 10)).result
+    samples = bat_sample(posterior, MCMCSampling(mcalg = MetropolisHastings(), nsteps = 10^4, nchains = 4)).result
     FileIO.save(name * ".jld2", Dict("samples" => samples))
 
 else

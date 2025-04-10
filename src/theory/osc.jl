@@ -150,19 +150,20 @@ module standard
             end
         end
         H = Hermitian(SMatrix(H))
-        #tmp = eigen(H)
-        tmp = fast_eigen(H)
+        tmp = eigen(H)
+        #tmp = fast_eigen(H)
         tmp.vectors, tmp.values
     end    
 
     function osc_reduce(matter_matrices, path, e, anti::Bool)
-        ps = [osc_kernel(matter_matrices[section.layer_idx]..., e, section.length) for section in path]
-        reduce(*, ps)
+        abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
+        #ps = [osc_kernel(matter_matrices[section.layer_idx]..., e, section.length) for section in path]
+        #reduce(*, ps)
     end
         
     function matter_osc_per_e(H_eff, e, layers, paths, anti)
         matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
-        stack([(osc_reduce(matter_matrices, path, e, anti)) for path in paths])
+        stack(map(path -> (osc_reduce(matter_matrices, path, e, anti)), paths))
     end
 
     function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
@@ -170,7 +171,7 @@ module standard
         Uc = anti ? conj.(U) : U
         H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
     
-        p = abs2.(stack([matter_osc_per_e(H_eff, e, layers, paths, anti) for e in E]) )
+        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti), E))
         permutedims(p, (4, 3, 1, 2))
     end
     
