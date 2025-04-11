@@ -345,20 +345,44 @@ function plotmap(h; colormap=Reverse(:Spectral), symm=false)
     end
     
     fig = Figure(size=(800, 400))
-    ax = Axis(fig[1,1], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", ylabel="cos(zen)", title="cascades")
+    ax = Axis(fig[1,1], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", ylabel="cos(zenith)", title="Cascades")
     hm = heatmap!(ax, reco_energy_bin_edges, reco_coszen_bin_edges, h[:, :, 1], colormap=colormap, colorrange=colorrange)
-    ax = Axis(fig[1,2], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", yticksvisible=true, yticklabelsvisible=false, title="tracks")
+    ax = Axis(fig[1,2], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", yticksvisible=true, yticklabelsvisible=false, title="Tracks")
     hm = heatmap!(ax, reco_energy_bin_edges, reco_coszen_bin_edges, h[:, :, 2], colormap=colormap, colorrange=colorrange)
     Colorbar(fig[1,3], hm)
     fig
 end
 
-function plot(params, osc_prob)
+function plot(params, osc_prob, data=observed)
 
     expected = get_expected(params, osc_prob, assets)
 
-    plotmap(expected)
-    
+    fig = Figure(size=(800, 600))
+    for j in 1:2
+        for i in 1:size(expected)[1]
+            ax = Axis(fig[i,j], yticklabelsize=10)
+            stephist!(ax, midpoints(reco_coszen_bin_edges), bins=reco_coszen_bin_edges, weights=expected[i, :, j])
+            scatter!(ax, midpoints(reco_coszen_bin_edges), data[i, :, j], color=:black)
+            ax.xticksvisible = false
+            ax.xticklabelsvisible = false
+            ax.xlabel = ""
+            up = maximum((maximum(data[i, :, j]), maximum(expected[i, :, j]))) * 1.2
+            ylims!(ax, 0, up)
+            e_low = reco_energy_bin_edges[i]
+            e_high = reco_energy_bin_edges[i+1]
+            text!(ax, 0.5, 0, text=@sprintf("E in [%.1f, %.1f] GeV", e_low, e_high), align = (:center, :bottom), space = :relative)
+        end
+    end
+    for i in 1:2
+        ax = fig.content[size(expected)[1]*i]
+        ax.xticklabelsvisible = true
+        ax.xticksvisible = true
+        ax.xlabel="cos(zenith)"
+    end
+    fig.content[1].title = "Cascades"
+    fig.content[9].title = "Tracks"
+    rowgap!(fig.layout, 0)
+    fig
 end
 
 end
