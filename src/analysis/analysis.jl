@@ -18,10 +18,10 @@ context = set_batcontext(ad = adsel)
 ###### CONFIG ######
 
 # Name for output files etc
-name = "deepcore_test_new_flux"
+name = "deepcore_Ultranest"
 
 # Choice of MCMC, Profile, Scan
-task = "Profile"
+task = "MCMC"
 
 # Choose oscillation model
 osc = Newtrinos.osc.standard
@@ -54,9 +54,13 @@ for var in conditional_vars
 end
 
 if task == "MCMC"
+    #import NestedSamplers
+    import UltraNest
     prior = distprod(;priors_dict...)
     posterior = PosteriorMeasure(llh, prior)
-    samples = bat_sample(posterior, MCMCSampling(mcalg = MetropolisHastings(), nsteps = 10^4, nchains = 4)).result
+    samples = bat_sample(posterior, ReactiveNestedSampling()).result
+    #samples = bat_sample(posterior, EllipsoidalNestedSampling()).result
+    #samples = bat_sample(posterior, MCMCSampling(mcalg = MetropolisHastings(), nsteps = 10^4, nchains = 4)).result
     FileIO.save(name * ".jld2", Dict("samples" => samples))
 
 else
