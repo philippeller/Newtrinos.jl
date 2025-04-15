@@ -3,9 +3,7 @@ module deepcore
 using LinearAlgebra
 using Distributions
 using DataStructures
-using DelimitedFiles
 using TypedTables
-using Interpolations
 using CSV
 using StatsBase
 using CairoMakie
@@ -16,38 +14,38 @@ const datadir = @__DIR__
 using Printf
 
 
-const reco_energy_bin_edges = [5.623413,  7.498942, 10. , 13.335215, 17.782795, 23.713737, 31.622776, 42.16965 , 56.23413]
-const reco_coszen_bin_edges = [-1., -0.75, -0.5 , -0.25,  0., 0.25, 0.5, 0.75, 1.]
-const pid_bin_edges = -0.5:1:1.5
-const type_bin_edges = [-0.5, 0.5, 3.5]
+function setup(config, datadir = @__DIR__)
 
-const cz_fine_bins = LinRange(-1,1, 201)
-const log10e_fine_bins = LinRange(0,3,201)
-const e_fine_bins = 10 .^log10e_fine_bins
-
-const cz_fine = midpoints(cz_fine_bins);
-const log10e_fine = midpoints(log10e_fine_bins);
-const e_fine = 10 .^log10e_fine;
-
-const e_ticks = (reco_energy_bin_edges, [@sprintf("%.1f",b) for b in reco_energy_bin_edges])
-
-const layers = earth_layers.compute_layers()
-const paths = earth_layers.compute_paths(cz_fine, layers);
+    binning = OrderedDict()
+    binning[:reco_energy_bin_edges] = [5.623413,  7.498942, 10. , 13.335215, 17.782795, 23.713737, 31.622776, 42.16965 , 56.23413]
+    binning[:reco_coszen_bin_edges] = [-1., -0.75, -0.5 , -0.25,  0., 0.25, 0.5, 0.75, 1.]
+    binning[:pid_bin_edges] = -0.5:1:1.5
+    binning[:type_bin_edges] = [-0.5, 0.5, 3.5]
+    binning[:cz_fine_bins] = LinRange(-1,1, 201)
+    binning[:log10e_fine_bins] = LinRange(0,3,201)
+    binning[:e_fine_bins] = 10 .^binning[:log10e_fine_bins]
+    binning[:cz_fine] = midpoints(binning[:cz_fine_bins])
+    binning[:log10e_fine] = midpoints(binning[:log10e_fine_bins])
+    binning[:e_fine] = 10 .^binning[:log10e_fine]
+    binning[:e_ticks] = (binning[:reco_energy_bin_edges], [@sprintf("%.1f",b) for b in binning[:reco_energy_bin_edges]])
 
 
+    binning = NamedTuple(binning)
+    
+    layers = config.earth_layers.compute_layers()
+    paths = config.earth_layers.compute_paths(binning.cz_fine, layers)
 
-function prepare_data(datadir = @__DIR__)
-
+  
     mc_nu = CSV.read(joinpath(datadir, "neutrino_mc.csv"), FlexTable; header=true);
     mc_nu.log10_true_energy = log10.(mc_nu.true_energy)
     
     function compute_indices(mc)
-        mc.e_idx = searchsortedfirst.(Ref(reco_energy_bin_edges), mc.reco_energy) .- 1
-        mc.c_idx = searchsortedfirst.(Ref(reco_coszen_bin_edges), mc.reco_coszen) .- 1
-        mc.p_idx = searchsortedfirst.(Ref(pid_bin_edges), mc.pid) .- 1
-        mc.t_idx = searchsortedfirst.(Ref(type_bin_edges), mc.type) .- 1
-        mc.ef_idx = searchsortedfirst.(Ref(log10e_fine_bins), mc.log10_true_energy) .- 1
-        mc.cf_idx = searchsortedfirst.(Ref(cz_fine_bins), mc.true_coszen) .- 1
+        mc.e_idx = searchsortedfirst.(Ref(binning.reco_energy_bin_edges), mc.reco_energy) .- 1
+        mc.c_idx = searchsortedfirst.(Ref(binning.reco_coszen_bin_edges), mc.reco_coszen) .- 1
+        mc.p_idx = searchsortedfirst.(Ref(binning.pid_bin_edges), mc.pid) .- 1
+        mc.t_idx = searchsortedfirst.(Ref(binning.type_bin_edges), mc.type) .- 1
+        mc.ef_idx = searchsortedfirst.(Ref(binning.log10e_fine_bins), mc.log10_true_energy) .- 1
+        mc.cf_idx = searchsortedfirst.(Ref(binning.cz_fine_bins), mc.true_coszen) .- 1
     end
     
     compute_indices(mc_nu);
@@ -66,7 +64,7 @@ function prepare_data(datadir = @__DIR__)
         vars_to_extract = setdiff(columnnames(csv), (:reco_coszen, :reco_energy, :pid))
         d = OrderedDict()
         for var in vars_to_extract
-            d[var] = fit(Histogram, (csv.reco_energy, csv.reco_coszen, csv.pid), weights(columns(csv)[var]), (reco_energy_bin_edges, reco_coszen_bin_edges, pid_bin_edges)).weights
+            d[var] = fit(Histogram, (csv.reco_energy, csv.reco_coszen, csv.pid), weights(columns(csv)[var]), (binning.reco_energy_bin_edges, binning.reco_coszen_bin_edges, binning.pid_bin_edges)).weights
         end
         Table(;d...)
     end
@@ -84,64 +82,27 @@ function prepare_data(datadir = @__DIR__)
     
     # ---------- Pre-Compute FLuxes --------
     
-    function get_hkkm_flux(filename)    
-    
-        flux_chunks = []
-        for i in 19:-1:0
-            idx = i*103 + 3: (i+1)*103
-            push!(flux_chunks, Float32.(readdlm(filename)[idx, 2:5]))
-        end
-        
-        log10_energy_flux_values = LinRange(-1, 4, 101)
-        
-        cz_flux_bins = LinRange(-1, 1, 21);
-        energy_flux_values = 10 .^ log10_energy_flux_values;
-        
-        cz_flux_values = LinRange(-0.95, 0.95, 20);
-        
-        hkkm_flux = permutedims(stack(flux_chunks), [1, 3, 2]);
-        
-        flux = OrderedDict{Symbol, Interpolations.Extrapolation}()
-        
-        flux[:numu] = cubic_spline_interpolation((log10_energy_flux_values, cz_flux_values), hkkm_flux[:, :, 1], extrapolation_bc = Line());
-        flux[:numubar] = cubic_spline_interpolation((log10_energy_flux_values, cz_flux_values), hkkm_flux[:, :, 2], extrapolation_bc = Line());
-        flux[:nue] = cubic_spline_interpolation((log10_energy_flux_values, cz_flux_values), hkkm_flux[:, :, 3], extrapolation_bc = Line());
-        flux[:nuebar] = cubic_spline_interpolation((log10_energy_flux_values, cz_flux_values), hkkm_flux[:, :, 4], extrapolation_bc = Line());
-    
-        return flux
-    end
-    
-    flux_splines = get_hkkm_flux(joinpath(datadir, "spl-nu-20-01-000.d"))
-    
-    flux = OrderedDict{Symbol, Table}()
 
-    # make fine grid
-    e = ones(size(cz_fine))' .* e_fine;
-    log10e = ones(size(cz_fine))' .* log10e_fine;
-    cz = cz_fine' .* ones(size(e_fine));
     
-    for key in [:nue, :numu]
-        for anti in ["", "bar"]
-            fkey = Symbol(key, anti)
-            f = FlexTable(true_energy=[(e...)...], log10_true_energy=[(log10e...)...], true_coszen=[(cz...)...])
-            f.flux = flux_splines[fkey].(f.log10_true_energy, f.true_coszen);
-            flux[fkey] = Table(f)
-        end
-    end
-    
-    
-    return (
-            mc = mc,
-            hyperplanes = hyperplanes,
-            flux = NamedTuple(flux),
-            muons = muons
-            ),(
-            data.count
-            )
+    # for key in [:nue, :numu]
+    #     for anti in ["", "bar"]
+    #         fkey = Symbol(key, anti)
+    #         f = FlexTable(true_energy=binning.e_fine_meshgrid, log10_true_energy=binning.log10e_fine_meshgrid, true_coszen=binning.cz_fine_meshgrid)
+    #         f.flux = flux_splines[fkey].(f.log10_true_energy, f.true_coszen);
+    #         flux[fkey] = Table(f)
+    #     end
+    # end
+
+    # flux = NamedTuple(flux)
+
+    flux = config.atm_flux.get_nominal_flux(binning.e_fine, binning.cz_fine)
+
+    global assets = (;mc, hyperplanes, flux, muons, observed=data.count, layers, paths, binning)
+
+    return nothing
 
 end
 
-const assets, observed = prepare_data()
 
     
 # ---------- DATA IS PREPARED --------------
@@ -156,10 +117,7 @@ params[:deepcore_opt_eff_lateral] = 0.
 params[:deepcore_opt_eff_headon] = 0.
 params[:nc_norm] = 1.
 params[:nutau_cc_norm] = 1.
-params[:atm_flux_nunubar_sigma] = 0.
-params[:atm_flux_nuenumu_sigma] = 0.
-params[:atm_flux_delta_spectral_index] = 0.
-params[:atm_flux_uphorizonzal_sigma] = 0.
+
 
 priors = OrderedDict()
 priors[:deepcore_lifetime] = Uniform(2, 4)
@@ -171,10 +129,6 @@ priors[:deepcore_opt_eff_lateral] = Truncated(Normal(0, 1.), -2, 2)
 priors[:deepcore_opt_eff_headon] = Uniform(-5, 2.)
 priors[:nc_norm] = Truncated(Normal(1, 0.2), 0.4, 1.6)
 priors[:nutau_cc_norm] = Uniform(0., 2.)
-priors[:atm_flux_nunubar_sigma] = Truncated(Normal(0., 1.), -3, 3)
-priors[:atm_flux_nuenumu_sigma] = Truncated(Normal(0., 1.), -3, 3)
-priors[:atm_flux_delta_spectral_index] = Truncated(Normal(0., 0.1), -0.3, 0.3)
-priors[:atm_flux_uphorizonzal_sigma] = Truncated(Normal(0., 1.), -3, 3)
 
 
 # ------------- Define Model --------
@@ -196,65 +150,6 @@ function make_hist_per_channel(mc, osc_flux, lifetime_seconds)
     make_hist(mc.e_idx, mc.c_idx, mc.p_idx, mc.t_idx, w)
 end
 
-function scale_flux(A, B, scale)
-    # scale a ratio between A and B
-    r = A ./ B
-    total = A .+ B
-    mod_B = total ./ (1 .+ r .* scale)
-    mod_A = r .* scale .* mod_B
-    return mod_A, mod_B  # Returns two separate vectors instead of tuples
-end
-
-function uphorizontal(coszen, rel_error)
-    # ratio of an ellipse to a circle
-    b = rel_error
-    a = 1/rel_error
-    1 / sqrt((b^2 - a^2) * coszen^2 + a^2)
-end
-
-function calc_sys_flux(flux, params)
-
-    # we can do this because all grids are identical
-    e = flux[:nue].true_energy
-    log10e = flux[:nue].log10_true_energy
-    cz = flux[:nue].true_coszen
-
-    # spectral
-    f_spectral_shift = (e ./ 24.0900951261) .^ params.atm_flux_delta_spectral_index
-
-
-    # all coefficients below come from fits to the Figs. 7 & 9 in Uncertainties in Atmospheric Neutrino Fluxes by Barr & Robbins
-    
-    # nue - nuebar
-    uncert = ((0.73 * e) .^(0.59) .+ 4.8) / 100.
-    flux_nue1, flux_nuebar1 = scale_flux(flux[:nue].flux, flux[:nuebar].flux, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))
-    
-    # numu - numubar
-    uncert = ((9.6 * e) .^(0.41) .-0.8) / 100.
-    flux_numu1, flux_numubar1 = scale_flux(flux[:numu].flux, flux[:numubar].flux, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))        
-
-    # nue - numu
-    uncert = ((0.051 * e) .^(0.63) .+ 0.73) / 100.
-    flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
-    flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
-
-    # up/horizontal
-    # nue
-    uncert = (-0.43*log10e.^5 .+ 1.17*log10e.^4 .+ 0.89*log10e.^3 .- 0.36*log10e.^2 .- 1.59*log10e .+ 1.96) / 100.
-    f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
-    flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal
-    flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal
-    
-    #numu
-    uncert = (-0.16*log10e.^5 .+ 0.45*log10e.^4 .+ 0.48*log10e.^3 .+ 0.17*log10e.^2 .- 1.88*log10e .+ 1.88) / 100.
-    f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
-    flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal
-    flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal
-
-    s = (size(e_fine)[1], size(cz_fine)[1])
-
-    return (reshape(flux_nue3, s), reshape(flux_numu3, s)), (reshape(flux_nuebar3, s), reshape(flux_numubar3, s)) 
-end
 
 # Function that should NOT allocate
 function gather_flux(p_flux, ef, cf, j)
@@ -266,18 +161,20 @@ function gather_flux(p_flux, ef, cf, j)
 end
 
 
-function reweight(mc, flux, params, osc_prob)
-    sys_flux, sys_flux_anti = calc_sys_flux(flux, params)
+function reweight(params, config, assets)
+    sys_flux = config.atm_flux.calc_sys_flux(assets.flux, params)
 
-    p = osc_prob(e_fine, paths, layers, params)
-    p_flux = sys_flux[1] .* p[:, :, 1, :] .+ sys_flux[2] .* p[:, :, 2, :]
-    
-    nus = NamedTuple(ch=>gather_flux(p_flux, mc[ch].ef_idx, mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
-    
-    p = osc_prob(e_fine, paths, layers, params, anti=true)
-    p_flux = sys_flux_anti[1] .* p[:, :, 1, :] .+ sys_flux_anti[2] .* p[:, :, 2, :]
+    s = (size(assets.binning.e_fine)[1], size(assets.binning.cz_fine)[1])
 
-    nubars = NamedTuple(ch=>gather_flux(p_flux, mc[ch].ef_idx, mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
+    p = config.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
+    p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
+    
+    nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
+    
+    p = config.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
+    p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
+
+    nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
 
     merge(nus, nubars)
 end
@@ -311,9 +208,9 @@ function apply_hyperplanes(hists, params, hyperplanes)
     )    
 end 
 
-function get_expected(params, osc_prob, assets)
+function get_expected(params, config, assets)
 
-    osc_flux = reweight(assets.mc, assets.flux, params, osc_prob)
+    osc_flux = reweight(params, config, assets)
 
     lifetime_seconds = params.deepcore_lifetime * 365. * 24. * 3600.
 
@@ -326,10 +223,10 @@ function get_expected(params, osc_prob, assets)
 end
 
 
-function forward_model(osc_prob)
+function forward_model(config)
     model = let this_assets = assets
         params -> begin
-            exp_events = get_expected(params, osc_prob, this_assets)
+            exp_events = get_expected(params, config, this_assets)
             distprod(Poisson.(exp_events))
         end
     end
@@ -345,31 +242,31 @@ function plotmap(h; colormap=Reverse(:Spectral), symm=false)
     end
     
     fig = Figure(size=(800, 400))
-    ax = Axis(fig[1,1], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", ylabel="cos(zenith)", title="Cascades")
-    hm = heatmap!(ax, reco_energy_bin_edges, reco_coszen_bin_edges, h[:, :, 1], colormap=colormap, colorrange=colorrange)
+    ax = Axis(fig[1,1], xscale=log10, xticks=assets.binning.e_ticks, xlabel="E (GeV)", ylabel="cos(zenith)", title="Cascades")
+    hm = heatmap!(ax, assets.binning.reco_energy_bin_edges, assets.binning.reco_coszen_bin_edges, h[:, :, 1], colormap=colormap, colorrange=colorrange)
     ax = Axis(fig[1,2], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", yticksvisible=true, yticklabelsvisible=false, title="Tracks")
-    hm = heatmap!(ax, reco_energy_bin_edges, reco_coszen_bin_edges, h[:, :, 2], colormap=colormap, colorrange=colorrange)
+    hm = heatmap!(ax, assets.binning.reco_energy_bin_edges, assets.binning.reco_coszen_bin_edges, h[:, :, 2], colormap=colormap, colorrange=colorrange)
     Colorbar(fig[1,3], hm)
     fig
 end
 
-function plot(params, osc_prob, data=observed)
+function plot(params, config, data=assets.observed)
 
-    expected = get_expected(params, osc_prob, assets)
+    expected = get_expected(params, config, assets)
 
     fig = Figure(size=(800, 600))
     for j in 1:2
         for i in 1:size(expected)[1]
             ax = Axis(fig[i,j], yticklabelsize=10)
-            stephist!(ax, midpoints(reco_coszen_bin_edges), bins=reco_coszen_bin_edges, weights=expected[i, :, j])
-            scatter!(ax, midpoints(reco_coszen_bin_edges), data[i, :, j], color=:black)
+            stephist!(ax, midpoints(assets.binning.reco_coszen_bin_edges), bins=assets.binning.reco_coszen_bin_edges, weights=expected[i, :, j])
+            scatter!(ax, midpoints(assets.binning.reco_coszen_bin_edges), data[i, :, j], color=:black)
             ax.xticksvisible = false
             ax.xticklabelsvisible = false
             ax.xlabel = ""
             up = maximum((maximum(data[i, :, j]), maximum(expected[i, :, j]))) * 1.2
             ylims!(ax, 0, up)
-            e_low = reco_energy_bin_edges[i]
-            e_high = reco_energy_bin_edges[i+1]
+            e_low = assets.binning.reco_energy_bin_edges[i]
+            e_high = assets.binning.reco_energy_bin_edges[i+1]
             text!(ax, 0.5, 0, text=@sprintf("E in [%.1f, %.1f] GeV", e_low, e_high), align = (:center, :bottom), space = :relative)
         end
     end

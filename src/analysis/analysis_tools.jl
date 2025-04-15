@@ -16,6 +16,8 @@ import ValueShapes
 using FileIO
 using FillArrays
 import JLD2
+using MeasureBase
+using FunctionChains
 
 adsel = AutoForwardDiff()
 set_batcontext(ad = adsel)
@@ -255,12 +257,23 @@ function bestfit(result::NewtrinosResult)
     NamedTuple(bf)
 end
 
-function generate_likelihood(modules, osc, data)
-    llhs = [let osc_prob = osc.osc_prob, observed = data[i] 
-        params -> logpdf(modules[i].forward_model(osc_prob)(params), observed)
-        end
-        for i in 1:length(modules)]
+function get_priors(modules, config)
+     NamedTuple(merge(vcat([m.priors for m in config], [m.priors for m in modules])...))
+end
 
-    logfuncdensity(params -> sum([f(params) for f in llhs]))
+function get_params(modules, config)
+     NamedTuple(merge(vcat([m.params for m in config], [m.params for m in modules])...))
+end
 
+function get_observed(modules)
+    NamedTuple(OrderedDict([nameof(m)=>m.assets.observed for m in modules]))
+end
+
+function get_fwd_model(modules, config)
+    fwd_models = NamedTuple(OrderedDict([nameof(m)=>m.forward_model(config) for m in modules]))
+    distprod ∘ ffanout(fwd_models)
+end
+
+function generate_likelihood(modules, config, observed=get_observed(modules))
+    likelihoodof(get_fwd_model(modules, config), observed)
 end

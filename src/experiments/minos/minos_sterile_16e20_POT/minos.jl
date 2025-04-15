@@ -7,7 +7,7 @@ using BAT
 using DataStructures
 using CairoMakie
 
-function prepare_data(datadir = @__DIR__)
+function setup(config, datadir = @__DIR__)
 
     h5file = h5open(joinpath(datadir, "dataRelease.h5"), "r")
 
@@ -34,25 +34,27 @@ function prepare_data(datadir = @__DIR__)
         for channel in channels
     ])
 
-   return (
+   global assets = (
         ch_data = ch_data,
         TotalCCCovar = (x->reshape(x, fill(Int(sqrt(length(x))), 2)...))(read(h5file["TotalCCCovar"])),
         TotalNCCovar = (x->reshape(x, fill(Int(sqrt(length(x))), 2)...))(read(h5file["TotalNCCovar"])),
-    ), (
+        observed = (
             CC = ch_data["FDCC"].observed,
             NC = ch_data["FDNC"].observed,
-        )
+        ),
+    )
+
+    return nothing
 end
 
-const assets, observed = prepare_data()
 params = OrderedDict()
 priors = OrderedDict()
 
 
-function get_expected_per_channel(params, osc_prob, assets)
+function get_expected_per_channel(params, config, assets)
     # Minos baseline:
     s = assets.smearings
-    p = osc_prob(s.E, [assets.L], params)
+    p = config.osc.osc_prob(s.E, [assets.L], params)
     NuMu = s.NuMu * p[:,[1],2,2]
     TrueNC = s.TrueNC * dropdims(sum(p[:,[1],2,1:3], dims=3), dims=3)
     BeamNue = s.BeamNue * p[:,[1],1,1]
@@ -61,12 +63,12 @@ function get_expected_per_channel(params, osc_prob, assets)
     dropdims(NuMu + TrueNC + BeamNue + AppNue + AppNuTau, dims=2)
 end
 
-function forward_model_per_channel(params, osc_prob, channel, assets)
+function forward_model_per_channel(params, config, channel, assets)
    
     observed_far = assets.ch_data["FD"*channel].observed
-    expected_far = get_expected_per_channel(params, osc_prob, assets.ch_data["FD"*channel])
+    expected_far = get_expected_per_channel(params, config, assets.ch_data["FD"*channel])
     observed_near = assets.ch_data["ND"*channel].observed
-    expected_near = get_expected_per_channel(params, osc_prob, assets.ch_data["ND"*channel])
+    expected_near = get_expected_per_channel(params, config, assets.ch_data["ND"*channel])
     
     cov = channel == "CC" ? assets.TotalCCCovar : assets.TotalNCCovar
 
@@ -88,20 +90,20 @@ function forward_model_per_channel(params, osc_prob, channel, assets)
     Distributions.MvNormal(expected, (cov+cov')/2)
 end
 
-function forward_model(osc_prob)
+function forward_model(config)
     model = let this_assets = assets
         params -> distprod(
-            CC = forward_model_per_channel(params, osc_prob, "CC", this_assets),
-            NC = forward_model_per_channel(params, osc_prob, "NC", this_assets),
+            CC = forward_model_per_channel(params, config, "CC", this_assets),
+            NC = forward_model_per_channel(params, config, "NC", this_assets),
         )
         end
 end
 
-function plot(params, osc_prob, d=observed)
+function plot(params, config, d=assets.observed)
     f = Figure()
 
-    m = mean(forward_model(osc_prob)(params))
-    v = var(forward_model(osc_prob)(params))
+    m = mean(forward_model(config)(params))
+    v = var(forward_model(config)(params))
     
     for (i, ch) in enumerate([:CC, :NC])
     
