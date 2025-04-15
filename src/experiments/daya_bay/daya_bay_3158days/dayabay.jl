@@ -122,7 +122,12 @@ end
 
 const normalized_ad_contribs_to_far_hall = ad_contribs_to_far_hall ./ sum(ad_contribs_to_far_hall)
 const covmat_prefactor = sum(normalized_ad_contribs_to_far_hall .^ 2)
-const observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N);
+
+function setup(config)
+    nothing
+end
+
+assets = (observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N),)
 
 energy_bins = copy(dfBKG_dict["dfBKG_Six_EH3"].Emin)
 energy = copy(dfBKG_dict["dfBKG_Six_EH3"].Ec)
@@ -131,29 +136,29 @@ push!(energy_bins, dfBKG_dict["dfBKG_Six_EH3"].Emax[end])
 params = OrderedDict()
 priors = OrderedDict()
 
-function get_expected_per_period(params, period, osc_prob)
+function get_expected_per_period(params, period, config)
     E = E_arrs[period]
     L = L_arrs[period]
-    prob_arr = osc_prob(E, L, params, anti=true)[:, :, 1, 1]'
+    prob_arr = config.osc.osc_prob(E, L, params, anti=true)[:, :, 1, 1]'
     L2 = L .^ 2
     prob = vec(sum(prob_arr./L2, dims=1) ./ sum(1 ./L2))
     Npred_EH3_with_osc = Npred_EH3_nooscs[period] .* prob
 end
 
 # Define function to give the expected events at the far hall (EH3)
-function get_expected(params, osc_prob)
-    sum([get_expected_per_period(params, period, osc_prob) for period in 1:length(period_list)])
+function get_expected(params, config)
+    sum([get_expected_per_period(params, period, config) for period in 1:length(period_list)])
 end
 
-function forward_model(osc_prob)
+function forward_model(config)
     model = params -> begin
-        exp_events = get_expected(params, osc_prob)
+        exp_events = get_expected(params, config)
         cov = Symmetric(Diagonal(exp_events .* rel_unc_diag) * corr_mat * Diagonal(exp_events .* rel_unc_diag)) * covmat_prefactor + Diagonal(exp_events)
         Distributions.MvNormal(exp_events, cov)
     end
 end
 
-function plot(params, osc_prob, data=observed)
+function plot(params, osc_prob, data=assets.observed)
     
     m = mean(forward_model(osc_prob)(params))
     v = var(forward_model(osc_prob)(params))

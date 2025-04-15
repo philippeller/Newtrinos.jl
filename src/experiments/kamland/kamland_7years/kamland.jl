@@ -37,7 +37,11 @@ end
 # Import data
 const datadir = @__DIR__ 
 
-const observed = round.(CSV.read(joinpath(datadir, "KamLAND_data.csv"), DataFrame; header=false)[:, 2])
+assets = (observed = round.(CSV.read(joinpath(datadir, "KamLAND_data.csv"), DataFrame; header=false)[:, 2]),)
+function setup(config)
+    nothing
+end
+
 const no_osc = CSV.read(joinpath(datadir, "KamLAND_no_osc.csv"), DataFrame; header=false)[:, 2]
 const bestfit_osc = CSV.read(joinpath(datadir, "KamLAND_best_fit_osc.csv"), DataFrame; header=false)[:, 2]
 const bestfit_BG = CSV.read(joinpath(datadir, "KamLAND_best_fit_withBG.csv"), DataFrame; header=false)[:, 2]
@@ -59,12 +63,12 @@ const Ep_fine = 0.5 * (Ep_bins_fine[1:end-1] .+ Ep_bins_fine[2:end])
 # these weights are according to very approximately a reactor nergy spectrum
 const weights = pdf(LogNormal(log(3.25),0.38), Ep_fine);
 
-function get_expected(params, osc_prob)
+function get_expected(params, config)
     E_fine = (Ep_fine .+ NEUTRINO_POSITRON_ENERGY_SHIFT) .* (1 .+ ENERGY_SCALE_UNC .* params.kamland_energy_scale)
 
     BG = allBG .+ geonu .* (params.kamland_geonu_scale)
 
-    prob_outer_fine = osc_prob(E_fine .* 1e-3, L, params, anti=true)[:, :, 1, 1]'
+    prob_outer_fine = config.osc.osc_prob(E_fine .* 1e-3, L, params, anti=true)[:, :, 1, 1]'
 
     prob_fine = dropdims(sum(flux_factor .* prob_outer_fine, dims=1), dims=1)
     Ep_resolutions = ENERGY_RESOL_1MEV .* sqrt.(Ep_fine)
@@ -83,17 +87,17 @@ function get_expected(params, osc_prob)
     return exp_events_noBG .+ BG
 end
 
-function forward_model(osc_prob)
+function forward_model(config)
     model = params -> begin
-        exp_events = get_expected(params, osc_prob)
+        exp_events = get_expected(params, config)
         distprod(Poisson.(exp_events))
     end
 end
 
-function plot(params, osc_prob, data=observed)
+function plot(params, config, data=assets.observed)
 
-    m = mean(forward_model(osc_prob)(params))
-    v = var(forward_model(osc_prob)(params))
+    m = mean(forward_model(config)(params))
+    v = var(forward_model(config)(params))
     
     energy = Ep
     energy_bins = Ep_bins

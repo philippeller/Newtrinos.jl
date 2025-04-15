@@ -11,6 +11,8 @@ export compute_paths
 
 const datadir = @__DIR__ 
 
+params = OrderedDict()
+priors = OrderedDict()
 
 function compute_layers(;p_fractions=0.5, atm_heihgt = 20.)
     
