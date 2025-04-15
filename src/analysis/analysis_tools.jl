@@ -18,6 +18,7 @@ using FillArrays
 import JLD2
 using MeasureBase
 using FunctionChains
+using Accessors
 
 adsel = AutoForwardDiff()
 set_batcontext(ad = adsel)
@@ -39,25 +40,24 @@ function build_optimizationfunction(f, adsel::BAT._NoADSelected)
 end
 
 "Find Maximum Likelihood Estimator (MLE)"
-function find_mle(llh, prior, v_init_dict)
+function find_mle(likelihood, prior, params)
 
     adsel = AutoForwardDiff()
     set_batcontext(ad = adsel)
     
-    posterior = PosteriorMeasure(llh, prior)
+    posterior = PosteriorMeasure(likelihood, prior)
 
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
     
     for key in keys(prior)
     	if prior[key] isa ValueShapes.ConstValueDist
-    	    v_init_dict[key] = prior[key].value
+    	    @reset params[key] = prior[key].value
     	end
     end
 
-    v_init = NamedTuple(v_init_dict)
 
     # THIS ONE WORKS:
-    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init])))#, kwargs = (reltol=1e-7, maxiters=10000)))
+    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params])))#, kwargs = (reltol=1e-7, maxiters=10000)))
 
     # This one also works, and IS thread safe:
 
@@ -94,7 +94,7 @@ function find_mle(llh, prior, v_init_dict)
     #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
     #res = bat_findmode(posterior, OptimizationAlg(optalg=NLopt.GN_CRS2_LM()))
 
-    return logdensityof(llh, res.result), logdensityof(posterior, res.result), res.result
+    return logdensityof(likelihood, res.result), logdensityof(posterior, res.result), res.result
 
     # posterior = PosteriorMeasure(llh, prior)
 
@@ -116,16 +116,16 @@ function find_mle(llh, prior, v_init_dict)
 end
 
 
-function generate_scanpoints(vars_to_scan, prior_dict)
+function generate_scanpoints(vars_to_scan, priors)
     vars = collect(keys(vars_to_scan))
-    values = [quantile(prior_dict[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
+    values = [quantile(priors[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
     mesh = collect(IterTools.product(values...))
     scanpoints = Array{Any}(undef, size(mesh))
 
     function make_prior(vals)
-        p = copy(prior_dict)
+        p = deepcopy(priors)
         for i in 1:length(vars_to_scan)
-            p[vars[i]] = vals[i]
+            @reset p[vars[i]] = vals[i]
         end
         distprod(;p...)
     end
@@ -137,10 +137,10 @@ function generate_scanpoints(vars_to_scan, prior_dict)
     values, scanpoints
 end
 
-function find_mle_cached(llh, prior, v_init_dict, cache_dir)
+function find_mle_cached(likelihood, prior, params, cache_dir)
     opt_result = nothing
 
-    h = ContentHashes.hash([prior, v_init_dict])
+    h = ContentHashes.hash([prior, params])
 
     if !isnothing(cache_dir)
         fname = joinpath(cache_dir, "$h.jld2")
@@ -152,7 +152,7 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
     end
     
     if isnothing(opt_result)
-        opt_result = find_mle(llh, prior, copy(v_init_dict))
+        opt_result = find_mle(likelihood, prior, deepcopy(params))
     end
 
     if !isnothing(cache_dir)
@@ -163,13 +163,13 @@ function find_mle_cached(llh, prior, v_init_dict, cache_dir)
     opt_result
 end
 
-function _profile(llh, scanpoints, v_init_dict, cache_dir)
+function _profile(likelihood, scanpoints, params, cache_dir)
     results = Array{Any}(undef, size(scanpoints))
     llhs = Array{Any}(undef, size(scanpoints))
     log_posteriors = Array{Any}(undef, size(scanpoints))
 
     Threads.@threads for i in eachindex(scanpoints)
-        opt_result = find_mle_cached(llh, scanpoints[i], v_init_dict, cache_dir)
+        opt_result = find_mle_cached(likelihood, scanpoints[i], params, cache_dir)
         llhs[i] = opt_result[1]
         log_posteriors[i] = opt_result[2]
         results[i] = opt_result[3]
@@ -181,21 +181,21 @@ function _profile(llh, scanpoints, v_init_dict, cache_dir)
 end
 
 "Run Profile llh scan"
-function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
+function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing)
 
     #check if there is actually any variable to be profiled over, or if they all or just Numbers
-    if all([isa(prior_dict[var], Number) for var in setdiff(keys(prior_dict), keys(vars_to_scan))])
+    if all([isa(priors[var], Number) for var in setdiff(keys(priors), keys(vars_to_scan))])
         # so all variables are just numbers and it reduces to a simple scan
-        return scan(llh, prior_dict, vars_to_scan, v_init_dict)
+        return scan(llh, priors, vars_to_scan, params)
     end
     
-    values, scanpoints = generate_scanpoints(vars_to_scan, prior_dict)
+    values, scanpoints = generate_scanpoints(vars_to_scan, priors)
     if !isnothing(cache_dir)
         if !isdir(cache_dir)
             mkdir(cache_dir)
         end
     end
-    res = _profile(llh, scanpoints, v_init_dict, cache_dir)
+    res = _profile(likelihood, scanpoints, params, cache_dir)
 
     axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
     result = NewtrinosResult(axes=axes, values=res)
@@ -203,18 +203,18 @@ function profile(llh, prior_dict, vars_to_scan, v_init_dict; cache_dir=nothing)
 end
 
 "Run simple llh scan"
-function scan(llh, prior_dict, vars_to_scan, param_dict; gradient_map=false)
+function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
     vars = collect(keys(vars_to_scan))
-    values = [quantile(prior_dict[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
+    values = [quantile(priors[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
     mesh = collect(IterTools.product(values...))
     scanpoints = Array{Any}(undef, size(mesh))
 
     function make_params(vals)
-        p = copy(param_dict)
+        p = deepcopy(params)
         for i in 1:length(vars_to_scan)
-            p[vars[i]] = vals[i]
+            @reset p[vars[i]] = vals[i]
         end
-        NamedTuple(p)
+        return p
     end
 
     for i in eachindex(mesh)
@@ -227,14 +227,14 @@ function scan(llh, prior_dict, vars_to_scan, param_dict; gradient_map=false)
     end
 
     Threads.@threads for i in eachindex(scanpoints)
-        params = scanpoints[i]
-        llhs[i] = logdensityof(llh, params)
+        p = scanpoints[i]
+        llhs[i] = logdensityof(likelihood, p)
         if gradient_map
-            grads[i] = ForwardDiff.gradient(x -> logdensityof(llh, x),  params)
+            grads[i] = ForwardDiff.gradient(x -> logdensityof(likelihood, x),  p)
         end
     end
 
-    s = OrderedDict{Symbol, Array}(key=>Fill(param_dict[key], size(mesh)) for key in setdiff(keys(param_dict), keys(vars_to_scan)))
+    s = OrderedDict{Symbol, Array}(key=>Fill(params[key], size(mesh)) for key in setdiff(keys(params), keys(vars_to_scan)))
     if gradient_map
         g = OrderedDict(Symbol(key, "_grad")=>[x[key] for x in grads] for key in keys(first(grads)))
         s = merge(s, g)
