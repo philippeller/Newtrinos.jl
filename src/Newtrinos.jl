@@ -2,9 +2,9 @@ module Newtrinos
 
 export NewtrinosResult, plot
 
-include("theory/osc.jl")
-include("theory/earth_layers.jl")
-include("theory/atm_flux.jl")
+include("physics/osc.jl")
+include("physics/earth_layers.jl")
+include("physics/atm_flux.jl")
 include("analysis/analysis_tools.jl")
 include("utils/plotting.jl")
 include("utils/autodiff.jl")
