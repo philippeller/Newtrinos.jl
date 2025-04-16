@@ -186,6 +186,9 @@ module standard
     params_io = copy(params_no)
     params_io[:Δm²₃₁] = ftype(-2.4e-3)
 
+    params_no = NamedTuple(params_no)
+    params_io = NamedTuple(params_io)
+
     priors_no = OrderedDict()
     priors_no[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
     priors_no[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
@@ -197,6 +200,9 @@ module standard
     priors_io = copy(priors_no)
     priors_io[:Δm²₃₁] = Uniform(ftype(-3e-3), ftype(-2e-3))
 
+    priors_no = NamedTuple(priors_no)
+    priors_io = NamedTuple(priors_io)
+
     # if not specified, assume normal ordering
     params = params_no
     priors = priors_no
@@ -206,6 +212,7 @@ end
 
 module sterile
     using Distributions
+    using DataStructures
     using ..osc
     using LinearAlgebra
 
@@ -224,11 +231,13 @@ module sterile
         return U_sterile, H
     end
 
-    params = copy(standard.params)
+    params = OrderedDict(pairs(standard.params))
     params[:Δm²₄₁] = 1
     params[:θ₁₄] = 0.1
     params[:θ₂₄] = 0.1
     params[:θ₃₄] = 0.1
+
+    params = NamedTuple(params)
 
     # Missing
     priors = nothing
@@ -236,6 +245,7 @@ end
 
 module ADD
     using Distributions
+    using DataStructures
     using ..osc
     using LinearAlgebra
 
@@ -299,18 +309,21 @@ module ADD
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
 
-    params = copy(standard.params)
+    params = OrderedDict(pairs(standard.params))
     params[:m₀] = ftype(0.01)
     params[:ADD_radius] = ftype(1e-2)
+    params = NamedTuple(params)
 
-    priors = copy(standard.priors)
+    priors = OrderedDict{Symbol, Distribution}(pairs(standard.priors))
     priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
     priors[:ADD_radius] = LogUniform(ftype(1e-3),ftype(1))
+    priors = NamedTuple(priors)
 
 end
 
 module Darkdim
     using Distributions
+    using DataStructures
     using ..osc
     using LinearAlgebra
 
@@ -397,24 +410,27 @@ module Darkdim
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
 
-    params = copy(standard.params)
+    params = OrderedDict(pairs(standard.params))
     params[:m₀] = ftype(0.01)
     params[:ca1] = ftype(1e-4)
     params[:ca2] = ftype(1e-4)
     params[:ca3] = ftype(1e-4)
     params[:Darkdim_radius] = ftype(1e-2)
-    
-    priors = copy(standard.priors)
+    params = NamedTuple(params)
+   
+    priors = OrderedDict{Symbol, Distribution}(pairs(standard.priors))
     priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
     priors[:ca1] = LogUniform(ftype(1e-5), ftype(10))
     priors[:ca2] = LogUniform(ftype(1e-5), ftype(10))
     priors[:ca3] = LogUniform(ftype(1e-5), ftype(10))
     priors[:Darkdim_radius] = LogUniform(ftype(1e-3),ftype(1))
+    priors = NamedTuple(priors)
 
 end
 
 module Darkdim_L
     using Distributions
+    using DataStructures
     using ..osc
     using LinearAlgebra
 
@@ -505,7 +521,7 @@ module Darkdim_L
         Float64.(permutedims(p, (3, 4, 1, 2)))
     end
 
-    params = copy(standard.params)
+    params = OrderedDict(pairs(standard.params))
     pop!(params, :Δm²₂₁)
     pop!(params, :Δm²₃₁)
     
@@ -543,8 +559,10 @@ module Darkdim_L
     params[:λ₁] = 0.221826
     params[:λ₂] = 0.000558143
     params[:λ₃] = 0.0902954
+    params = NamedTuple(params)
 
-    priors = copy(standard.priors)
+
+    priors = OrderedDict{Symbol, Distribution}(pairs(standard.priors))
     pop!(priors, :Δm²₂₁)
     pop!(priors, :Δm²₃₁)
     priors[:Darkdim_radius] = LogUniform(ftype(4),ftype(6))
@@ -556,6 +574,7 @@ module Darkdim_L
     priors[:λ₁] = Uniform(ftype(0), ftype(5))
     priors[:λ₂] = Uniform(ftype(0), ftype(5))
     priors[:λ₃] = Uniform(ftype(0), ftype(5))
+    priors = NamedTuple(priors)
 
 end
 

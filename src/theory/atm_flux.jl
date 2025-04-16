@@ -10,18 +10,19 @@ using TypedTables
 
 const datadir = @__DIR__ 
 
-params = OrderedDict()
-params[:atm_flux_nunubar_sigma] = 0.
-params[:atm_flux_nuenumu_sigma] = 0.
-params[:atm_flux_delta_spectral_index] = 0.
-params[:atm_flux_uphorizonzal_sigma] = 0.
+params = (
+    atm_flux_nunubar_sigma = 0.,
+    atm_flux_nuenumu_sigma = 0.,
+    atm_flux_delta_spectral_index = 0.,
+    atm_flux_uphorizonzal_sigma = 0.,
+    )
 
-priors = OrderedDict()
-priors[:atm_flux_nunubar_sigma] = Truncated(Normal(0., 1.), -3, 3)
-priors[:atm_flux_nuenumu_sigma] = Truncated(Normal(0., 1.), -3, 3)
-priors[:atm_flux_delta_spectral_index] = Truncated(Normal(0., 0.1), -0.3, 0.3)
-priors[:atm_flux_uphorizonzal_sigma] = Truncated(Normal(0., 1.), -3, 3)
-
+priors = (
+    atm_flux_nunubar_sigma = Truncated(Normal(0., 1.), -3, 3),
+    atm_flux_nuenumu_sigma = Truncated(Normal(0., 1.), -3, 3),
+    atm_flux_delta_spectral_index = Truncated(Normal(0., 0.1), -0.3, 0.3),
+    atm_flux_uphorizonzal_sigma = Truncated(Normal(0., 1.), -3, 3),
+    )
 
 function get_hkkm_flux(filename)    
 

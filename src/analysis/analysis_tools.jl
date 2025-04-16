@@ -257,23 +257,54 @@ function bestfit(result::NewtrinosResult)
     NamedTuple(bf)
 end
 
-function get_priors(modules, config)
-     NamedTuple(merge(vcat([m.priors for m in config], [m.priors for m in modules])...))
+function safe_merge(nt_list::NamedTuple...)
+    """ Merge namedtuples such that duplicates are checked for consistentcy
+    """
+    merged = NamedTuple()  # start with an empty NamedTuple
+    for nt in nt_list
+        for (k, v) in pairs(nt)
+            if haskey(merged, k)
+                if merged[k] != v
+                    error("Conflict on key '$k': $(merged[k]) ≠ $v")
+                end
+            end
+        end
+        merged = merge(merged, nt)
+    end
+    return merged
 end
 
-function get_params(modules, config)
-     NamedTuple(merge(vcat([m.params for m in config], [m.params for m in modules])...))
+function get_priors(modules)
+    all_priors = []
+    for m in modules
+        push!(all_priors, m.priors)
+        for c in m.config
+            push!(all_priors, NamedTuple(c.priors))
+        end
+    end
+    safe_merge(all_priors...)
+end
+
+function get_params(modules)
+    all_params = []
+    for m in modules
+        push!(all_params, m.params)
+        for c in m.config
+            push!(all_params, c.params)
+        end
+    end
+    safe_merge(all_params...)
 end
 
 function get_observed(modules)
     NamedTuple(OrderedDict([nameof(m)=>m.assets.observed for m in modules]))
 end
 
-function get_fwd_model(modules, config)
-    fwd_models = NamedTuple(OrderedDict([nameof(m)=>m.forward_model(config) for m in modules]))
+function get_fwd_model(modules)
+    fwd_models = NamedTuple(OrderedDict([nameof(m)=>m.get_forward_model() for m in modules]))
     distprod ∘ ffanout(fwd_models)
 end
 
-function generate_likelihood(modules, config, observed=get_observed(modules))
-    likelihoodof(get_fwd_model(modules, config), observed)
+function generate_likelihood(modules, observed=get_observed(modules))
+    likelihoodof(get_fwd_model(modules), observed)
 end

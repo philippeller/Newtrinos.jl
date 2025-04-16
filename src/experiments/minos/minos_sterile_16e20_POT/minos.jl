@@ -7,7 +7,17 @@ using BAT
 using DataStructures
 using CairoMakie
 
-function setup(config, datadir = @__DIR__)
+
+assets = undef
+config = undef
+
+function configure(;osc, kwargs...)
+    global config = (;osc,)
+    return true
+end
+
+
+function setup(datadir = @__DIR__)
 
     h5file = h5open(joinpath(datadir, "dataRelease.h5"), "r")
 
@@ -44,11 +54,11 @@ function setup(config, datadir = @__DIR__)
         ),
     )
 
-    return nothing
+    return true
 end
 
-params = OrderedDict()
-priors = OrderedDict()
+params = (;)
+priors = (;)
 
 
 function get_expected_per_channel(params, config, assets)
@@ -90,20 +100,20 @@ function forward_model_per_channel(params, config, channel, assets)
     Distributions.MvNormal(expected, (cov+cov')/2)
 end
 
-function forward_model(config)
-    model = let this_assets = assets
+function get_forward_model()
+    model = let this_assets = assets, this_config = config
         params -> distprod(
-            CC = forward_model_per_channel(params, config, "CC", this_assets),
-            NC = forward_model_per_channel(params, config, "NC", this_assets),
+            CC = forward_model_per_channel(params, this_config, "CC", this_assets),
+            NC = forward_model_per_channel(params, this_config, "NC", this_assets),
         )
         end
 end
 
-function plot(params, config, d=assets.observed)
+function plot(params, d=assets.observed)
     f = Figure()
 
-    m = mean(forward_model(config)(params))
-    v = var(forward_model(config)(params))
+    m = mean(get_forward_model()(params))
+    v = var(get_forward_model()(params))
     
     for (i, ch) in enumerate([:CC, :NC])
     

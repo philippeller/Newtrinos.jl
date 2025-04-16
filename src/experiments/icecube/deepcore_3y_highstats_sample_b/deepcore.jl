@@ -7,14 +7,21 @@ using TypedTables
 using CSV
 using StatsBase
 using CairoMakie
-import ..earth_layers
 using BAT
 
 const datadir = @__DIR__ 
 using Printf
 
 
-function setup(config, datadir = @__DIR__)
+assets = undef
+config = undef
+
+function configure(;osc, atm_flux, earth_layers, kwargs...)
+    global config = (;osc, atm_flux, earth_layers)
+    return true
+end
+
+function setup(datadir = @__DIR__)
 
     binning = OrderedDict()
     binning[:reco_energy_bin_edges] = [5.623413,  7.498942, 10. , 13.335215, 17.782795, 23.713737, 31.622776, 42.16965 , 56.23413]
@@ -28,8 +35,6 @@ function setup(config, datadir = @__DIR__)
     binning[:log10e_fine] = midpoints(binning[:log10e_fine_bins])
     binning[:e_fine] = 10 .^binning[:log10e_fine]
     binning[:e_ticks] = (binning[:reco_energy_bin_edges], [@sprintf("%.1f",b) for b in binning[:reco_energy_bin_edges]])
-
-
     binning = NamedTuple(binning)
     
     layers = config.earth_layers.compute_layers()
@@ -76,30 +81,13 @@ function setup(config, datadir = @__DIR__)
         nue_cc = read_csv_into_hist("hyperplanes_nue_cc.csv"),
         numu_cc = read_csv_into_hist("hyperplanes_numu_cc.csv"),
         nutau_cc = read_csv_into_hist("hyperplanes_nutau_cc.csv")
-        )
-    
-    # ---------- DATA READ --------
-    
-    # ---------- Pre-Compute FLuxes --------
-    
-
-    
-    # for key in [:nue, :numu]
-    #     for anti in ["", "bar"]
-    #         fkey = Symbol(key, anti)
-    #         f = FlexTable(true_energy=binning.e_fine_meshgrid, log10_true_energy=binning.log10e_fine_meshgrid, true_coszen=binning.cz_fine_meshgrid)
-    #         f.flux = flux_splines[fkey].(f.log10_true_energy, f.true_coszen);
-    #         flux[fkey] = Table(f)
-    #     end
-    # end
-
-    # flux = NamedTuple(flux)
+        )    
 
     flux = config.atm_flux.get_nominal_flux(binning.e_fine, binning.cz_fine)
 
     global assets = (;mc, hyperplanes, flux, muons, observed=data.count, layers, paths, binning)
 
-    return nothing
+    return true
 
 end
 
@@ -107,28 +95,30 @@ end
     
 # ---------- DATA IS PREPARED --------------
 
-params = OrderedDict()
-params[:deepcore_lifetime] = 2.5
-params[:deepcore_atm_muon_scale] = 1.
-params[:deepcore_ice_absorption] = 1.
-params[:deepcore_ice_scattering] = 1.
-params[:deepcore_opt_eff_overall] = 1.
-params[:deepcore_opt_eff_lateral] = 0.
-params[:deepcore_opt_eff_headon] = 0.
-params[:nc_norm] = 1.
-params[:nutau_cc_norm] = 1.
+params = (
+    deepcore_lifetime = 2.5,
+    deepcore_atm_muon_scale = 1.,
+    deepcore_ice_absorption = 1.,
+    deepcore_ice_scattering = 1.,
+    deepcore_opt_eff_overall = 1.,
+    deepcore_opt_eff_lateral = 0.,
+    deepcore_opt_eff_headon = 0.,
+    nc_norm = 1.,
+    nutau_cc_norm = 1.,
+    )
 
 
-priors = OrderedDict()
-priors[:deepcore_lifetime] = Uniform(2, 4)
-priors[:deepcore_atm_muon_scale ] = Uniform(0, 2)
-priors[:deepcore_ice_absorption] = Truncated(Normal(1, 0.1), 0.85, 1.15)
-priors[:deepcore_ice_scattering] = Truncated(Normal(1, 0.1), 0.85, 1.15)
-priors[:deepcore_opt_eff_overall] = Truncated(Normal(1, 0.1), 0.8, 1.2)
-priors[:deepcore_opt_eff_lateral] = Truncated(Normal(0, 1.), -2, 2)
-priors[:deepcore_opt_eff_headon] = Uniform(-5, 2.)
-priors[:nc_norm] = Truncated(Normal(1, 0.2), 0.4, 1.6)
-priors[:nutau_cc_norm] = Uniform(0., 2.)
+priors = (
+    deepcore_lifetime = Uniform(2, 4),
+    deepcore_atm_muon_scale = Uniform(0, 2),
+    deepcore_ice_absorption = Truncated(Normal(1, 0.1), 0.85, 1.15),
+    deepcore_ice_scattering = Truncated(Normal(1, 0.1), 0.85, 1.15),
+    deepcore_opt_eff_overall = Truncated(Normal(1, 0.1), 0.8, 1.2),
+    deepcore_opt_eff_lateral = Truncated(Normal(0, 1.), -2, 2),
+    deepcore_opt_eff_headon = Uniform(-5, 2.),
+    nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
+    nutau_cc_norm = Uniform(0., 2.),
+    )
 
 
 # ------------- Define Model --------
@@ -223,10 +213,10 @@ function get_expected(params, config, assets)
 end
 
 
-function forward_model(config)
-    model = let this_assets = assets
+function get_forward_model()
+    model = let this_assets = assets, this_config = config
         params -> begin
-            exp_events = get_expected(params, config, this_assets)
+            exp_events = get_expected(params, this_config, this_assets)
             distprod(Poisson.(exp_events))
         end
     end
@@ -250,7 +240,7 @@ function plotmap(h; colormap=Reverse(:Spectral), symm=false)
     fig
 end
 
-function plot(params, config, data=assets.observed)
+function plot(params, data=assets.observed)
 
     expected = get_expected(params, config, assets)
 

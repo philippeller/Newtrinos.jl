@@ -10,6 +10,15 @@ using DataStructures
 using BAT
 using CairoMakie
 
+
+assets = undef
+config = undef
+
+function configure(;osc, kwargs...)
+    global config = (;osc,)
+    return true
+end
+
 # Important global constants
 const ENERGY_RESOL_1MEV = 0.065 # Reduces as 1/sqrt(visible energy in MeV)
 const RATE_UNC = 0.041 # Fully correlated event rate uncertainty
@@ -38,8 +47,8 @@ end
 const datadir = @__DIR__ 
 
 assets = (observed = round.(CSV.read(joinpath(datadir, "KamLAND_data.csv"), DataFrame; header=false)[:, 2]),)
-function setup(config)
-    nothing
+function setup()
+    return true
 end
 
 const no_osc = CSV.read(joinpath(datadir, "KamLAND_no_osc.csv"), DataFrame; header=false)[:, 2]
@@ -87,17 +96,19 @@ function get_expected(params, config)
     return exp_events_noBG .+ BG
 end
 
-function forward_model(config)
-    model = params -> begin
-        exp_events = get_expected(params, config)
-        distprod(Poisson.(exp_events))
+function get_forward_model()
+    model = let this_assets = assets, this_config = config
+        params -> begin
+            exp_events = get_expected(params, this_config)
+            distprod(Poisson.(exp_events))
+        end
     end
 end
 
-function plot(params, config, data=assets.observed)
+function plot(params, data=assets.observed)
 
-    m = mean(forward_model(config)(params))
-    v = var(forward_model(config)(params))
+    m = mean(get_forward_model()(params))
+    v = var(get_forward_model()(params))
     
     energy = Ep
     energy_bins = Ep_bins
@@ -138,14 +149,16 @@ function plot(params, config, data=assets.observed)
 end
 
 
-params = OrderedDict()
-params[:kamland_energy_scale] = 0.
-params[:kamland_geonu_scale] = 0.
-params[:kamland_flux_scale] = 0.
+params = (
+    kamland_energy_scale = 0.,
+    kamland_geonu_scale = 0.,
+    kamland_flux_scale = 0.,
+    )
 
-priors = OrderedDict()
-priors[:kamland_energy_scale] = Truncated(Normal(0, 1.), -3, 3)
-priors[:kamland_geonu_scale] = Uniform(-0.5, 0.5)
-priors[:kamland_flux_scale] = Truncated(Normal(0, 1.), -3, 3)
+priors = (
+    kamland_energy_scale = Truncated(Normal(0, 1.), -3, 3),
+    kamland_geonu_scale = Uniform(-0.5, 0.5),
+    kamland_flux_scale = Truncated(Normal(0, 1.), -3, 3),
+    )
 
 end

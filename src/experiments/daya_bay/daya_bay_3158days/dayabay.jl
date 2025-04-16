@@ -5,7 +5,17 @@ using LinearAlgebra
 using Distributions
 using DataStructures
 using CairoMakie
+using Accessors
 import ..osc
+
+
+assets = undef
+config = undef
+
+function configure(;osc, kwargs...)
+    global config = (;osc,)
+    return true
+end
 
 # Import the data
 const datadir = @__DIR__ 
@@ -78,14 +88,13 @@ for EH in EH_list
 end
 
 # Paramnaters for DayaBay bestfit to recalculate unoscillated spectrum
-best_fit_params_dayabay = copy(osc.standard.params)
-best_fit_params_dayabay[:θ₁₂] = asin(sqrt(0.307))
-best_fit_params_dayabay[:θ₁₃] = asin(sqrt(0.0851)) * 0.5
-best_fit_params_dayabay[:θ₂₃] = asin(sqrt(0.57))
-best_fit_params_dayabay[:δCP] = 0.
-best_fit_params_dayabay[:Δm²₂₁] = 7.53e-5
-best_fit_params_dayabay[:Δm²₃₁] = 2.466e-3 + best_fit_params_dayabay[:Δm²₂₁]
-best_fit_params_dayabay = NamedTuple(best_fit_params_dayabay)
+best_fit_params_dayabay = deepcopy(osc.standard.params)
+@reset best_fit_params_dayabay.θ₁₂ = asin(sqrt(0.307))
+@reset best_fit_params_dayabay.θ₁₃ = asin(sqrt(0.0851)) * 0.5
+@reset best_fit_params_dayabay.θ₂₃ = asin(sqrt(0.57))
+@reset best_fit_params_dayabay.δCP = 0.
+@reset best_fit_params_dayabay.Δm²₂₁ = 7.53e-5
+@reset best_fit_params_dayabay.Δm²₃₁ = 2.466e-3 + best_fit_params_dayabay[:Δm²₂₁]
 
 const ad_contribs_to_far_hall = Float64[]
 const E_arrs = Vector{Vector{Float64}}()
@@ -123,8 +132,8 @@ end
 const normalized_ad_contribs_to_far_hall = ad_contribs_to_far_hall ./ sum(ad_contribs_to_far_hall)
 const covmat_prefactor = sum(normalized_ad_contribs_to_far_hall .^ 2)
 
-function setup(config)
-    nothing
+function setup()
+    return true
 end
 
 assets = (observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N),)
@@ -133,8 +142,8 @@ energy_bins = copy(dfBKG_dict["dfBKG_Six_EH3"].Emin)
 energy = copy(dfBKG_dict["dfBKG_Six_EH3"].Ec)
 push!(energy_bins, dfBKG_dict["dfBKG_Six_EH3"].Emax[end])
 
-params = OrderedDict()
-priors = OrderedDict()
+params = (;)
+priors = (;)
 
 function get_expected_per_period(params, period, config)
     E = E_arrs[period]
@@ -150,18 +159,20 @@ function get_expected(params, config)
     sum([get_expected_per_period(params, period, config) for period in 1:length(period_list)])
 end
 
-function forward_model(config)
-    model = params -> begin
-        exp_events = get_expected(params, config)
-        cov = Symmetric(Diagonal(exp_events .* rel_unc_diag) * corr_mat * Diagonal(exp_events .* rel_unc_diag)) * covmat_prefactor + Diagonal(exp_events)
-        Distributions.MvNormal(exp_events, cov)
+function get_forward_model()
+    model = let this_assets = assets, this_config = config
+        params -> begin
+            exp_events = get_expected(params, this_config)
+            cov = Symmetric(Diagonal(exp_events .* rel_unc_diag) * corr_mat * Diagonal(exp_events .* rel_unc_diag)) * covmat_prefactor + Diagonal(exp_events)
+            Distributions.MvNormal(exp_events, cov)
+        end
     end
 end
 
-function plot(params, osc_prob, data=assets.observed)
+function plot(params, data=assets.observed)
     
-    m = mean(forward_model(osc_prob)(params))
-    v = var(forward_model(osc_prob)(params))
+    m = mean(get_forward_model()(params))
+    v = var(get_forward_model()(params))
 
     f = Figure()
     ax = Axis(f[1,1])
