@@ -7,9 +7,9 @@ using TypedTables
 using CSV
 using StatsBase
 using CairoMakie
+using Logging
 using BAT
 
-const datadir = @__DIR__ 
 using Printf
 
 
@@ -22,6 +22,7 @@ function configure(;osc, atm_flux, earth_layers, kwargs...)
 end
 
 function setup(datadir = @__DIR__)
+    @info "Loading deepcore data"
 
     binning = OrderedDict()
     binning[:reco_energy_bin_edges] = [5.623413,  7.498942, 10. , 13.335215, 17.782795, 23.713737, 31.622776, 42.16965 , 56.23413]

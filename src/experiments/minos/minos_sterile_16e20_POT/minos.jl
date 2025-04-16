@@ -6,6 +6,7 @@ using HDF5
 using BAT
 using DataStructures
 using CairoMakie
+using Logging
 
 
 assets = undef
@@ -18,6 +19,7 @@ end
 
 
 function setup(datadir = @__DIR__)
+    @info "Loading minos data"
 
     h5file = h5open(joinpath(datadir, "dataRelease.h5"), "r")
 

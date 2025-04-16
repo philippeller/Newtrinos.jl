@@ -271,7 +271,9 @@ function safe_merge(nt_list::NamedTuple...)
         end
         merged = merge(merged, nt)
     end
-    return merged
+    keys_sorted = sort(collect(keys(merged)))
+    values_sorted = getindex.(Ref(merged), keys_sorted)
+    return NamedTuple{Tuple(keys_sorted)}(values_sorted)
 end
 
 function get_priors(modules)
