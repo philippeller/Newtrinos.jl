@@ -19,6 +19,7 @@ import JLD2
 using MeasureBase
 using FunctionChains
 using Accessors
+using Logging
 
 adsel = AutoForwardDiff()
 set_batcontext(ad = adsel)
@@ -48,14 +49,18 @@ function find_mle(likelihood, prior, params)
     posterior = PosteriorMeasure(likelihood, prior)
 
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
+
+    msg = "Running Optimization for point "
     
     for key in keys(prior)
     	if prior[key] isa ValueShapes.ConstValueDist
-    	    @reset params[key] = prior[key].value
+            value = prior[key].value
+    	    @reset params[key] = value
+            msg *= " $(key): $(value)"
     	end
     end
 
-
+    @info msg
     # THIS ONE WORKS:
     res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params])))#, kwargs = (reltol=1e-7, maxiters=10000)))
 
@@ -145,7 +150,7 @@ function find_mle_cached(likelihood, prior, params, cache_dir)
     if !isnothing(cache_dir)
         fname = joinpath(cache_dir, "$h.jld2")
         if isfile(fname)
-            println("using cached file $fname")
+            @info "using cached file $fname"
             cached = FileIO.load(fname)
             opt_result = (cached["llh"], cached["log_posterior"], cached["result"])
         end

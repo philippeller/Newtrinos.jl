@@ -10,10 +10,10 @@ using DataStructures
 using BAT
 using CairoMakie
 using Logging
+import ..Newtrinos
 
-
-assets = undef
-config = undef
+assets = @Newtrinos.undef_assets
+config = @Newtrinos.undef_config
 
 function configure(;osc, kwargs...)
     global config = (;osc,)

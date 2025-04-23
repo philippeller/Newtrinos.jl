@@ -9,12 +9,12 @@ using StatsBase
 using CairoMakie
 using Logging
 using BAT
+import ..Newtrinos
 
 using Printf
 
-
-assets = undef
-config = undef
+assets = @Newtrinos.undef_assets
+config = @Newtrinos.undef_config
 
 function configure(;osc, atm_flux, earth_layers, kwargs...)
     global config = (;osc, atm_flux, earth_layers)
