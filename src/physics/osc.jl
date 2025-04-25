@@ -1,11 +1,13 @@
 module osc
 using LinearAlgebra
 using StaticArrays
+using ArraysOfArrays, StructArrays
 
 export ftype
 export Layer
 export Path
 export osc_kernel
+export make_osc_prob_function
 export osc_kernel_matter
 export osc_kernel_smoothed
 export osc_reduce
@@ -40,7 +42,7 @@ const G_F = 8.961877245622253e-38 #[eV*cm^3]
 const A = sqrt(2) * G_F * N_A
 
 # Oscillation Kernel Simple
-function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real)
+function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real)
     phase_factors = exp.(2.5338653580781976 * 1im * (l / e) .* H)
     p = U * Diagonal(phase_factors) * U'
 end
@@ -106,75 +108,114 @@ function get_abs_masses(params)
     return m1, m2, m3
 end
 
+function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti)
+    H = copy(H_eff)
+    if anti
+        H[1,1] -= A * layer.p_density * 2 * e * 1e9
+        for i in 1:3
+            H[i,i] += A * layer.n_density * e * 1e9
+        end
+    else
+        H[1,1] += A * layer.p_density * 2 * e * 1e9
+        for i in 1:3
+            H[i,i] -= A * layer.n_density * e * 1e9
+        end
+    end
+    H = Hermitian(H)
+    tmp = eigen(H)
+    tmp.vectors, tmp.values
+end   
+
+function compute_matter_matrices(H_eff::SMatrix, e, layer, anti)
+    H = MMatrix{size(H_eff)...}(H_eff)
+    if anti
+        H[1,1] -= A * layer.p_density * 2 * e * 1e9
+        for i in 1:3
+            H[i,i] += A * layer.n_density * e * 1e9
+        end
+    else
+        H[1,1] += A * layer.p_density * 2 * e * 1e9
+        for i in 1:3
+            H[i,i] -= A * layer.n_density * e * 1e9
+        end
+    end
+    H = Hermitian(SMatrix(H))
+    tmp = eigen(H)
+    #tmp = fast_eigen(H)
+    tmp.vectors, tmp.values
+end   
+
+function osc_reduce(matter_matrices, path, e, anti::Bool)
+    abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
+    #ps = [osc_kernel(matter_matrices[section.layer_idx]..., e, section.length) for section in path]
+    #reduce(*, ps)
+end
+    
+function matter_osc_per_e(H_eff, e, layers, paths, anti)
+    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
+    stack(map(path -> (osc_reduce(matter_matrices, path, e, anti)), paths))
+end
+
+
+
+function make_osc_prob_function(get_matrices)
+    # Oscillation over arrays of Energy (E) and Lnegth (L)
+    function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false, cutoff=Inf)
+        U, H = get_matrices(params);
+        Uc = anti ? conj.(U) : U
+
+        mask = sqrt.(abs.(H)) .< cutoff;
+        if any(.!mask)
+            H = H[mask];
+            U_rest = Uc[:, .!mask]
+            Uc = Uc[:, mask];
+        else
+            U_rest = 0
+        end
+
+        p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l)), E, L')) .+ abs2.(U_rest) * abs2.(U_rest)'
+        return permutedims(p, (3, 4, 1, 2))
+    end
+
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, cutoff=Inf)
+        U, H = get_matrices(params);
+        Uc = anti ? conj.(U) : U
+
+        mask = sqrt.(abs.(H)) .< cutoff;
+        if any(.!mask)
+            H = H[mask];
+            U_rest = Uc[:, .!mask]
+            Uc = Uc[:, mask];
+        else
+            U_rest = 0
+        end
+        
+        H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
+    
+        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti), E)) .+ abs2.(U_rest) * abs2.(U_rest)'
+        permutedims(p, (4, 3, 1, 2))
+    end
+    
+    return osc_prob
+end
+
 module standard
     using LinearAlgebra
     using DataStructures
     using StaticArrays
     using Distributions
-    using ArraysOfArrays, StructArrays
+
     using ..osc
     include("eigen_hermitian_3x3.jl")
 
     function get_matrices(params)
         U = get_PMNS(params)
-        H = Diagonal(SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁));
+        H = SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁)
         return U, H
     end
 
-    # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false, use_cuda=false)
-        U, H = get_matrices(params);
-        Uc = anti ? conj.(U) : U
-        #p = stack(map(e -> stack(map(l -> osc_kernel(U, diag(H), e, l), L)), E))
-        #p = stack(map(x -> osc_kernel(U, diag(H), x[1], x[2]), Iterators.product(E, L)))
-    
-        #if use_cuda
-        #    p = stack(Array(broadcast((e, l) -> osc_kernel(Uc, diag(H), e, l), cu(E), cu(L'))))
-        #else
-        p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, diag(H), e, l)), E, L'))
-        #end
-        permutedims(p, (3, 4, 1, 2))
-    end
-
-    function compute_matter_matrices(H_eff, e, layer, anti)
-        H = MMatrix{3, 3}(H_eff)
-        if anti
-            H[1,1] -= A * layer.p_density * 2 * e * 1e9
-            for i in 1:3
-                H[i,i] += A * layer.n_density * e * 1e9
-            end
-        else
-            H[1,1] += A * layer.p_density * 2 * e * 1e9
-            for i in 1:3
-                H[i,i] -= A * layer.n_density * e * 1e9
-            end
-        end
-        H = Hermitian(SMatrix(H))
-        tmp = eigen(H)
-        #tmp = fast_eigen(H)
-        tmp.vectors, tmp.values
-    end    
-
-    function osc_reduce(matter_matrices, path, e, anti::Bool)
-        abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
-        #ps = [osc_kernel(matter_matrices[section.layer_idx]..., e, section.length) for section in path]
-        #reduce(*, ps)
-    end
-        
-    function matter_osc_per_e(H_eff, e, layers, paths, anti)
-        matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
-        stack(map(path -> (osc_reduce(matter_matrices, path, e, anti)), paths))
-    end
-
-    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
-        U, H = get_matrices(params);
-        Uc = anti ? conj.(U) : U
-        H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
-    
-        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti), E))
-        permutedims(p, (4, 3, 1, 2))
-    end
-    
+    osc_prob = make_osc_prob_function(get_matrices)
+   
     params_no = OrderedDict()
     params_no[:θ₁₂] = ftype(asin(sqrt(0.307)))
     params_no[:θ₁₃] = ftype(asin(sqrt(0.021)))
@@ -207,8 +248,8 @@ module standard
     params = params_no
     priors = priors_no
 
-
 end
+
 
 module sterile
     using Distributions
@@ -230,6 +271,8 @@ module sterile
         
         return U_sterile, H
     end
+
+    osc_prob = make_osc_prob_function(get_matrices)
 
     params = OrderedDict(pairs(standard.params))
     params[:Δm²₄₁] = 1
@@ -300,14 +343,7 @@ module ADD
         return U, h
     end
 
-    # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params; anti=false)
-        U, H = get_matrices(params);
-        Uc = anti ? conj.(U) : U
-        p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l)), E, L'))
-    
-        Float64.(permutedims(p, (3, 4, 1, 2)))
-    end
+    osc_prob = make_osc_prob_function(get_matrices)
 
     params = OrderedDict(pairs(standard.params))
     params[:m₀] = ftype(0.01)
@@ -401,14 +437,7 @@ module Darkdim
     end
 
 
-    # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params; anti=false)
-        U, H = get_matrices(params);
-        Uc = anti ? conj.(U) : U
-        p = stack(broadcast((e, l) -> osc_kernel_smoothed(Uc, H, e, l, cutoff=0.5), E, L'))
-    
-        Float64.(permutedims(p, (3, 4, 1, 2)))
-    end
+    osc_prob = make_osc_prob_function(get_matrices)
 
     params = OrderedDict(pairs(standard.params))
     params[:m₀] = ftype(0.01)
@@ -511,15 +540,7 @@ module Darkdim_L
         return U, h
     end 
     
-    # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E, L, params; anti=false)
-        U, H = get_matrices(params);
-        Uc = anti ? conj.(U) : U
-    
-        p = stack(broadcast((e, l) -> osc_kernel_smoothed(Uc, H, e, l, damping=2.), E, L'))
-    
-        Float64.(permutedims(p, (3, 4, 1, 2)))
-    end
+    osc_prob = make_osc_prob_function(get_matrices)
 
     params = OrderedDict(pairs(standard.params))
     pop!(params, :Δm²₂₁)
