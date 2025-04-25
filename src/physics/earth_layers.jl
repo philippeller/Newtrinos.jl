@@ -14,11 +14,10 @@ const datadir = @__DIR__
 params = (;)
 priors = (;)
 
-function compute_layers(;p_fractions=0.5, atm_heihgt = 20.)
+function compute_layers(;p_fractions=0.5, atm_heihgt = 20., zones = [0, 4, 7.5, 12.5, 13.1])
     
     PREM = CSV.read(joinpath(datadir, "PREM_1s.csv"), DataFrame, header=["radius","depth","density","Vpv","Vph","Vsv","Vsh","eta","Q-mu","Q-kappa"])
     # density boundaries to define the constant density zones
-    zones = [0, 4, 7.5, 12.5, 13.1]
     
     radii = Float64[]
     ave_densities = Float64[]
