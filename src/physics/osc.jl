@@ -43,46 +43,18 @@ const A = sqrt(2) * G_F * N_A
 
 # Oscillation Kernel Simple
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real)
-    phase_factors = exp.(2.5338653580781976 * 1im * (l / e) .* H)
-    p = U * Diagonal(phase_factors) * U'
+    phase_factors = 2.5338653580781976 * 1im * (l / e) .* H
+    U * Diagonal(exp.(phase_factors)) * U'
+end
+
+# Oscillation Kernel with Low pass filter
+function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real, σₑ::Real)
+    phase_factors = 2.5338653580781976 * (l / e) .* H
+    decay = -abs2.(σₑ / e * phase_factors)/2
+    # Note: the incoherent sum is missing here...i don't know how to add it for matter osc....
+    p = U * Diagonal(exp.(1im * phase_factors .+ decay)) * U'
 end
   
-
-# Oscillation Kernel
-function osc_kernel_smoothed(U::AbstractMatrix{<:Number}, H::AbstractVector, e::Real, l::Real; cutoff=Inf, damping=0, add=true)
-
-    #cut off inaccessible states
-    mask = sqrt.(abs.(H)) .< cutoff;
-
-    if any(.!mask)
-        H = H[mask];
-        U_rest = U[:, .!mask]
-        U = U[:, mask];
-    else
-        U_rest = 0
-    end
-
-    #H_sub = H .- minimum(H)
-    
-    phase_factors = 1im * (1 / e) .* H
-    D = exp.(2.5338653580781976 * phase_factors .* l)
-    decay = exp.(-2 * abs2.(H * damping))
-    
-    p = abs2.(U * Diagonal(D .* decay) * U') 
-    
-    if add
-        p = p .+ abs2.(U_rest) * abs2.(U_rest)' .+ abs2.(U) * Diagonal((1 .- decay)) * abs2.(U)'
-    end
-
-    # We need the aplitude now, not probabilities anymore because of matter osc, needs to be corrected here
-    p
-end
-
-# function osc_kernel(U::AbstractMatrix, H::AbstractMatrix, e::Real, l::Real)
-#     p = U * exp(2.5338653580781976 * 1im * (l/e) * H) * U'
-#     abs2.(p)
-# end
-
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
     #T = ftype
@@ -145,22 +117,25 @@ function compute_matter_matrices(H_eff::SMatrix, e, layer, anti)
     tmp.vectors, tmp.values
 end   
 
-function osc_reduce(matter_matrices, path, e, anti::Bool)
-    abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
-    #ps = [osc_kernel(matter_matrices[section.layer_idx]..., e, section.length) for section in path]
-    #reduce(*, ps)
+function osc_reduce(matter_matrices, path, e, σₑ)
+    if σₑ > 0.
+        p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length, σₑ), *, path))
+    else
+        p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
+    end
+    p
 end
     
-function matter_osc_per_e(H_eff, e, layers, paths, anti)
+function matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ)
     matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
-    stack(map(path -> (osc_reduce(matter_matrices, path, e, anti)), paths))
+    stack(map(path -> osc_reduce(matter_matrices, path, e, σₑ), paths))
 end
 
 
 
 function make_osc_prob_function(get_matrices)
     # Oscillation over arrays of Energy (E) and Lnegth (L)
-    function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false, cutoff=Inf)
+    function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false, cutoff=Inf, σₑ=0.)
         U, H = get_matrices(params);
         Uc = anti ? conj.(U) : U
 
@@ -173,11 +148,18 @@ function make_osc_prob_function(get_matrices)
             U_rest = 0
         end
 
-        p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l)), E, L')) .+ abs2.(U_rest) * abs2.(U_rest)'
+        if σₑ > 0.
+            p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l, σₑ)), E, L'))
+        else
+            p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l)), E, L'))
+        end
+            
+        # results
+        p = p .+ abs2.(U_rest) * abs2.(U_rest)'
         return permutedims(p, (3, 4, 1, 2))
     end
 
-    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, cutoff=Inf)
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, cutoff=Inf, σₑ=0.)
         U, H = get_matrices(params);
         Uc = anti ? conj.(U) : U
 
@@ -192,7 +174,7 @@ function make_osc_prob_function(get_matrices)
         
         H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
     
-        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti), E)) .+ abs2.(U_rest) * abs2.(U_rest)'
+        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ), E)) .+ abs2.(U_rest) * abs2.(U_rest)'
         permutedims(p, (4, 3, 1, 2))
     end
     
