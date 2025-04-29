@@ -50,9 +50,8 @@ end
 # Oscillation Kernel with Low pass filter
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real, σₑ::Real)
     phase_factors = 2.5338653580781976 * (l / e) .* H
-    decay = -abs2.(σₑ / e * phase_factors)/2
-    # Note: the incoherent sum is missing here...i don't know how to add it for matter osc....
-    p = U * Diagonal(exp.(1im * phase_factors .+ decay)) * U'
+    decay = exp.(-2 * abs.(phase_factors) * σₑ^2) #exp.(-abs.(σₑ / e * phase_factors)/2)
+    U * Diagonal(exp.(1im * phase_factors) .* decay) * U', decay
 end
   
 function get_PMNS(params)
@@ -119,7 +118,11 @@ end
 
 function osc_reduce(matter_matrices, path, e, σₑ)
     if σₑ > 0.
-        p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length, σₑ), *, path))
+        res = map(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length, σₑ), path)
+        decay = abs2.(reduce(.*, last.(res)))
+        # taking first mixing here (= vacuum)
+        U = matter_matrices[1][1]  
+        p = abs2.(reduce(*, first.(res))) + abs2.(U) * Diagonal(1 .- decay) * abs2.(U')
     else
         p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
     end
@@ -149,7 +152,8 @@ function make_osc_prob_function(get_matrices)
         end
 
         if σₑ > 0.
-            p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l, σₑ)), E, L'))
+            res = broadcast((e, l) -> osc_kernel(Uc, H, e, l, σₑ), E, L')
+            p = stack(map(x -> abs2.(first(x)) + abs2.(Uc) * Diagonal(1 .- abs2.(last(x))) * abs2.(Uc)', res))
         else
             p = stack(broadcast((e, l) -> abs2.(osc_kernel(Uc, H, e, l)), E, L'))
         end
