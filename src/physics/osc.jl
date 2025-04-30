@@ -1,6 +1,7 @@
 module osc
 using LinearAlgebra
 using StaticArrays
+using StatsBase
 using ArraysOfArrays, StructArrays
 
 export ftype
@@ -43,13 +44,13 @@ const A = sqrt(2) * G_F * N_A
 
 # Oscillation Kernel Simple
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real)
-    phase_factors = 2.5338653580781976 * 1im * (l / e) .* H
+    phase_factors = -2.5338653580781976 * 1im * (l / e) .* H
     U * Diagonal(exp.(phase_factors)) * U'
 end
 
 # Oscillation Kernel with Low pass filter
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real, σₑ::Real)
-    phase_factors = 2.5338653580781976 * (l / e) .* H
+    phase_factors = -2.5338653580781976 * (l / e) .* H
     decay = exp.(-2 * abs.(phase_factors) * σₑ^2) #exp.(-abs.(σₑ / e * phase_factors)/2)
     U * Diagonal(exp.(1im * phase_factors) .* decay) * U', decay
 end
@@ -120,18 +121,75 @@ function osc_reduce(matter_matrices, path, e, σₑ)
     if σₑ > 0.
         res = map(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length, σₑ), path)
         decay = abs2.(reduce(.*, last.(res)))
-        # taking first mixing here (= vacuum)
-        U = matter_matrices[1][1]  
-        p = abs2.(reduce(*, first.(res))) + abs2.(U) * Diagonal(1 .- decay) * abs2.(U')
+        # taking an average mixing matrix along the path to compute the decoherent sum, which is a bold approximation
+        deco_ave = mean([abs2.(matter_matrices[section.layer_idx][1]) * abs2.(matter_matrices[section.layer_idx][1]') for section in path], weights([section.length for section in path]))
+
+        #deco_ave = abs2.(matter_matrices[path[end].layer_idx][1]) * abs2.(matter_matrices[path[end].layer_idx][1]')
+        
+        p = abs2.(reduce(*, first.(res))) + deco_ave * Diagonal(1 .- decay) #* abs2.(U_ave')
     else
         p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
     end
     p
 end
     
-function matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ)
-    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
-    stack(map(path -> osc_reduce(matter_matrices, path, e, σₑ), paths))
+# function matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ)
+
+# end
+
+
+function matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ, approx)
+    if approx
+        matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
+        p = stack(map(path -> osc_reduce(matter_matrices, path, e, σₑ), paths))
+    else
+        matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti)
+        ps = []
+        for path in paths
+            P = Matrix(abs.(zero(H_eff)))  # P[β, α]
+            v = one(H_eff)
+            
+            for α in 1:size(v)[1]
+                # Initial flavor state density matrix |να⟩⟨να|
+                eα = v[α, :]
+                ρ = eα * eα'
+            
+                # Propagate through each layer
+                for section in path
+                #for (L_km, H_flavor) in layer_Hs
+                    l = section.length
+            
+                    # Diagonalize Hamiltonian
+                    U, h = matter_matrices[section.layer_idx]
+            
+                    # Step 1: Transform to eigenbasis
+                    ρ_eig = U' * ρ * U
+            
+                    # Step 2: Coherent evolution
+                    phases = exp.(-2.5338653580781976 * 1im * (l / e) .* h)
+                    U_phase = Diagonal(phases)
+                    ρ_eig = U_phase * ρ_eig * U_phase'
+            
+                    # Step 3: Decoherence damping
+                    Δφ = abs.(h .- h') * (l / e) * 2.5338653580781976
+                    D = exp.(-2 .* Δφ .* σₑ^2)
+                    ρ_eig .= ρ_eig .* D
+            
+                    # Step 4: Transform back to flavor basis
+                    ρ = U * ρ_eig * U'
+                end
+            
+                # Fill in transition probabilities to each final flavor β
+                for β in 1:size(v)[1]
+                    eβ = v[β, :]
+                    P[β, α] = real(eβ' * ρ * eβ)  # P(ν_α → ν_β)
+                end
+            end
+            push!(ps, P)
+        end
+        p = stack(ps)
+    end
+    p
 end
 
 
@@ -163,7 +221,7 @@ function make_osc_prob_function(get_matrices)
         return permutedims(p, (3, 4, 1, 2))
     end
 
-    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, cutoff=Inf, σₑ=0.)
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, cutoff=Inf, σₑ=0., approx=true)
         U, H = get_matrices(params);
         Uc = anti ? conj.(U) : U
 
@@ -178,7 +236,7 @@ function make_osc_prob_function(get_matrices)
         
         H_eff = Uc * Diagonal{Complex{eltype(H)}}(H) * adjoint(Uc)
     
-        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ), E)) .+ abs2.(U_rest) * abs2.(U_rest)'
+        p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, σₑ, approx), E)) .+ abs2.(U_rest) * abs2.(U_rest)'
         permutedims(p, (4, 3, 1, 2))
     end
     
