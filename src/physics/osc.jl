@@ -122,11 +122,8 @@ function osc_reduce(matter_matrices, path, e, σₑ)
         res = map(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length, σₑ), path)
         decay = abs2.(reduce(.*, last.(res)))
         # taking an average mixing matrix along the path to compute the decoherent sum, which is a bold approximation
-        deco_ave = mean([abs2.(matter_matrices[section.layer_idx][1]) * abs2.(matter_matrices[section.layer_idx][1]') for section in path], weights([section.length for section in path]))
-
-        #deco_ave = abs2.(matter_matrices[path[end].layer_idx][1]) * abs2.(matter_matrices[path[end].layer_idx][1]')
-        
-        p = abs2.(reduce(*, first.(res))) + deco_ave * Diagonal(1 .- decay) #* abs2.(U_ave')
+        P_ave  = mean([abs2.(matter_matrices[section.layer_idx][1]) for section in path], weights([section.length for section in path]))
+        p = abs2.(reduce(*, first.(res))) .+ P_ave * Diagonal(1 .- decay) * P_ave'
     else
         p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
     end
