@@ -5,10 +5,17 @@ using StatsBase
 using ArraysOfArrays, StructArrays
 using DataStructures
 using Distributions
+using ..Newtrinos
 
 export ftype
 export Layer
 export Path
+export Decoherent, Damping, Basic
+export All, Cut
+export Vacuum, SI, NSI
+export ThreeFlavour, Sterile, ADD
+export OscillationConfig
+export configure
 
 const ftype = Float64
 
@@ -25,9 +32,14 @@ struct Path
     layer_idx::Int
 end 
 
+# Physical constants
 const N_A = 6.022e23 #[mol^-1]
 const G_F = 8.961877245622253e-38 #[eV*cm^3]
 const A = sqrt(2) * G_F * N_A
+# conversion factor for km/GeV (1/(2*hbar*c))
+const F_units = 2.5338653580781976
+# um to eV
+const umev = 5.067730716156395
 
 # TYPE DEFINITIONS
 
@@ -46,32 +58,56 @@ struct All <: StateSelector end
     cutoff::Float64 = Inf
 end
 
-abstract type MatterEffects end
-struct Vacuum <: MatterEffects end
-struct NSI <: MatterEffects end
-struct SI <: MatterEffects end
-
+abstract type InteractionModel end
+struct Vacuum <: InteractionModel end
+struct NSI <: InteractionModel end
+struct SI <: InteractionModel end
 
 abstract type FlavourModel end
-struct ThreeFlavour <: FlavourModel end
-struct Sterile <: FlavourModel end
-struct ADD <: FlavourModel end
+@kwdef struct ThreeFlavour <: FlavourModel 
+    ordering::Symbol = :NO
+end
+@kwdef struct Sterile <: FlavourModel
+    three_flavour::ThreeFlavour = ThreeFlavour()
+end
+@kwdef struct ADD <: FlavourModel 
+    three_flavour::ThreeFlavour = ThreeFlavour()
+    N_KK::Int = 5
+end
 
-
-@kwdef struct OscillationConfig{F<:FlavourModel, M<:MatterEffects, P<:PropagationModel, S<:StateSelector}
+@kwdef struct OscillationConfig{F<:FlavourModel, I<:InteractionModel, P<:PropagationModel, S<:StateSelector}
     flavour::F = ThreeFlavour()
-    matter::M = Vacuum()
+    interaction::I = Vacuum()
     propagation::P = Basic()
     states::S = All()
 end
 
+@kwdef struct Osc <: Newtrinos.Physics
+    cfg::OscillationConfig
+    params::NamedTuple
+    priors::NamedTuple
+    matrices::Function
+    osc_prob::Function
+end
+
+function configure(cfg::OscillationConfig=OscillationConfig())
+    Osc(
+        cfg=cfg,
+        params = get_params(cfg),
+        priors = get_priors(cfg),
+        matrices = get_matrices(cfg.flavour),
+        osc_prob = get_osc_prob(cfg)
+    )
+end
+
+
 # PARAMS & PRIORS
 
+# for now only the flavour model has any params...to be changed
+get_params(cfg::OscillationConfig) = get_params(cfg.flavour)
+get_priors(cfg::OscillationConfig) = get_priors(cfg.flavour)
 
-get_params(cfg::OscillationConfig; kwargs...) = get_params(cfg.flavour; kwargs...)
-get_priors(cfg::OscillationConfig; kwargs...) = get_priors(cfg.flavour; kwargs...)
-
-function get_params(cfg::ThreeFlavour; NO=true)
+function get_params(cfg::ThreeFlavour)
     params = OrderedDict()
     params[:θ₁₂] = ftype(asin(sqrt(0.307)))
     params[:θ₁₃] = ftype(asin(sqrt(0.021)))
@@ -79,31 +115,35 @@ function get_params(cfg::ThreeFlavour; NO=true)
     params[:δCP] = ftype(1.)
     params[:Δm²₂₁] = ftype(7.53e-5)
     
-    if NO
+    if cfg.ordering == :NO
         params[:Δm²₃₁] = ftype(2.4e-3 + params[:Δm²₂₁])
-    else
+    elseif cfg.ordering == :IO
         params[:Δm²₃₁] = ftype(-2.4e-3)
+    else
+        throw("Unknown ordering `$(cfg.ordering)`. Must be either :NO or :IO.")
     end
     NamedTuple(params)
 end
 
-function get_priors(cfg::ThreeFlavour; NO=true)
+function get_priors(cfg::ThreeFlavour)
     priors = OrderedDict()
     priors[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
     priors[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
     priors[:θ₂₃] = Uniform(ftype(pi/4 *2/3), ftype(pi/4 *4/3))
     priors[:δCP] = Uniform(ftype(0), ftype(2*π))
     priors[:Δm²₂₁] = Uniform(ftype(6.5e-5), ftype(9e-5))
-    if NO
+    if cfg.ordering == :NO
         priors[:Δm²₃₁] = Uniform(ftype(2e-3), ftype(3e-3))
-    else
+    elseif cfg.ordering == :IO
         priors[:Δm²₃₁] = Uniform(ftype(-3e-3), ftype(-2e-3))
+    else
+        throw("Unknown ordering $ordering. Must be either :NO or :IO.")
     end
     NamedTuple(priors)
 end
 
-function get_params(cfg::Sterile; NO=true)
-    std = get_params(ThreeFlavour(); NO=NO)
+function get_params(cfg::Sterile)
+    std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:Δm²₄₁] = 1
     params[:θ₁₄] = 0.1
@@ -112,8 +152,8 @@ function get_params(cfg::Sterile; NO=true)
     NamedTuple(params)
 end
 
-function get_priors(cfg::Sterile; NO=true)
-    std = get_priors(ThreeFlavour(); NO=NO)
+function get_priors(cfg::Sterile)
+    std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors[:Δm²₄₁] = Uniform(0.1, 10.)
     priors[:θ₁₄] = Uniform(0., 1.)
@@ -122,18 +162,18 @@ function get_priors(cfg::Sterile; NO=true)
     NamedTuple(priors)
 end
     
-function get_params(cfg::ADD; NO=true)
-    std = get_params(ThreeFlavour(); NO=NO)
+function get_params(cfg::ADD)
+    std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
     params[:ADD_radius] = ftype(1e-2)
     NamedTuple(params)
 end
 
-function get_priors(cfg::ADD; NO=true)
-    std = get_priors(ThreeFlavour(); NO=NO)
+function get_priors(cfg::ADD)
+    std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
-    priors = OrderedDict{Symbol, Distribution}(pairs(std.priors))
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
     priors[:ADD_radius] = LogUniform(ftype(1e-3),ftype(1))
     NamedTuple(priors)
@@ -155,8 +195,8 @@ function get_abs_masses(params)
         m2 = sqrt(params.Δm²₂₁ + params.m₀^2)
         m3 = sqrt(params.Δm²₃₁ + params.m₀^2)
     elseif params.Δm²₃₁ < 0
-        m1 = sqrt(params.Δm²₃₁ + params.m₀^2)
-        m2 = sqrt(params.Δm²₂₁ + params.Δm²₃₁ + params.m₀^2)
+        m1 = sqrt(- params.Δm²₃₁ + params.m₀^2)
+        m2 = sqrt(params.Δm²₂₁ - params.Δm²₃₁ + params.m₀^2)
         m3 = params.m₀
     else
         error("Error: Please enter only either 1 for normal or -1 for inverted hierarchy.")
@@ -167,18 +207,18 @@ end
 
 # Oscillation Kernel Simple
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real)
-    phase_factors = -2.5338653580781976 * 1im * (l / e) .* H
+    phase_factors = -F_units * 1im * (l / e) .* H
     U * Diagonal(exp.(phase_factors)) * U'
 end
 
 # Oscillation Kernel with Low pass filter
 function osc_kernel(U::AbstractMatrix{<:Number}, H::AbstractVector{<:Number}, e::Real, l::Real, σₑ::Real)
-    phase_factors = -2.5338653580781976 * (l / e) .* H
+    phase_factors = -F_units * (l / e) .* H
     decay = exp.(-2 * abs.(phase_factors) * σₑ^2) #exp.(-abs.(σₑ / e * phase_factors)/2)
     U * Diagonal(exp.(1im * phase_factors) .* decay) * U', decay
 end
 
-function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti, matter::SI)
+function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti, interaction::SI)
     H = copy(H_eff)
     if anti
         H[1,1] -= A * layer.p_density * 2 * e * 1e9
@@ -196,7 +236,7 @@ function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti
     tmp.vectors, tmp.values
 end   
 
-function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, matter::SI)
+function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, interactionv::SI)
     H = MMatrix{size(H_eff)...}(H_eff)
     if anti
         H[1,1] -= A * layer.p_density * 2 * e * 1e9
@@ -228,14 +268,14 @@ function osc_reduce(matter_matrices, path, e, propagation::Basic)
 end
     
 
-function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Union{Basic, Damping}, matter)
-    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti, Ref(matter))
+function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Union{Basic, Damping}, interaction)
+    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti, Ref(interaction))
     p = stack(map(path -> osc_reduce(matter_matrices, path, e, propagation), paths))
 end
 
 
-function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Decoherent, matter)
-    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti, Ref(matter))
+function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Decoherent, interaction)
+    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti, Ref(interaction))
     ps = []
     for path in paths
         P = Matrix(abs.(zero(H_eff)))  # P[β, α]
@@ -258,12 +298,12 @@ function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Decoherent
                 ρ_eig = U' * ρ * U
         
                 # Step 2: Coherent evolution
-                phases = exp.(-2.5338653580781976 * 1im * (l / e) .* h)
+                phases = exp.(-F_units * 1im * (l / e) .* h)
                 U_phase = Diagonal(phases)
                 ρ_eig = U_phase * ρ_eig * U_phase'
         
                 # Step 3: Decoherence damping
-                Δφ = abs.(h .- h') * (l / e) * 2.5338653580781976
+                Δφ = abs.(h .- h') * (l / e) * F_units
                 D = exp.(-2 .* Δφ .* propagation.σₑ^2)
                 ρ_eig .= ρ_eig .* D
         
@@ -297,7 +337,6 @@ function select(U, h, cfg::Cut)
     end
 
     return U, h, abs2.(U_rest) * abs2.(U_rest)'
-    
 end
 
 
@@ -325,12 +364,12 @@ function propagate(U, h, E, L, propagation::Decoherent)
             ρ_eig = U' * ρ * U
     
             # Step 2: Coherent evolution
-            phases = exp.(-2.5338653580781976 * 1im * (l / e) .* h)
+            phases = exp.(-F_units * 1im * (l / e) .* h)
             U_phase = Diagonal(phases)
             ρ_eig = U_phase * ρ_eig * U_phase'
     
             # Step 3: Decoherence damping
-            Δφ = abs.(h .- h') * (l / e) * 2.5338653580781976
+            Δφ = abs.(h .- h') * (l / e) * F_units
             D = exp.(-2 .* Δφ .* propagation.σₑ^2)
             ρ_eig .= ρ_eig .* D
     
@@ -350,115 +389,122 @@ function propagate(U, h, E, L, propagation::Decoherent)
     res = stack(broadcast((e, l) -> kernel(e, l), E, L'))
 end
 
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, matter::Vacuum, anti::Bool)
+function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Vacuum, anti::Bool)
     L = [sum([segment.length for segment in path]) for path in paths]
     propagate(U, h, E, L, propagation)
 end
 
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, matter::Union{SI, NSI}, anti::Bool)
+function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool)
     H_eff = U * Diagonal{Complex{eltype(h)}}(h) * adjoint(U)
-    p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, matter), E))
+    p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction), E))
     permutedims(p, (1, 2, 4, 3))
 end
 
-function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, cfg::OscillationConfig, params::NamedTuple; anti=false)
-    U, h = get_matrices(cfg.flavour, params)
-    Uc = anti ? conj.(U) : U
+function get_osc_prob(cfg::OscillationConfig)
 
-    U, h, rest = select(Uc, h, cfg.states)
+    function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false)
+        U, h = get_matrices(cfg.flavour)(params)
+        Uc = anti ? conj.(U) : U
     
-    p = propagate(U, h, E, L, cfg.propagation)
+        U, h, rest = select(Uc, h, cfg.states)
         
-    # results
-    p = p .+ rest
-    return permutedims(p, (3, 4, 1, 2))
-end
-
-
-function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, cfg::OscillationConfig, params::NamedTuple; anti=false)
-    U, h = get_matrices(cfg.flavour, params)
-    Uc = anti ? conj.(U) : U
-
-    U, h, rest = select(Uc, h, cfg.states)
-
-    p = propagate(U, h, E, paths, layers, cfg.propagation, cfg.matter, anti)
-    
-    # results
-    p = p .+ rest
-    return permutedims(p, (3, 4, 1, 2))
-end
-
-
-function get_matrices(config::ThreeFlavour, params::NamedTuple)
-    U = get_PMNS(params)
-    H = SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁)
-    return U, H
-end
-
-
-function get_matrices(config::Sterile, params::NamedTuple)
-    h = [0 ,params.Δm²₂₁, params.Δm²₃₁, params.Δm²₄₁]
- 
-    R14 = [cos(params.θ₁₄) 0 0 sin(params.θ₁₄); 0 1 0 0; 0 0 1 0; -sin(params.θ₁₄) 0 0 cos(params.θ₁₄)]
-    R24 = [1 0 0 0; 0 cos(params.θ₂₄) 0 sin(params.θ₂₄); 0 0 1 0; 0 -sin(params.θ₂₄) 0 cos(params.θ₂₄)]
-    R34 = [1 0 0 0; 0 1 0 0; 0 0 cos(params.θ₃₄) sin(params.θ₃₄); 0 0 -sin(params.θ₃₄) cos(params.θ₃₄)]
-    
-    U = get_PMNS(params)
-    
-    U_sterile = R34 * R24 * R14 * hcat(vcat(U, [0 0 0]), [0 0 0 1]')
-    
-    return U_sterile, h
-end
-
-function get_matrices(config::ADD, params::NamedTuple)
-    N_KK = 5
-    
-    # um to eV
-    umev = 5.067730716156395
-    PMNS = get_PMNS(params)
-
-    m1, m2, m3 = get_abs_masses(params)
-
-    # MD is the Dirac mass matrix that appears in the Lagrangian.
-    MD = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
-
-    aM1 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-    aM2 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-
-    # init buffers
-    for i in 1:3*(N_KK+1)
-        for j in 1:3*(N_KK+1)
-            aM1[i,j] = 0.
-            aM2[i,j] = 0.
-        end
+        p = propagate(U, h, E, L, cfg.propagation)
+            
+        # results
+        p = p .+ rest
+        return permutedims(p, (3, 4, 1, 2))
     end
 
-    for i in 1:3
-        for j in 1:3
-            aM1[i, j] = params.ADD_radius * MD[i, j] * umev
-        end
-    end
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
+        U, h = get_matrices(cfg.flavour)(params)
+        Uc = anti ? conj.(U) : U
     
-    for n in 1:N_KK
-        for i in 1:3
-            for j in 1:3
-                aM1[3*n + i, j] = sqrt(2) * params.ADD_radius * MD[i, j] * umev
+        U, h, rest = select(Uc, h, cfg.states)
+    
+        p = propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti)
+        
+        # results
+        p = p .+ rest
+        return permutedims(p, (3, 4, 1, 2))
+    end
+
+    return osc_prob
+end
+
+
+function get_matrices(cfg::ThreeFlavour)
+    function matrices(params::NamedTuple)
+        U = get_PMNS(params)
+        H = SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁)
+        return U, H
+    end
+end
+
+
+function get_matrices(cfg::Sterile)
+    function matrices(params::NamedTuple)
+        h = [0 ,params.Δm²₂₁, params.Δm²₃₁, params.Δm²₄₁]
+     
+        R14 = [cos(params.θ₁₄) 0 0 sin(params.θ₁₄); 0 1 0 0; 0 0 1 0; -sin(params.θ₁₄) 0 0 cos(params.θ₁₄)]
+        R24 = [1 0 0 0; 0 cos(params.θ₂₄) 0 sin(params.θ₂₄); 0 0 1 0; 0 -sin(params.θ₂₄) 0 cos(params.θ₂₄)]
+        R34 = [1 0 0 0; 0 1 0 0; 0 0 cos(params.θ₃₄) sin(params.θ₃₄); 0 0 -sin(params.θ₃₄) cos(params.θ₃₄)]
+        
+        U = get_PMNS(params)
+        
+        U_sterile = R34 * R24 * R14 * hcat(vcat(U, [0 0 0]), [0 0 0 1]')
+        
+        return U_sterile, h
+    end
+end
+
+function get_matrices(cfg::ADD)
+    function matrices(params::NamedTuple)
+        
+        PMNS = get_PMNS(params)
+    
+        m1, m2, m3 = get_abs_masses(params)
+    
+        # MD is the Dirac mass matrix that appears in the Lagrangian.
+        MD = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
+    
+        aM1 = similar(PMNS, 3*(cfg.N_KK+1), 3*(cfg.N_KK+1))
+        aM2 = similar(PMNS, 3*(cfg.N_KK+1), 3*(cfg.N_KK+1))
+    
+        # init buffers
+        for i in 1:3*(cfg.N_KK+1)
+            for j in 1:3*(cfg.N_KK+1)
+                aM1[i,j] = 0.
+                aM2[i,j] = 0.
             end
         end
+    
+        for i in 1:3
+            for j in 1:3
+                aM1[i, j] = params.ADD_radius * MD[i, j] * umev
+            end
+        end
+        
+        for n in 1:cfg.N_KK
+            for i in 1:3
+                for j in 1:3
+                    aM1[3*n + i, j] = sqrt(2) * params.ADD_radius * MD[i, j] * umev
+                end
+            end
+        end
+    
+        for i in 1:cfg.N_KK
+            aM2[3*i + 1, 3*i + 1] = i
+            aM2[3*i + 2, 3*i + 2] = i
+            aM2[3*i + 3, 3*i + 3] = i
+        end
+    
+        aM = copy(aM1) + copy(aM2)
+        aaMM = Hermitian(conj(transpose(aM)) * aM)
+    
+        h, U = eigen(aaMM)
+        h = h / (params.ADD_radius^2 * umev^2.)
+        return U, h
     end
-
-    for i in 1:N_KK
-        aM2[3*i + 1, 3*i + 1] = i
-        aM2[3*i + 2, 3*i + 2] = i
-        aM2[3*i + 3, 3*i + 3] = i
-    end
-
-    aM = copy(aM1) + copy(aM2)
-    aaMM = Hermitian(conj(transpose(aM)) * aM)
-
-    h, U = eigen(aaMM)
-    h = h / (params.ADD_radius^2 * umev^2.)
-    return U, h
 end
 
 

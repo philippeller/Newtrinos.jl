@@ -9,19 +9,33 @@ using StatsBase
 using CairoMakie
 using Logging
 using BAT
-import ..Newtrinos
-
+using Memoize
 using Printf
+using ..Newtrinos
 
-assets = @Newtrinos.undef_assets
-config = @Newtrinos.undef_config
-
-function configure(;osc, atm_flux, earth_layers, kwargs...)
-    global config = (;osc, atm_flux, earth_layers)
-    return true
+@kwdef struct DeepCore <: Newtrinos.Experiment
+    physics::NamedTuple
+    params::NamedTuple
+    priors::NamedTuple
+    assets::NamedTuple
+    forward_model::Function
+    plot::Function
 end
 
-function setup(datadir = @__DIR__)
+function configure(physics)
+    physics = (;physics.osc, physics.atm_flux, physics.earth_layers)
+    assets = get_assets(physics)
+    return DeepCore(
+        physics = physics,
+        params = get_params(),
+        priors = get_priors(),
+        assets = assets,
+        forward_model = get_forward_model(physics, assets),
+        plot = get_plot(physics, assets)
+    )
+end
+
+function get_assets(physics; datadir = @__DIR__)
     @info "Loading deepcore data"
 
     binning = OrderedDict()
@@ -38,8 +52,8 @@ function setup(datadir = @__DIR__)
     binning[:e_ticks] = (binning[:reco_energy_bin_edges], [@sprintf("%.1f",b) for b in binning[:reco_energy_bin_edges]])
     binning = NamedTuple(binning)
     
-    layers = config.earth_layers.compute_layers()
-    paths = config.earth_layers.compute_paths(binning.cz_fine, layers)
+    layers = physics.earth_layers.compute_layers()
+    paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
 
   
     mc_nu = CSV.read(joinpath(datadir, "neutrino_mc.csv"), FlexTable; header=true);
@@ -84,11 +98,9 @@ function setup(datadir = @__DIR__)
         nutau_cc = read_csv_into_hist("hyperplanes_nutau_cc.csv")
         )    
 
-    flux = config.atm_flux.get_nominal_flux(binning.e_fine, binning.cz_fine)
+    flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
 
-    global assets = (;mc, hyperplanes, flux, muons, observed=data.count, layers, paths, binning)
-
-    return true
+    assets = (;mc, hyperplanes, flux, muons, observed=data.count, layers, paths, binning)
 
 end
 
@@ -96,31 +108,33 @@ end
     
 # ---------- DATA IS PREPARED --------------
 
-params = (
-    deepcore_lifetime = 2.5,
-    deepcore_atm_muon_scale = 1.,
-    deepcore_ice_absorption = 1.,
-    deepcore_ice_scattering = 1.,
-    deepcore_opt_eff_overall = 1.,
-    deepcore_opt_eff_lateral = 0.,
-    deepcore_opt_eff_headon = 0.,
-    nc_norm = 1.,
-    nutau_cc_norm = 1.,
-    )
+function get_params()
+    params = (
+        deepcore_lifetime = 2.5,
+        deepcore_atm_muon_scale = 1.,
+        deepcore_ice_absorption = 1.,
+        deepcore_ice_scattering = 1.,
+        deepcore_opt_eff_overall = 1.,
+        deepcore_opt_eff_lateral = 0.,
+        deepcore_opt_eff_headon = 0.,
+        nc_norm = 1.,
+        nutau_cc_norm = 1.,
+        )
+end
 
-
-priors = (
-    deepcore_lifetime = Uniform(2, 4),
-    deepcore_atm_muon_scale = Uniform(0, 2),
-    deepcore_ice_absorption = Truncated(Normal(1, 0.1), 0.85, 1.15),
-    deepcore_ice_scattering = Truncated(Normal(1, 0.1), 0.85, 1.15),
-    deepcore_opt_eff_overall = Truncated(Normal(1, 0.1), 0.8, 1.2),
-    deepcore_opt_eff_lateral = Truncated(Normal(0, 1.), -2, 2),
-    deepcore_opt_eff_headon = Uniform(-5, 2.),
-    nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
-    nutau_cc_norm = Uniform(0., 2.),
-    )
-
+function get_priors()
+    priors = (
+        deepcore_lifetime = Uniform(2, 4),
+        deepcore_atm_muon_scale = Uniform(0, 2),
+        deepcore_ice_absorption = Truncated(Normal(1, 0.1), 0.85, 1.15),
+        deepcore_ice_scattering = Truncated(Normal(1, 0.1), 0.85, 1.15),
+        deepcore_opt_eff_overall = Truncated(Normal(1, 0.1), 0.8, 1.2),
+        deepcore_opt_eff_lateral = Truncated(Normal(0, 1.), -2, 2),
+        deepcore_opt_eff_headon = Uniform(-5, 2.),
+        nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
+        nutau_cc_norm = Uniform(0., 2.),
+        )
+end
 
 # ------------- Define Model --------
 
@@ -152,17 +166,17 @@ function gather_flux(p_flux, ef, cf, j)
 end
 
 
-function reweight(params, config, assets)
-    sys_flux = config.atm_flux.calc_sys_flux(assets.flux, params)
+function reweight(params, physics, assets)
+    sys_flux = physics.atm_flux.sys_flux(assets.flux, params)
 
     s = (size(assets.binning.e_fine)[1], size(assets.binning.cz_fine)[1])
 
-    p = config.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
+    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
     
     nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
     
-    p = config.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
+    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
     nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
@@ -199,9 +213,9 @@ function apply_hyperplanes(hists, params, hyperplanes)
     )    
 end 
 
-function get_expected(params, config, assets)
+function get_expected(params, physics, assets)
 
-    osc_flux = reweight(params, config, assets)
+    osc_flux = reweight(params, physics, assets)
 
     lifetime_seconds = params.deepcore_lifetime * 365. * 24. * 3600.
 
@@ -214,63 +228,64 @@ function get_expected(params, config, assets)
 end
 
 
-function get_forward_model()
-    model = let this_assets = assets, this_config = config
-        params -> begin
-            exp_events = get_expected(params, this_config, this_assets)
-            distprod(Poisson.(exp_events))
-        end
+function get_forward_model(physics, assets)
+    function forward_model(params)
+        exp_events = get_expected(params, physics, assets)
+        distprod(Poisson.(exp_events))
     end
 end
 
     
-function plotmap(h; colormap=Reverse(:Spectral), symm=false)
+# function plotmap(h; colormap=Reverse(:Spectral), symm=false)
+#     asset = get_assets()
 
-    if symm
-        colorrange = (-maximum(abs.(h)), maximum(abs.(h)))
-    else
-        colorrange = (0, maximum(h))
-    end
+#     if symm
+#         colorrange = (-maximum(abs.(h)), maximum(abs.(h)))
+#     else
+#         colorrange = (0, maximum(h))
+#     end
     
-    fig = Figure(size=(800, 400))
-    ax = Axis(fig[1,1], xscale=log10, xticks=assets.binning.e_ticks, xlabel="E (GeV)", ylabel="cos(zenith)", title="Cascades")
-    hm = heatmap!(ax, assets.binning.reco_energy_bin_edges, assets.binning.reco_coszen_bin_edges, h[:, :, 1], colormap=colormap, colorrange=colorrange)
-    ax = Axis(fig[1,2], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", yticksvisible=true, yticklabelsvisible=false, title="Tracks")
-    hm = heatmap!(ax, assets.binning.reco_energy_bin_edges, assets.binning.reco_coszen_bin_edges, h[:, :, 2], colormap=colormap, colorrange=colorrange)
-    Colorbar(fig[1,3], hm)
-    fig
-end
+#     fig = Figure(size=(800, 400))
+#     ax = Axis(fig[1,1], xscale=log10, xticks=assets.binning.e_ticks, xlabel="E (GeV)", ylabel="cos(zenith)", title="Cascades")
+#     hm = heatmap!(ax, assets.binning.reco_energy_bin_edges, assets.binning.reco_coszen_bin_edges, h[:, :, 1], colormap=colormap, colorrange=colorrange)
+#     ax = Axis(fig[1,2], xscale=log10, xticks=e_ticks, xlabel="E (GeV)", yticksvisible=true, yticklabelsvisible=false, title="Tracks")
+#     hm = heatmap!(ax, assets.binning.reco_energy_bin_edges, assets.binning.reco_coszen_bin_edges, h[:, :, 2], colormap=colormap, colorrange=colorrange)
+#     Colorbar(fig[1,3], hm)
+#     fig
+# end
 
-function plot(params, data=assets.observed)
+function get_plot(physics, assets)
 
-    expected = get_expected(params, config, assets)
-
-    fig = Figure(size=(800, 600))
-    for j in 1:2
-        for i in 1:size(expected)[1]
-            ax = Axis(fig[i,j], yticklabelsize=10)
-            stephist!(ax, midpoints(assets.binning.reco_coszen_bin_edges), bins=assets.binning.reco_coszen_bin_edges, weights=expected[i, :, j])
-            scatter!(ax, midpoints(assets.binning.reco_coszen_bin_edges), data[i, :, j], color=:black)
-            ax.xticksvisible = false
-            ax.xticklabelsvisible = false
-            ax.xlabel = ""
-            up = maximum((maximum(data[i, :, j]), maximum(expected[i, :, j]))) * 1.2
-            ylims!(ax, 0, up)
-            e_low = assets.binning.reco_energy_bin_edges[i]
-            e_high = assets.binning.reco_energy_bin_edges[i+1]
-            text!(ax, 0.5, 0, text=@sprintf("E in [%.1f, %.1f] GeV", e_low, e_high), align = (:center, :bottom), space = :relative)
+    function plot(params, data=assets.observed)
+        expected = get_expected(params, physics, assets)
+    
+        fig = Figure(size=(800, 600))
+        for j in 1:2
+            for i in 1:size(expected)[1]
+                ax = Axis(fig[i,j], yticklabelsize=10)
+                stephist!(ax, midpoints(assets.binning.reco_coszen_bin_edges), bins=assets.binning.reco_coszen_bin_edges, weights=expected[i, :, j])
+                scatter!(ax, midpoints(assets.binning.reco_coszen_bin_edges), data[i, :, j], color=:black)
+                ax.xticksvisible = false
+                ax.xticklabelsvisible = false
+                ax.xlabel = ""
+                up = maximum((maximum(data[i, :, j]), maximum(expected[i, :, j]))) * 1.2
+                ylims!(ax, 0, up)
+                e_low = assets.binning.reco_energy_bin_edges[i]
+                e_high = assets.binning.reco_energy_bin_edges[i+1]
+                text!(ax, 0.5, 0, text=@sprintf("E in [%.1f, %.1f] GeV", e_low, e_high), align = (:center, :bottom), space = :relative)
+            end
         end
+        for i in 1:2
+            ax = fig.content[size(expected)[1]*i]
+            ax.xticklabelsvisible = true
+            ax.xticksvisible = true
+            ax.xlabel="cos(zenith)"
+        end
+        fig.content[1].title = "Cascades"
+        fig.content[9].title = "Tracks"
+        rowgap!(fig.layout, 0)
+        fig
     end
-    for i in 1:2
-        ax = fig.content[size(expected)[1]*i]
-        ax.xticklabelsvisible = true
-        ax.xticksvisible = true
-        ax.xlabel="cos(zenith)"
-    end
-    fig.content[1].title = "Cascades"
-    fig.content[9].title = "Tracks"
-    rowgap!(fig.layout, 0)
-    fig
 end
 
 end

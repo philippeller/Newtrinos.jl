@@ -12,15 +12,45 @@ using CairoMakie
 using Logging
 import ..Newtrinos
 
-assets = @Newtrinos.undef_assets
-config = @Newtrinos.undef_config
-
-function configure(;osc, kwargs...)
-    global config = (;osc,)
-    return true
+@kwdef struct KamLAND <: Newtrinos.Experiment
+    physics::NamedTuple
+    params::NamedTuple
+    priors::NamedTuple
+    assets::NamedTuple
+    forward_model::Function
+    plot::Function
 end
 
-function setup(datadir = @__DIR__)
+function configure(physics)
+    physics = (;physics.osc)
+    assets = get_assets(physics)
+    return KamLAND(
+        physics = physics,
+        params = get_params(),
+        priors = get_priors(),
+        assets = assets,
+        forward_model = get_forward_model(physics, assets),
+        plot = get_plot(physics, assets)
+    )
+end
+
+function get_params()
+    params = (
+        kamland_energy_scale = 0.,
+        kamland_geonu_scale = 0.,
+        kamland_flux_scale = 0.,
+        )
+end
+
+function get_priors()
+    priors = (
+        kamland_energy_scale = Truncated(Normal(0, 1.), -3, 3),
+        kamland_geonu_scale = Uniform(-0.5, 0.5),
+        kamland_flux_scale = Truncated(Normal(0, 1.), -3, 3),
+        )
+end
+
+function get_assets(physics, datadir = @__DIR__)
     @info "Loading kamland data"
 
     # Important global constants
@@ -49,7 +79,7 @@ function setup(datadir = @__DIR__)
     weights = pdf(LogNormal(log(3.25),0.38), Ep_fine);
 
     observed = round.(CSV.read(joinpath(datadir, "KamLAND_data.csv"), DataFrame; header=false)[:, 2])
-    global assets = (;
+    assets = (;
         observed,
         Ep,
         Ep_bins,
@@ -68,8 +98,6 @@ function setup(datadir = @__DIR__)
         geonu,
         flux_factor,        
         )
-
-    return true
 end
 
 function smear(E, p, sigma, weights; width=10, E_scale=1.0, E_bias=0.0)
@@ -89,12 +117,12 @@ function smear(E, p, sigma, weights; width=10, E_scale=1.0, E_bias=0.0)
     return copy(out)
 end
 
-function get_expected(params, config, assets)
+function get_expected(params, physics, assets)
     E_fine = (assets.Ep_fine .+ assets.NEUTRINO_POSITRON_ENERGY_SHIFT) .* (1 .+ assets.ENERGY_SCALE_UNC .* params.kamland_energy_scale)
 
     BG = assets.allBG .+ assets.geonu .* (params.kamland_geonu_scale)
 
-    prob_outer_fine = config.osc.osc_prob(E_fine .* 1e-3, assets.L, params, anti=true)[:, :, 1, 1]'
+    prob_outer_fine = physics.osc.osc_prob(E_fine .* 1e-3, assets.L, params, anti=true)[:, :, 1, 1]'
 
     prob_fine = dropdims(sum(assets.flux_factor .* prob_outer_fine, dims=1), dims=1)
     Ep_resolutions = assets.ENERGY_RESOL_1MEV .* sqrt.(assets.Ep_fine)
@@ -113,69 +141,57 @@ function get_expected(params, config, assets)
     return exp_events_noBG .+ BG
 end
 
-function get_forward_model()
-    model = let this_assets = assets, this_config = config
-        params -> begin
-            exp_events = get_expected(params, this_config, this_assets)
-            distprod(Poisson.(exp_events))
-        end
+function get_forward_model(physics, assets)
+    function forward_model(params)
+        exp_events = get_expected(params, physics, assets)
+        distprod(Poisson.(exp_events))
     end
 end
 
-function plot(params, data=assets.observed)
+function get_plot(physics, assets)
 
-    m = mean(get_forward_model()(params))
-    v = var(get_forward_model()(params))
+    function plot(params, data=assets.observed)
     
-    energy = assets.Ep
-    energy_bins = assets.Ep_bins
-
-    f = Figure()
-    ax = Axis(f[1,1])
+        m = mean(get_forward_model(physics, assets)(params))
+        v = var(get_forward_model(physics, assets)(params))
+        
+        energy = assets.Ep
+        energy_bins = assets.Ep_bins
     
-    plot!(ax, energy, data, color=:black, label="Observed")
-    stephist!(ax, energy, weights=m, bins=energy_bins, label="Expected")
-    barplot!(ax, energy, m .+ sqrt.(v), width=diff(energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
-    
-    ax.ylabel="Counts"
-    ax.title="KamLAND"
-    axislegend(ax, framevisible = false)
-    
-    
-    ax2 = Axis(f[2,1])
-    plot!(ax2, energy, data ./ m, color=:black, label="Observed")
-    hlines!(ax2, 1, label="Expected")
-    barplot!(ax2, energy, 1 .+ sqrt.(v) ./ m, width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
-    ylims!(ax2, 0.3, 1.7)
-    
-    ax.xticksvisible = false
-    ax.xticklabelsvisible = false
-    
-    rowsize!(f.layout, 1, Relative(3/4))
-    rowgap!(f.layout, 1, 0)
-    
-    ax2.xlabel="Eₚ (MeV)"
-    ax2.ylabel="Counts/Expected"
-    
-    xlims!(ax, minimum(energy_bins), maximum(energy_bins))
-    xlims!(ax2, minimum(energy_bins), maximum(energy_bins))
-    
-    ylims!(ax, 0, 300)
-    
-    f
+        f = Figure()
+        ax = Axis(f[1,1])
+        
+        plot!(ax, energy, data, color=:black, label="Observed")
+        stephist!(ax, energy, weights=m, bins=energy_bins, label="Expected")
+        barplot!(ax, energy, m .+ sqrt.(v), width=diff(energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+        
+        ax.ylabel="Counts"
+        ax.title="KamLAND"
+        axislegend(ax, framevisible = false)
+        
+        
+        ax2 = Axis(f[2,1])
+        plot!(ax2, energy, data ./ m, color=:black, label="Observed")
+        hlines!(ax2, 1, label="Expected")
+        barplot!(ax2, energy, 1 .+ sqrt.(v) ./ m, width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+        ylims!(ax2, 0.3, 1.7)
+        
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+        
+        rowsize!(f.layout, 1, Relative(3/4))
+        rowgap!(f.layout, 1, 0)
+        
+        ax2.xlabel="Eₚ (MeV)"
+        ax2.ylabel="Counts/Expected"
+        
+        xlims!(ax, minimum(energy_bins), maximum(energy_bins))
+        xlims!(ax2, minimum(energy_bins), maximum(energy_bins))
+        
+        ylims!(ax, 0, 300)
+        
+        f
+    end
 end
-
-
-params = (
-    kamland_energy_scale = 0.,
-    kamland_geonu_scale = 0.,
-    kamland_flux_scale = 0.,
-    )
-
-priors = (
-    kamland_energy_scale = Truncated(Normal(0, 1.), -3, 3),
-    kamland_geonu_scale = Uniform(-0.5, 0.5),
-    kamland_flux_scale = Truncated(Normal(0, 1.), -3, 3),
-    )
 
 end

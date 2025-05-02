@@ -7,19 +7,31 @@ using DataStructures
 using CairoMakie
 using Accessors
 using Logging
-import ..osc
 import ..Newtrinos
 
-
-assets = @Newtrinos.undef_assets
-config = @Newtrinos.undef_config
-
-function configure(;osc, kwargs...)
-    global config = (;osc,)
-    return true
+@kwdef struct DayaBay <: Newtrinos.Experiment
+    physics::NamedTuple
+    params::NamedTuple
+    priors::NamedTuple
+    assets::NamedTuple
+    forward_model::Function
+    plot::Function
 end
 
-function setup(datadir = @__DIR__)
+function configure(physics)
+    physics = (;physics.osc)
+    assets = get_assets(physics)
+    return DayaBay(
+        physics = physics,
+        params = (;),
+        priors = (;),
+        assets = assets,
+        forward_model = get_forward_model(physics, assets),
+        plot = get_plot(physics, assets)
+    )
+end
+
+function get_assets(physics; datadir = @__DIR__)
 
     @info "Loading dayabay data"
     # Experimental Halls
@@ -89,14 +101,14 @@ function setup(datadir = @__DIR__)
         dfIBD_dict["dfIBD_EH$EH"][!, "N"] = dfIBD_dict["dfIBD_EH$EH"].Nobs .- BKG
     end
     
-    # Paramnaters for DayaBay bestfit to recalculate unoscillated spectrum
-    best_fit_params_dayabay = deepcopy(osc.standard.params)
-    @reset best_fit_params_dayabay.θ₁₂ = asin(sqrt(0.307))
-    @reset best_fit_params_dayabay.θ₁₃ = asin(sqrt(0.0851)) * 0.5
-    @reset best_fit_params_dayabay.θ₂₃ = asin(sqrt(0.57))
-    @reset best_fit_params_dayabay.δCP = 0.
-    @reset best_fit_params_dayabay.Δm²₂₁ = 7.53e-5
-    @reset best_fit_params_dayabay.Δm²₃₁ = 2.466e-3 + best_fit_params_dayabay[:Δm²₂₁]
+    # Setup for DayaBay bestfit to recalculate unoscillated spectrum
+    bestift_osc = Newtrinos.osc.configure()
+    @reset bestift_osc.params.θ₁₂ = asin(sqrt(0.307))
+    @reset bestift_osc.params.θ₁₃ = asin(sqrt(0.0851)) * 0.5
+    @reset bestift_osc.params.θ₂₃ = asin(sqrt(0.57))
+    @reset bestift_osc.params.δCP = 0.
+    @reset bestift_osc.params.Δm²₂₁ = 7.53e-5
+    @reset bestift_osc.params.Δm²₃₁ = 2.466e-3 + bestift_osc.params[:Δm²₂₁]
     
     ad_contribs_to_far_hall = Float64[]
     E_arrs = Vector{Vector{Float64}}()
@@ -116,7 +128,7 @@ function setup(datadir = @__DIR__)
         L_arr = vec(Matrix(L_matrix))
     
         Npred_EH3_after_best_fit_osc = dfIBD_dict["dfIBD_EH3"][:, "Npred_$(periods_dict[period])AD"]
-        best_fit_prob_arr = osc.standard.osc_prob(E_arr, L_arr, best_fit_params_dayabay, anti=true)[:, :, 1, 1]'
+        best_fit_prob_arr = bestift_osc.osc_prob(E_arr, L_arr, bestift_osc.params, anti=true)[:, :, 1, 1]'
         baseline_average_best_fit_prob_arr = vec(sum(best_fit_prob_arr ./ (L_arr .^ 2), dims=1) ./ sum(1 ./(L_arr .^ 2)))
         # unoscillated N predicted EH3:
         Npred_EH3_noosc = Npred_EH3_after_best_fit_osc ./ baseline_average_best_fit_prob_arr
@@ -140,7 +152,7 @@ function setup(datadir = @__DIR__)
 
     observed = convert(Vector{Float64}, dfIBD_dict["dfIBD_EH3"].N)
     
-    global assets = (;
+    assets = (;
         E_arrs, 
         L_arrs, 
         Npred_EH3_nooscs,
@@ -152,77 +164,74 @@ function setup(datadir = @__DIR__)
         energy_bins,
         energy
     )
-    return true
 
 end
 
 
-params = (;)
-priors = (;)
-
-function get_expected_per_period(params, period, config, assets)
+function get_expected_per_period(params, period, physics, assets)
     E = assets.E_arrs[period]
     L = assets.L_arrs[period]
-    prob_arr = config.osc.osc_prob(E, L, params, anti=true)[:, :, 1, 1]'
+    prob_arr = physics.osc.osc_prob(E, L, params, anti=true)[:, :, 1, 1]'
     L2 = L .^ 2
     prob = vec(sum(prob_arr./L2, dims=1) ./ sum(1 ./L2))
     Npred_EH3_with_osc = assets.Npred_EH3_nooscs[period] .* prob
 end
 
 # Define function to give the expected events at the far hall (EH3)
-function get_expected(params, config, assets)
-    sum([get_expected_per_period(params, period, config, assets) for period in 1:length(assets.period_list)])
+function get_expected(params, physics, assets)
+    sum([get_expected_per_period(params, period, physics, assets) for period in 1:length(assets.period_list)])
 end
 
-function get_forward_model()
-    model = let this_assets = assets, this_config = config
-        params -> begin
-            exp_events = get_expected(params, this_config, this_assets)
-            cov = Symmetric(Diagonal(exp_events .* this_assets.rel_unc_diag) * this_assets.corr_mat * Diagonal(exp_events .* this_assets.rel_unc_diag)) * this_assets.covmat_prefactor + Diagonal(exp_events)
-            Distributions.MvNormal(exp_events, cov)
-        end
+function get_forward_model(physics, assets)
+    function forward_model(params)
+        exp_events = get_expected(params, physics, assets)
+        cov = Symmetric(Diagonal(exp_events .* assets.rel_unc_diag) * assets.corr_mat * Diagonal(exp_events .* assets.rel_unc_diag)) * assets.covmat_prefactor + Diagonal(exp_events)
+        Distributions.MvNormal(exp_events, cov)
     end
 end
 
-function plot(params, data=assets.observed)
-    
-    m = mean(get_forward_model()(params))
-    v = var(get_forward_model()(params))
+function get_plot(physics, assets)
 
-    f = Figure()
-    ax = Axis(f[1,1])
+    function plot(params, data=assets.observed)
+        
+        m = mean(get_forward_model(physics, assets)(params))
+        v = var(get_forward_model(physics, assets)(params))
     
-    plot!(ax, assets.energy, data, color=:black, label="Observed")
-    stephist!(ax, assets.energy, weights=m, bins=assets.energy_bins, label="Expected")
-    barplot!(ax, assets.energy, m .+ sqrt.(v), width=diff(assets.energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+        f = Figure()
+        ax = Axis(f[1,1])
+        
+        plot!(ax, assets.energy, data, color=:black, label="Observed")
+        stephist!(ax, assets.energy, weights=m, bins=assets.energy_bins, label="Expected")
+        barplot!(ax, assets.energy, m .+ sqrt.(v), width=diff(assets.energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+        
+        ax.ylabel="Counts"
+        ax.title="Daya Bay"
+        axislegend(ax, framevisible = false)
+        
+        
+        ax2 = Axis(f[2,1])
+        plot!(ax2, assets.energy, data ./ m, color=:black, label="Observed")
+        hlines!(ax2, 1, label="Expected")
+        barplot!(ax2, assets.energy, 1 .+ sqrt.(v) ./ m, width=diff(assets.energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+        ylims!(ax2, 0.9, 1.1)
+        
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+        
+        rowsize!(f.layout, 1, Relative(3/4))
+        rowgap!(f.layout, 1, 0)
+        
+        ax2.xlabel="Eₚ (MeV)"
+        ax2.ylabel="Counts/Expected"
     
-    ax.ylabel="Counts"
-    ax.title="Daya Bay"
-    axislegend(ax, framevisible = false)
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        
+        ylims!(ax, 0, 60000)
+        
+        f
     
-    
-    ax2 = Axis(f[2,1])
-    plot!(ax2, assets.energy, data ./ m, color=:black, label="Observed")
-    hlines!(ax2, 1, label="Expected")
-    barplot!(ax2, assets.energy, 1 .+ sqrt.(v) ./ m, width=diff(assets.energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
-    ylims!(ax2, 0.9, 1.1)
-    
-    ax.xticksvisible = false
-    ax.xticklabelsvisible = false
-    
-    rowsize!(f.layout, 1, Relative(3/4))
-    rowgap!(f.layout, 1, 0)
-    
-    ax2.xlabel="Eₚ (MeV)"
-    ax2.ylabel="Counts/Expected"
-
-    xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
-    xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
-    
-    ylims!(ax, 0, 60000)
-    
-    f
-
+    end
 end
 
 end

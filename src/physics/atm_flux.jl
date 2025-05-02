@@ -6,23 +6,60 @@ using DataStructures
 using Distributions
 using LinearAlgebra
 using TypedTables
+using ..Newtrinos
 
+export AtmFluxConfig, HKKM, Barr
 
 const datadir = @__DIR__ 
 
-params = (
-    atm_flux_nunubar_sigma = 0.,
-    atm_flux_nuenumu_sigma = 0.,
-    atm_flux_delta_spectral_index = 0.,
-    atm_flux_uphorizonzal_sigma = 0.,
-    )
+abstract type NominalFluxModel end
+@kwdef struct HKKM <: NominalFluxModel
+    fname::String = "spl-nu-20-01-000.d"
+end
 
-priors = (
-    atm_flux_nunubar_sigma = Truncated(Normal(0., 1.), -3, 3),
-    atm_flux_nuenumu_sigma = Truncated(Normal(0., 1.), -3, 3),
-    atm_flux_delta_spectral_index = Truncated(Normal(0., 0.1), -0.3, 0.3),
-    atm_flux_uphorizonzal_sigma = Truncated(Normal(0., 1.), -3, 3),
-    )
+abstract type FluxSystematicsModel end
+struct Barr <: FluxSystematicsModel end
+
+@kwdef struct AtmFluxConfig{F<:NominalFluxModel, S<:FluxSystematicsModel}
+    nominal_model::F = HKKM()
+    systematics_model::S = Barr()
+end
+
+@kwdef struct AtmFlux <: Newtrinos.Physics
+    cfg::AtmFluxConfig
+    params::NamedTuple
+    priors::NamedTuple
+    nominal_flux::Function
+    sys_flux::Function
+end
+
+function configure(cfg::AtmFluxConfig=AtmFluxConfig())
+    AtmFlux(
+        cfg=cfg,
+        params = get_params(cfg.systematics_model),
+        priors = get_priors(cfg.systematics_model),
+        nominal_flux = get_nominal_flux(cfg.nominal_model),
+        sys_flux = get_sys_flux(cfg.systematics_model)
+        )
+end
+
+function get_params(cfg::Barr)
+    params = (
+        atm_flux_nunubar_sigma = 0.,
+        atm_flux_nuenumu_sigma = 0.,
+        atm_flux_delta_spectral_index = 0.,
+        atm_flux_uphorizonzal_sigma = 0.,
+        )
+end
+
+function get_priors(cfg::Barr)
+    priors = (
+        atm_flux_nunubar_sigma = Truncated(Normal(0., 1.), -3, 3),
+        atm_flux_nuenumu_sigma = Truncated(Normal(0., 1.), -3, 3),
+        atm_flux_delta_spectral_index = Truncated(Normal(0., 0.1), -0.3, 0.3),
+        atm_flux_uphorizonzal_sigma = Truncated(Normal(0., 1.), -3, 3),
+        )
+end
 
 function get_hkkm_flux(filename)    
 
@@ -51,21 +88,22 @@ function get_hkkm_flux(filename)
     return flux
 end
 
-function get_nominal_flux(energy, coszen)
-
-    # make fine grid
-    e_fine_meshgrid = [((ones(size(coszen))' .* energy)...)...]
-    log10e_fine_meshgrid = log10.(e_fine_meshgrid)
-    cz_fine_meshgrid = [((coszen' .* ones(size(energy)))...)...]
-
-    flux_splines = get_hkkm_flux(joinpath(datadir, "spl-nu-20-01-000.d"))
+function get_nominal_flux(cfg::HKKM)
+    function nominal_flux(energy, coszen)
+        # make fine grid
+        e_fine_meshgrid = [((ones(size(coszen))' .* energy)...)...]
+        log10e_fine_meshgrid = log10.(e_fine_meshgrid)
+        cz_fine_meshgrid = [((coszen' .* ones(size(energy)))...)...]
     
-    flux = FlexTable(true_energy=e_fine_meshgrid, log10_true_energy=log10e_fine_meshgrid, true_coszen=cz_fine_meshgrid)
-    for key in keys(flux_splines)
-        setproperty!(flux, key, flux_splines[key].(flux.log10_true_energy, flux.true_coszen))
-    end
-
-    flux = Table(flux)
+        flux_splines = get_hkkm_flux(joinpath(datadir, cfg.fname))
+        
+        flux = FlexTable(true_energy=e_fine_meshgrid, log10_true_energy=log10e_fine_meshgrid, true_coszen=cz_fine_meshgrid)
+        for key in keys(flux_splines)
+            setproperty!(flux, key, flux_splines[key].(flux.log10_true_energy, flux.true_coszen))
+        end
+    
+        flux = Table(flux)
+        end
 end
 
 function scale_flux(A, B, scale)
@@ -84,46 +122,47 @@ function uphorizontal(coszen, rel_error)
     1 / sqrt((b^2 - a^2) * coszen^2 + a^2)
 end
 
-function calc_sys_flux(flux, params)
-
-    e = flux.true_energy
-    log10e =flux.log10_true_energy
-    cz = flux.true_coszen
-
-    # spectral
-    f_spectral_shift = (e ./ 24.0900951261) .^ params.atm_flux_delta_spectral_index
-
-    # all coefficients below come from fits to the Figs. 7 & 9 in Uncertainties in Atmospheric Neutrino Fluxes by Barr & Robbins
+function get_sys_flux(cfg::Barr)
+    function sys_flux(flux, params)
     
-    # nue - nuebar
-    uncert = ((0.73 * e) .^(0.59) .+ 4.8) / 100.
-    flux_nue1, flux_nuebar1 = scale_flux(flux.nue, flux.nuebar, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))
+        e = flux.true_energy
+        log10e = flux.log10_true_energy
+        cz = flux.true_coszen
     
-    # numu - numubar
-    uncert = ((9.6 * e) .^(0.41) .-0.8) / 100.
-    flux_numu1, flux_numubar1 = scale_flux(flux.numu, flux.numubar, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))        
-
-    # nue - numu
-    uncert = ((0.051 * e) .^(0.63) .+ 0.73) / 100.
-    flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
-    flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
-
-    # up/horizontal
-    # nue
-    uncert = (-0.43*log10e.^5 .+ 1.17*log10e.^4 .+ 0.89*log10e.^3 .- 0.36*log10e.^2 .- 1.59*log10e .+ 1.96) / 100.
-    f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
-    flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal
-    flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal
+        # spectral
+        f_spectral_shift = (e ./ 24.0900951261) .^ params.atm_flux_delta_spectral_index
     
-    #numu
-    uncert = (-0.16*log10e.^5 .+ 0.45*log10e.^4 .+ 0.48*log10e.^3 .+ 0.17*log10e.^2 .- 1.88*log10e .+ 1.88) / 100.
-    f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
-    flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal
-    flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal
-
-    return (nue=flux_nue3, numu=flux_numu3, nuebar=flux_nuebar3, numubar=flux_numubar3)
-
+        # all coefficients below come from fits to the Figs. 7 & 9 in Uncertainties in Atmospheric Neutrino Fluxes by Barr & Robbins
+        
+        # nue - nuebar
+        uncert = ((0.73 * e) .^(0.59) .+ 4.8) / 100.
+        flux_nue1, flux_nuebar1 = scale_flux(flux.nue, flux.nuebar, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))
+        
+        # numu - numubar
+        uncert = ((9.6 * e) .^(0.41) .-0.8) / 100.
+        flux_numu1, flux_numubar1 = scale_flux(flux.numu, flux.numubar, 1. .+ (params.atm_flux_nunubar_sigma .* uncert))        
+    
+        # nue - numu
+        uncert = ((0.051 * e) .^(0.63) .+ 0.73) / 100.
+        flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
+        flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- (params.atm_flux_nuenumu_sigma .* uncert))
+    
+        # up/horizontal
+        # nue
+        uncert = (-0.43*log10e.^5 .+ 1.17*log10e.^4 .+ 0.89*log10e.^3 .- 0.36*log10e.^2 .- 1.59*log10e .+ 1.96) / 100.
+        f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
+        flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal
+        flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal
+        
+        #numu
+        uncert = (-0.16*log10e.^5 .+ 0.45*log10e.^4 .+ 0.48*log10e.^3 .+ 0.17*log10e.^2 .- 1.88*log10e .+ 1.88) / 100.
+        f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizonzal_sigma) 
+        flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal
+        flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal
+    
+        return (nue=flux_nue3, numu=flux_numu3, nuebar=flux_nuebar3, numubar=flux_numubar3)
+    
+    end
 end
-
 
 end

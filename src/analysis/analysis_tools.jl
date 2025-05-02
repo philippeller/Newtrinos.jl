@@ -20,6 +20,7 @@ using MeasureBase
 using FunctionChains
 using Accessors
 using Logging
+using ..Newtrinos
 
 adsel = AutoForwardDiff()
 set_batcontext(ad = adsel)
@@ -262,6 +263,12 @@ function bestfit(result::NewtrinosResult)
     NamedTuple(bf)
 end
 
+function sort_nt(nt::NamedTuple)
+    keys_sorted = sort(collect(keys(nt)))
+    values_sorted = getindex.(Ref(nt), keys_sorted)
+    return NamedTuple{Tuple(keys_sorted)}(values_sorted)
+end
+
 function safe_merge(nt_list::NamedTuple...)
     """ Merge namedtuples such that duplicates are checked for consistentcy
     """
@@ -276,42 +283,44 @@ function safe_merge(nt_list::NamedTuple...)
         end
         merged = merge(merged, nt)
     end
-    keys_sorted = sort(collect(keys(merged)))
-    values_sorted = getindex.(Ref(merged), keys_sorted)
-    return NamedTuple{Tuple(keys_sorted)}(values_sorted)
+    sort_nt(merged)
 end
 
-function get_priors(modules)
-    all_priors = []
-    for m in modules
-        push!(all_priors, m.priors)
-        for c in m.config
-            push!(all_priors, NamedTuple(c.priors))
-        end
-    end
+function get_priors(x::Newtrinos.Experiment)
+    safe_merge(x.priors, get_priors(x.physics))
+end
+
+function get_priors(x::Newtrinos.Physics)
+    sort_nt(x.priors)
+end
+
+function get_params(x::Newtrinos.Experiment)
+    safe_merge(x.params, get_params(x.physics))
+end
+
+function get_params(x::Newtrinos.Physics)
+    sort_nt(x.params)
+end
+
+function get_priors(modules::NamedTuple)
+    all_priors = [get_priors(m) for m in modules]
     safe_merge(all_priors...)
 end
 
-function get_params(modules)
-    all_params = []
-    for m in modules
-        push!(all_params, m.params)
-        for c in m.config
-            push!(all_params, c.params)
-        end
-    end
+function get_params(modules::NamedTuple)
+    all_params = [get_params(m) for m in modules]
     safe_merge(all_params...)
 end
 
-function get_observed(modules)
-    NamedTuple(OrderedDict([nameof(m)=>m.assets.observed for m in modules]))
+function get_observed(experiments::NamedTuple)
+    NamedTuple{keys(experiments)}(e.assets.observed for e in experiments)
 end
 
-function get_fwd_model(modules)
-    fwd_models = NamedTuple(OrderedDict([nameof(m)=>m.get_forward_model() for m in modules]))
+function get_fwd_model(experiments::NamedTuple)
+    fwd_models = NamedTuple{keys(experiments)}(e.forward_model for e in experiments)
     distprod ∘ ffanout(fwd_models)
 end
 
-function generate_likelihood(modules, observed=get_observed(modules))
-    likelihoodof(get_fwd_model(modules), observed)
+function generate_likelihood(experiments::NamedTuple, observed=get_observed(experiments))
+    likelihoodof(get_fwd_model(experiments), observed)
 end
