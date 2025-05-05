@@ -192,7 +192,7 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing)
     #check if there is actually any variable to be profiled over, or if they all or just Numbers
     if all([isa(priors[var], Number) for var in setdiff(keys(priors), keys(vars_to_scan))])
         # so all variables are just numbers and it reduces to a simple scan
-        return scan(llh, priors, vars_to_scan, params)
+        return scan(likelihood, priors, vars_to_scan, params)
     end
     
     values, scanpoints = generate_scanpoints(vars_to_scan, priors)
