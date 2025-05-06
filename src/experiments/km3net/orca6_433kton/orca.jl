@@ -50,7 +50,7 @@ function get_assets(physics; datadir = @__DIR__)
         cz_reco_edges = f["Ct_reco_axis"]["edges"]
     )
 
-    flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
+    #flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
     layers = physics.earth_layers.compute_layers()
     paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
 
@@ -70,16 +70,28 @@ function get_assets(physics; datadir = @__DIR__)
     data_hist = permutedims(reshape(data.W, reco_shape[rs]), rs)
     muon_hist = permutedims(reshape(muons.W, reco_shape[rs]), rs);
 
-    assets = (;mc, muon_hist, observed=cut_zeros(data_hist), binning, true_shape, reco_shape, flux, layers, paths)
+    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, layers, paths)
 end
 
 function get_params()
-    params = (;
+    params = (
+        orca_energy_scale = 1.,
+        orca_norm_all = 1.,
+        orca_norm_hpt = 1.,
+        orca_norm_showers = 1.,
+        orca_norm_muons = 1.,
+        #orca_norm_he = 1.,
         )
 end
 
 function get_priors()
-    priors = (;
+    priors = (
+        orca_energy_scale = Truncated(Normal(1., 0.09), 0.7, 1.3),
+        orca_norm_all = Uniform(0.5, 1.5),
+        orca_norm_hpt = Uniform(0.5, 1.5),
+        orca_norm_showers = Uniform(0.5, 1.5),
+        orca_norm_muons = Uniform(0., 2.),
+        #orca_norm_he = Truncated(Normal(1, 0.5), 0., 1.),
         )
 end
 
@@ -111,16 +123,19 @@ end
 
 
 function reweight(params, physics, assets)
-    sys_flux = physics.atm_flux.sys_flux(assets.flux, params)
+
+    flux = physics.atm_flux.nominal_flux(assets.binning.e_fine * params.orca_energy_scale, assets.binning.cz_fine)
+    
+    sys_flux = physics.atm_flux.sys_flux(flux, params)
 
     s = assets.true_shape
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
+    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, assets.paths, assets.layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
     
     nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].E_true_bin, assets.mc[ch].Ct_true_bin, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
+    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, assets.paths, assets.layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
     nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].E_true_bin, assets.mc[ch].Ct_true_bin, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
@@ -135,16 +150,29 @@ function get_expected(params, physics, assets)
     lifetime_seconds = 1.
 
     hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds, assets) for ch in keys(assets.mc))
-    
-    expected = assets.muon_hist .+ sum(sum(hists), dims=4)
 
-    cut_zeros(expected)
+    hists_cc_nc = sum(sum(hists), dims=4)
+    
+    expected = (assets.muon_hist * params.orca_norm_muons .+ hists_cc_nc) * params.orca_norm_all
+
+    # Poisson > 0
+    expected = max.(1e-2, (expected))
+
+    c = cut(expected)
+    
+    return (
+        hpt = c.hpt * params.orca_norm_hpt,
+        showers = c.showers * params.orca_norm_showers,
+        lpt = c.lpt
+    )
+        
 end
 
-function cut_zeros(hist)
-    (tracks = hist[1:end-1, 1:10, 1, :],
-        shower = hist[1:end, 1:10, 1, :],
-        mixed = hist[1:end-1, 1:10, 1, :]
+function cut(hist)
+    (
+    hpt = hist[1:end-1, 1:10, 1],
+    showers = hist[1:end, 1:10, 2],
+    lpt = hist[1:end-1, 1:10, 3]
         )
 end
 
@@ -152,6 +180,7 @@ end
 function get_forward_model(physics, assets)
     function forward_model(params)
         exp_events = get_expected(params, physics, assets)
+        #distprod(Poisson.(exp_events))
         distprod(NamedTuple(ch => distprod(Poisson.(exp_events[ch])) for ch in keys(exp_events)))
     end
 end
