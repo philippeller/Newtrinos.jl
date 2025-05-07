@@ -11,6 +11,7 @@ include("physics/osc.jl")
 using .osc
 include("physics/earth_layers.jl")
 include("physics/atm_flux.jl")
+include("physics/xsec.jl")
 include("analysis/analysis_tools.jl")
 include("utils/plotting.jl")
 include("utils/autodiff.jl")

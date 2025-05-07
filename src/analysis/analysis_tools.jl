@@ -20,6 +20,7 @@ using MeasureBase
 using FunctionChains
 using Accessors
 using Logging
+using ProgressMeter
 using ..Newtrinos
 
 adsel = AutoForwardDiff()
@@ -61,9 +62,9 @@ function find_mle(likelihood, prior, params)
     	end
     end
 
-    @info msg
+    #@info msg
     # THIS ONE WORKS:
-    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params])))#, kwargs = (reltol=1e-7, maxiters=10000)))
+    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=10000)))
 
     # This one also works, and IS thread safe:
 
@@ -174,7 +175,7 @@ function _profile(likelihood, scanpoints, params, cache_dir)
     llhs = Array{Any}(undef, size(scanpoints))
     log_posteriors = Array{Any}(undef, size(scanpoints))
 
-    Threads.@threads for i in eachindex(scanpoints)
+    @showprogress Threads.@threads for i in eachindex(scanpoints)
         opt_result = find_mle_cached(likelihood, scanpoints[i], params, cache_dir)
         llhs[i] = opt_result[1]
         log_posteriors[i] = opt_result[2]
@@ -232,7 +233,7 @@ function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
         grads = Array{Any}(undef, size(scanpoints))
     end
 
-    Threads.@threads for i in eachindex(scanpoints)
+    @showprogress Threads.@threads for i in eachindex(scanpoints)
         p = scanpoints[i]
         llhs[i] = logdensityof(likelihood, p)
         if gradient_map
