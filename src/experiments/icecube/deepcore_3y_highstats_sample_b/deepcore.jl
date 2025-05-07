@@ -23,7 +23,7 @@ using ..Newtrinos
 end
 
 function configure(physics)
-    physics = (;physics.osc, physics.atm_flux, physics.earth_layers)
+    physics = (;physics.osc, physics.atm_flux, physics.earth_layers, physics.xsec)
     assets = get_assets(physics)
     return DeepCore(
         physics = physics,
@@ -117,8 +117,6 @@ function get_params()
         deepcore_opt_eff_overall = 1.,
         deepcore_opt_eff_lateral = 0.,
         deepcore_opt_eff_headon = 0.,
-        nc_norm = 1.,
-        nutau_cc_norm = 1.,
         )
 end
 
@@ -131,8 +129,6 @@ function get_priors()
         deepcore_opt_eff_overall = Truncated(Normal(1, 0.1), 0.8, 1.2),
         deepcore_opt_eff_lateral = Truncated(Normal(0, 1.), -2, 2),
         deepcore_opt_eff_headon = Uniform(-5, 2.),
-        nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
-        nutau_cc_norm = Uniform(0., 2.),
         )
 end
 
@@ -196,7 +192,7 @@ function get_hyperplane_factor(hyperplane, params)
     f
 end
 
-function apply_hyperplanes(hists, params, hyperplanes)
+function apply_hyperplanes(hists, params, physics, hyperplanes)
     f_nc = get_hyperplane_factor(hyperplanes.nuall_nc, params)
     f_nue_cc = get_hyperplane_factor(hyperplanes.nue_cc, params)
     f_numu_cc = get_hyperplane_factor(hyperplanes.numu_cc, params)
@@ -206,10 +202,10 @@ function apply_hyperplanes(hists, params, hyperplanes)
     numus = hists[:numu] .+ hists[:numubar]
     nutaus = hists[:nutau] .+ hists[:nutaubar]
     (
-    (nues[:, :, :, 1] .+ numus[:, :, :, 1] .+ nutaus[:, :, :, 1]).* f_nc .* params.nc_norm .+ 
+    (nues[:, :, :, 1] .+ numus[:, :, :, 1] .+ nutaus[:, :, :, 1]).* f_nc .* physics.xsec.scale(:Any, :NC, params) .+ 
     nues[:, :, :, 2] .* f_nue_cc .+ 
     numus[:, :, :, 2] .* f_numu_cc .+ 
-    nutaus[:, :, :, 2] .* f_nutau_cc .* params.nutau_cc_norm
+    nutaus[:, :, :, 2] .* f_nutau_cc .* physics.xsec.scale(:nutau, :CC, params)
     )    
 end 
 
@@ -221,7 +217,7 @@ function get_expected(params, physics, assets)
 
     hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds) for ch in keys(assets.mc))
     
-    expected_nu = apply_hyperplanes(hists, params, assets.hyperplanes)
+    expected_nu = apply_hyperplanes(hists, params, physics, assets.hyperplanes)
 
     # set minimum number of events per bin to 1 for Poisson not to crash
     expected = max.(1., (expected_nu .+ params.deepcore_atm_muon_scale .* assets.muons.count))

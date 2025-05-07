@@ -20,7 +20,7 @@ import ..Newtrinos
 end
 
 function configure(physics)
-    physics = (;physics.osc)
+    physics = (;physics.osc, physics.xsec)
     assets = get_assets(physics)
     return Minos(
         physics = physics,
@@ -88,9 +88,9 @@ end
 function forward_model_per_channel(params, physics, channel, assets)
    
     observed_far = assets.ch_data["FD"*channel].observed
-    expected_far = get_expected_per_channel(params, physics, assets.ch_data["FD"*channel])
+    expected_far = get_expected_per_channel(params, physics, assets.ch_data["FD"*channel]) * physics.xsec.scale(:any, Symbol(channel), params)
     observed_near = assets.ch_data["ND"*channel].observed
-    expected_near = get_expected_per_channel(params, physics, assets.ch_data["ND"*channel])
+    expected_near = get_expected_per_channel(params, physics, assets.ch_data["ND"*channel]) * physics.xsec.scale(:any, Symbol(channel), params)
     
     cov = channel == "CC" ? assets.TotalCCCovar : assets.TotalNCCovar
 

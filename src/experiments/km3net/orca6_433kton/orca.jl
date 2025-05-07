@@ -20,7 +20,7 @@ using ..Newtrinos
 end
 
 function configure(physics)
-    physics = (;physics.osc, physics.atm_flux, physics.earth_layers)
+    physics = (;physics.osc, physics.atm_flux, physics.earth_layers, physics.xsec)
     assets = get_assets(physics)
     return ORCA(
         physics = physics,
@@ -35,7 +35,7 @@ end
 function get_assets(physics; datadir = @__DIR__)
     h5file = h5open(joinpath(datadir, "ORCA6_433kton_v_0_5.h5"), "r")
     f = read(h5file)
-    neutrinos = Table(Dict(Symbol(key) => f["binned_nu_response"][key] for key in keys(f["binned_nu_response"])))
+    mc_nu = FlexTable(Dict(Symbol(key) => f["binned_nu_response"][key] for key in keys(f["binned_nu_response"])))
     muons = Table(Dict(Symbol(key) => f["binned_muon"][key] for key in keys(f["binned_muon"])))
     data = Table(Dict(Symbol(key) => f["binned_data"][key] for key in keys(f["binned_data"])))
 
@@ -57,13 +57,15 @@ function get_assets(physics; datadir = @__DIR__)
     true_shape = (length(binning.e_fine), length(binning.cz_fine))
     reco_shape = (length(binning.e_reco), length(binning.cz_reco), 3, 2)
 
+    mc_nu.he_mask = ((mc_nu.IsCC .== 0) .& (mc_nu.E_true_bin_center .> 100)) .| ((mc_nu.IsCC .== 1) .& (mc_nu.E_true_bin_center .> 500))
+    
     mc = (
-        nue = neutrinos[neutrinos.Pdg .== 12],
-        nuebar = neutrinos[neutrinos.Pdg .== -12],
-        numu = neutrinos[neutrinos.Pdg .== 14],
-        numubar = neutrinos[neutrinos.Pdg .== -14],
-        nutau = neutrinos[neutrinos.Pdg .== 16],
-        nutaubar = neutrinos[neutrinos.Pdg .== -16]
+        nue = Table(mc_nu[mc_nu.Pdg .== 12, :]),
+        nuebar = Table(mc_nu[mc_nu.Pdg .== -12, :]),
+        numu = Table(mc_nu[mc_nu.Pdg .== 14, :]),
+        numubar = Table(mc_nu[mc_nu.Pdg .== -14, :]),
+        nutau = Table(mc_nu[mc_nu.Pdg .== 16, :]),
+        nutaubar = Table(mc_nu[mc_nu.Pdg .== -16, :])
         )
 
     rs = [2, 1, 3]
@@ -80,7 +82,7 @@ function get_params()
         orca_norm_hpt = 1.,
         orca_norm_showers = 1.,
         orca_norm_muons = 1.,
-        #orca_norm_he = 1.,
+        orca_norm_he = 1.,
         )
 end
 
@@ -91,7 +93,7 @@ function get_priors()
         orca_norm_hpt = Uniform(0.5, 1.5),
         orca_norm_showers = Uniform(0.5, 1.5),
         orca_norm_muons = Uniform(0., 2.),
-        #orca_norm_he = Truncated(Normal(1, 0.5), 0., 1.),
+        orca_norm_he = Truncated(Normal(1, 0.5), 0., 2.),
         )
 end
 
@@ -116,8 +118,8 @@ function make_hist(e_idx, c_idx, p_idx, t_idx, w, size=(8,8,2,2))
     hist
 end
 
-function make_hist_per_channel(mc, osc_flux, lifetime_seconds, assets)
-    w = lifetime_seconds * mc.W .* osc_flux
+function make_hist_per_channel(mc, osc_flux, lifetime_seconds, params, assets)
+    w = lifetime_seconds * mc.W .* osc_flux .* (mc.he_mask * (params.orca_norm_he - 1.) .+ 1.0)
     h = make_hist(mc.E_reco_bin, mc.Ct_reco_bin, mc.AnaClass, mc.IsCC .+ 1, w, assets.reco_shape)
 end
 
@@ -149,11 +151,12 @@ function get_expected(params, physics, assets)
 
     lifetime_seconds = 1.
 
-    hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds, assets) for ch in keys(assets.mc))
+    hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds, params, assets) for ch in keys(assets.mc))
 
-    hists_cc_nc = sum(sum(hists), dims=4)
-    
-    expected = (assets.muon_hist * params.orca_norm_muons .+ hists_cc_nc) * params.orca_norm_all
+    hists_nc = sum(h[:, :, :, 1] for h in hists) * physics.xsec.scale(:any, :NC, params)
+
+    hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ (hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]) * physics.xsec.scale(:nutau, :CC, params)
+    expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc .+ hists_cc) * params.orca_norm_all
 
     # Poisson > 0
     expected = max.(1e-2, (expected))
