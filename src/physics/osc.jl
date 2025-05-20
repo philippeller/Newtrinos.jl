@@ -74,9 +74,8 @@ end
     three_flavour::ThreeFlavour = ThreeFlavour()
     N_KK::Int = 5
 end
-@kwdef struct NND <: FlavourModel       'New'
+@kwdef struct NND <: FlavourModel       #'New'
     three_flavour::ThreeFlavour = ThreeFlavour()
-    N_KK::Int = 5
 end
 
 
@@ -187,7 +186,7 @@ end
 
 
    
-function get_params(cfg::NND)  'New'
+function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
@@ -196,7 +195,7 @@ function get_params(cfg::NND)  'New'
     NamedTuple(params)
 end
 
-function get_priors(cfg::NND)    'New'
+function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
