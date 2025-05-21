@@ -93,7 +93,7 @@ function get_priors()
         orca_norm_hpt = Uniform(0.5, 1.5),
         orca_norm_showers = Uniform(0.5, 1.5),
         orca_norm_muons = Uniform(0., 2.),
-        orca_norm_he = Truncated(Normal(1, 0.5), 0., 2.),
+        orca_norm_he = Truncated(Normal(1, 0.5), 0., 3.),
         )
 end
 
