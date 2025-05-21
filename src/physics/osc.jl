@@ -13,7 +13,7 @@ export Path
 export Decoherent, Damping, Basic
 export All, Cut
 export Vacuum, SI, NSI
-export ThreeFlavour, Sterile, ADD
+export ThreeFlavour, ThreeFlavourXYCP, Sterile, ADD
 export OscillationConfig
 export configure
 
@@ -66,6 +66,9 @@ struct SI <: InteractionModel end
 abstract type FlavourModel end
 @kwdef struct ThreeFlavour <: FlavourModel 
     ordering::Symbol = :NO
+end
+@kwdef struct ThreeFlavourXYCP <: FlavourModel
+    three_flavour::ThreeFlavour = ThreeFlavour()
 end
 @kwdef struct Sterile <: FlavourModel
     three_flavour::ThreeFlavour = ThreeFlavour()
@@ -142,6 +145,24 @@ function get_priors(cfg::ThreeFlavour)
     NamedTuple(priors)
 end
 
+function get_params(cfg::ThreeFlavourXYCP)
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict{Symbol, Any}(pairs(std))
+    delete!(params, :δCP)
+    params[:δCPshell] = [1., 0.]
+    #params[:δCPy] = 0.
+    NamedTuple(params)
+end
+
+function get_priors(cfg::ThreeFlavourXYCP)
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    delete!(priors, :δCP)
+    priors[:δCPshell] = MvNormal([1,1])
+    #priors[:δCPy] = Normal(0., 1.)
+    NamedTuple(priors)
+end
+
 function get_params(cfg::Sterile)
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
@@ -154,7 +175,7 @@ end
 
 function get_priors(cfg::Sterile)
     std = get_priors(cfg.three_flavour)
-    priors = OrderedDict(pairs(std))
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:Δm²₄₁] = Uniform(0.1, 10.)
     priors[:θ₁₄] = Uniform(0., 1.)
     priors[:θ₂₄] = Uniform(0., 1.)
@@ -172,7 +193,6 @@ end
 
 function get_priors(cfg::ADD)
     std = get_priors(cfg.three_flavour)
-    priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
     priors[:ADD_radius] = LogUniform(ftype(1e-3),ftype(1))
@@ -181,10 +201,10 @@ end
 
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
-    #T = ftype
-
     U1 = SMatrix{3,3}(one(T), zero(T), zero(T), zero(T), cos(params.θ₂₃), -sin(params.θ₂₃), zero(T), sin(params.θ₂₃), cos(params.θ₂₃))
-    U2 = SMatrix{3,3}(cos(params.θ₁₃), zero(T), -sin(params.θ₁₃)*exp(1im*params.δCP), zero(T), one(T), zero(T), sin(params.θ₁₃)*exp(-1im*params.δCP), zero(T), cos(params.θ₁₃))
+    T = typeof(params.θ₁₃)
+    U2 = SMatrix{3,3}(cos(params.θ₁₃), zero(T), -sin(params.θ₁₃)*cis(params.δCP), zero(T), one(T), zero(T), sin(params.θ₁₃)*cis(-params.δCP), zero(T), cos(params.θ₁₃))
+    T = typeof(params.θ₁₂)
     U3 = SMatrix{3,3}(cos(params.θ₁₂), -sin(params.θ₁₂), zero(T), sin(params.θ₁₂), cos(params.θ₁₂), zero(T), zero(T), zero(T), one(T))
     U = U1 * U2 * U3
 end
@@ -395,7 +415,7 @@ function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{L
 end
 
 function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool)
-    H_eff = U * Diagonal{Complex{eltype(h)}}(h) * adjoint(U)
+    H_eff = U * Diagonal(h) * adjoint(U)
     p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction), E))
     permutedims(p, (1, 2, 4, 3))
 end
@@ -435,15 +455,33 @@ end
 function get_matrices(cfg::ThreeFlavour)
     function matrices(params::NamedTuple)
         U = get_PMNS(params)
-        H = SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁)
-        return U, H
+        h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
+        return U, h
     end
 end
 
+function get_matrices(cfg::ThreeFlavourXYCP)
+    function matrices(params::NamedTuple)
+
+        # norm = sqrt(params.δCPy^2 + params.δCPx^2)
+        # if norm == 0.
+        #     δCP = 0.
+        #     #@show params.δCPy, params.δCPx
+        # else
+        #     δCP = atan(params.δCPy/norm, params.δCPx/norm)
+        # end
+        δCP = params.δCPshell[1]
+        #δCP = angle(params.δCPx + 1im * params.δCPy)
+        #@show δCP
+        U = get_PMNS(merge(params, (;δCP,)))
+        h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
+        return U, h
+    end
+end
 
 function get_matrices(cfg::Sterile)
     function matrices(params::NamedTuple)
-        h = [0 ,params.Δm²₂₁, params.Δm²₃₁, params.Δm²₄₁]
+        h = [0. ,params.Δm²₂₁, params.Δm²₃₁, params.Δm²₄₁]
      
         R14 = [cos(params.θ₁₄) 0 0 sin(params.θ₁₄); 0 1 0 0; 0 0 1 0; -sin(params.θ₁₄) 0 0 cos(params.θ₁₄)]
         R24 = [1 0 0 0; 0 cos(params.θ₂₄) 0 sin(params.θ₂₄); 0 0 1 0; 0 -sin(params.θ₂₄) 0 cos(params.θ₂₄)]
