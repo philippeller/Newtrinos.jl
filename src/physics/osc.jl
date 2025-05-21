@@ -77,12 +77,6 @@ end
     three_flavour::ThreeFlavour = ThreeFlavour()
     N_KK::Int = 5
 end
-@kwdef struct NND <: FlavourModel       'New'
-    three_flavour::ThreeFlavour = ThreeFlavour()
-    N_KK::Int = 5
-end
-
-
 
 @kwdef struct OscillationConfig{F<:FlavourModel, I<:InteractionModel, P<:PropagationModel, S<:StateSelector}
     flavour::F = ThreeFlavour()
@@ -205,27 +199,7 @@ function get_priors(cfg::ADD)
     NamedTuple(priors)
 end
 
-
    
-function get_params(cfg::NND)  'New'
-    std = get_params(cfg.three_flavour)
-    params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.01)
-    params[:N] = ftype(1)
-    params[:r] = ftype(1)
-    NamedTuple(params)
-end
-
-function get_priors(cfg::NND)    'New'
-    std = get_priors(cfg.three_flavour)
-    priors = OrderedDict(pairs(std))
-    priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = LogUniform(ftype(1),ftype(100))
-    priors[:r] = LogUniform(ftype(0),ftype(1))
-    NamedTuple(priors)
-end
-
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
     U1 = SMatrix{3,3}(one(T), zero(T), zero(T), zero(T), cos(params.θ₂₃), -sin(params.θ₂₃), zero(T), sin(params.θ₂₃), cos(params.θ₂₃))
@@ -572,61 +546,6 @@ function get_matrices(cfg::ADD)
     end
 end
 
-
-
-
-function get_matrices(cfg::NND)
-
-    function get_Nnaturalness(params)
-
-        N = round(Int,(params["NN_N"]))
-        
-        r= params["r"]
-        matrix = zeros(N, N)
-    
-        for i in 1:N
-            for j in 1:N
-                if i == j
-                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)  
-                else
-                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
-                end
-            
-            end
-        end
-        eigvalues, Usector =eigen(matrix)
-        #println(eigvalues)
-        m1, m2, m3 = get_abs_masses(params)
-        #println(m1)
-        #println(m2)
-        #println(m3)
-        osc = OscillationParameters(3*N);
-        setΔm²!(osc, 2=>1, m2^2-m1^2);
-        setΔm²!(osc, 3=>1, m3^2-m1^2);
-        for i in 2:N
-        m_s1sq = (N*eigvalues[i]) * m1^2
-        m_s2sq = (N*eigvalues[i]) * m2^2
-        m_s3sq = (N*eigvalues[i]) * m3^2
-        setΔm²!(osc, 3*i-2=>1, m_s1sq-m1^2);
-        setΔm²!(osc, 3*i-1=>1, m_s2sq-m1^2);
-        setΔm²!(osc, 3*i=>1, m_s3sq-m1^2);
-        end
-    #println(osc)
-        H = Hamiltonian(osc)
-
-        U, _ = get_SM(params)
-
-    #display(Usector)
-    #display(U)
-        FinalUmatrix = kron(Usector, U)
-
-
-
-        #display(FinalUmatrix)
-        return FinalUmatrix, H
-    
-    end
-end
 
 
 # module Darkdim
