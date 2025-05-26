@@ -13,7 +13,7 @@ export Path
 export Decoherent, Damping, Basic
 export All, Cut
 export Vacuum, SI, NSI
-export ThreeFlavour, Sterile, ADD
+export ThreeFlavour, Sterile, ADD, NND
 export OscillationConfig
 export configure
 
@@ -196,12 +196,13 @@ function get_params(cfg::NND)  #'New'
 end
 
 function get_priors(cfg::NND)    #'New'
+
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = LogUniform(ftype(1),ftype(100))
-    priors[:r] = LogUniform(ftype(0),ftype(1))
+    priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
+    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:r] = Uniform(ftype(1e-8),ftype(1))
     NamedTuple(priors)
 end
 
