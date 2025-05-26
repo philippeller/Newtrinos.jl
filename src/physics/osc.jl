@@ -190,19 +190,33 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(1)
+    params[:N] = ftype(5)
     params[:r] = ftype(1)
+
+    for i in 2 : params[:N] 
+        params[Symbol("Δm²_$(3*i-2)_1")] = ftype(1e-3)  
+        params[Symbol("Δm²_$(3*i-1)_1")] = ftype(1e-3)
+        params[Symbol("Δm²_$(3*i)_1")] = ftype(1e-3)  
+    end
+    
     NamedTuple(params)
 end
 
 function get_priors(cfg::NND)    #'New'
-
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
     priors[:N] = Uniform(ftype(1),ftype(100))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
+
+    N = 100  # Use maximum N for prior definition
+    for i in 2:N
+        priors[Symbol("Δm²_$(3*i-2)_1")] = Uniform(ftype(1e-6), ftype(1e2))
+        priors[Symbol("Δm²_$(3*i-1)_1")] = Uniform(ftype(1e-6), ftype(1e2))
+        priors[Symbol("Δm²_$(3*i)_1")] = Uniform(ftype(1e-6), ftype(1e2))
+    end
+
     NamedTuple(priors)
 end
 
@@ -539,11 +553,12 @@ end
 
 function get_matrices(cfg::NND)
 
-    function get_Nnaturalness(params)
+    function get_Nnaturalness(params::NamedTuple)
 
-        N = round(Int,(params["NN_N"]))
+        N = round(Int,(params[:N]))
         
-        r= params["r"]
+        r= params[:r]
+
         matrix = zeros(N, N)
     
         for i in 1:N
@@ -562,30 +577,38 @@ function get_matrices(cfg::NND)
         #println(m1)
         #println(m2)
         #println(m3)
-        osc = OscillationParameters(3*N);
-        setΔm²!(osc, 2=>1, m2^2-m1^2);
-        setΔm²!(osc, 3=>1, m3^2-m1^2);
+     
+        mass_squared = zeros(3*N)
+        delta_mass = zeros(3*N)
+        
+        mass_squared[1] = m1^2
+        mass_squared[2] = m2^2  
+        mass_squared[3] = m3^2
+        
         for i in 2:N
-        m_s1sq = (N*eigvalues[i]) * m1^2
-        m_s2sq = (N*eigvalues[i]) * m2^2
-        m_s3sq = (N*eigvalues[i]) * m3^2
-        setΔm²!(osc, 3*i-2=>1, m_s1sq-m1^2);
-        setΔm²!(osc, 3*i-1=>1, m_s2sq-m1^2);
-        setΔm²!(osc, 3*i=>1, m_s3sq-m1^2);
+            mass_squared[3*i-2]  = (N*eigvalues[i]) * m1^2
+            mass_squared[3*i-1] = (N*eigvalues[i]) * m2^2
+            mass_squared[3*i]= (N*eigvalues[i]) * m3^2
+        
+            delta_mass[1]= 0
+            delta_mass[2] = params.Δm²₂₁
+            delta_mass[3] = params.Δm²₃₁
+            delta_mass[3*i-2]  = mass_squared[3*i-2]- m1^2
+            delta_mass[3*i-1] =  mass_squared[3*i-1]- m1^2
+            delta_mass[3*i] =  mass_squared[3*i]- m1^2
         end
-    #println(osc)
-        H = Hamiltonian(osc)
-
-        U, _ = get_SM(params)
-
-    #display(Usector)
-    #display(U)
+        
+        h =delta_mass
+        U = get_PMNS(params)
+        #display(h)
+        #display(Usector)
+        #display(U)
         FinalUmatrix = kron(Usector, U)
 
 
 
         #display(FinalUmatrix)
-        return FinalUmatrix, H
+        return FinalUmatrix, h
     
     end
 end
