@@ -192,12 +192,6 @@ function get_params(cfg::NND)  #'New'
     params[:m₀] = ftype(0.01)
     params[:N] = ftype(5)
     params[:r] = ftype(1)
-
-    for i in 2 : params[:N] 
-        params[Symbol("Δm²_$(3*i-2)_1")] = ftype(1e-3)  
-        params[Symbol("Δm²_$(3*i-1)_1")] = ftype(1e-3)
-        params[Symbol("Δm²_$(3*i)_1")] = ftype(1e-3)  
-    end
     
     NamedTuple(params)
 end
@@ -209,13 +203,6 @@ function get_priors(cfg::NND)    #'New'
     priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
     priors[:N] = Uniform(ftype(1),ftype(100))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
-
-    N = 100  # Use maximum N for prior definition
-    for i in 2:N
-        priors[Symbol("Δm²_$(3*i-2)_1")] = Uniform(ftype(1e-6), ftype(1e2))
-        priors[Symbol("Δm²_$(3*i-1)_1")] = Uniform(ftype(1e-6), ftype(1e2))
-        priors[Symbol("Δm²_$(3*i)_1")] = Uniform(ftype(1e-6), ftype(1e2))
-    end
 
     NamedTuple(priors)
 end
@@ -598,6 +585,7 @@ function get_matrices(cfg::NND)
             delta_mass[3*i] =  mass_squared[3*i]- m1^2
         end
         
+        #println(mass_squared)
         h =delta_mass
         U = get_PMNS(params)
         #display(h)
