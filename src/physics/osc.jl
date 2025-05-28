@@ -13,7 +13,7 @@ export Path
 export Decoherent, Damping, Basic
 export All, Cut
 export Vacuum, SI, NSI
-export ThreeFlavour, Sterile, ADD, NND
+export ThreeFlavour, Sterile, ADD, NND, NNM
 export OscillationConfig
 export configure
 
@@ -75,6 +75,9 @@ end
     N_KK::Int = 5
 end
 @kwdef struct NND <: FlavourModel       #'New'
+    three_flavour::ThreeFlavour = ThreeFlavour()
+end
+@kwdef struct NNM <: FlavourModel       #'New'
     three_flavour::ThreeFlavour = ThreeFlavour()
 end
 
@@ -190,7 +193,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(5)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -201,7 +204,30 @@ function get_priors(cfg::NND)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:N] = Uniform(ftype(1),ftype(90))
+    priors[:r] = Uniform(ftype(1e-8),ftype(1))
+
+    NamedTuple(priors)
+end
+
+
+   
+function get_params(cfg::NNM)  #'New'
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:m₀] = ftype(0.01)
+    params[:N] = ftype(20)
+    params[:r] = ftype(1)
+    
+    NamedTuple(params)
+end
+
+function get_priors(cfg::NNM)    #'New'
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict(pairs(std))
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
+    priors[:N] = Uniform(ftype(1),ftype(90))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
@@ -602,6 +628,69 @@ function get_matrices(cfg::NND)
 end
 
 
+
+function get_matrices(cfg::NNM)
+
+    function get_Nnaturalness(params::NamedTuple)
+
+        N = round(Int,(params[:N]))
+        
+        r= params[:r]
+
+        matrix = zeros(N, N)
+    
+        for i in 1:N
+            for j in 1:N
+                if i == j
+                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)  
+                else
+                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
+                end
+            
+            end
+        end
+        eigvalues, Usector =eigen(matrix)
+        #println(eigvalues)
+        m1, m2, m3 = get_abs_masses(params)
+        #println(m1)
+        #println(m2)
+        #println(m3)
+     
+        mass_squared = zeros(3*N)
+        delta_mass = zeros(3*N)
+        
+        mass_squared[1] = m1^2
+        mass_squared[2] = m2^2  
+        mass_squared[3] = m3^2
+        
+        for i in 2:N
+            mass_squared[3*i-2]  = (N*eigvalues[i])^2 * m1^2
+            mass_squared[3*i-1] = (N*eigvalues[i])^2 * m2^2
+            mass_squared[3*i]= (N*eigvalues[i])^2 * m3^2
+        
+            delta_mass[1]= 0
+            delta_mass[2] = params.Δm²₂₁
+            delta_mass[3] = params.Δm²₃₁
+            delta_mass[3*i-2]  = mass_squared[3*i-2]- m1^2
+            delta_mass[3*i-1] =  mass_squared[3*i-1]- m1^2
+            delta_mass[3*i] =  mass_squared[3*i]- m1^2
+        end
+        
+        #println(mass_squared)
+        h =delta_mass
+        U = get_PMNS(params)
+        #display(h)
+        #display(Usector)
+        #display(U)
+        FinalUmatrix = kron(Usector, U)
+
+
+
+        #display(FinalUmatrix)
+        return FinalUmatrix, h
+    
+    end
+end
 # module Darkdim
 #     using Distributions
 #     using DataStructures

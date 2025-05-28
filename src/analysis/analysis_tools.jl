@@ -325,3 +325,40 @@ end
 function generate_likelihood(experiments::NamedTuple, observed=get_observed(experiments))
     likelihoodof(get_fwd_model(experiments), observed)
 end
+
+
+
+
+
+
+
+function likelihood_ratio_test(ll_0, ll_1, df; alpha=0.05)
+    """
+    Perform likelihood ratio test using chi-squared distribution (single value version)
+    
+    Args:
+        ll_0: log-likelihood of model 0
+        ll_1: log-likelihood of model 1
+        df: degrees of freedom (difference in number of parameters)
+        alpha: significance level (default 0.05)
+    
+    Returns:
+        p-value (scalar)
+    """
+    println("ll_0: $ll_0")
+    println("ll_1: $ll_1")
+    
+    Λ = -2 * (minimum(ll_0) - minimum(ll_1))
+    
+    chi2_dist = Chisq(df)
+    pvalue = 1 - cdf(chi2_dist, Λ)
+    
+    println("Likelihood Ratio Test Results:")
+    println("Λ: $(round(Λ, digits=3))")
+    println("Degrees of freedom: $df")
+    println("p-value: $(round(pvalue, digits=4))")
+    
+    
+    
+    return pvalue
+end
