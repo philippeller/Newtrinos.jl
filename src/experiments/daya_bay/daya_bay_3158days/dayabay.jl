@@ -234,4 +234,61 @@ function get_plot(physics, assets)
     end
 end
 
+
+function get_multiplot(physics, assets)
+
+    function multiplot(params, data=assets.observed)
+        
+        p=params
+        p_5 = merge(p, (N = ftype(5),))
+        p_10 = merge(p, (N = ftype(10),))
+        p_20 = merge(p, (N = ftype(20),))
+        p_50 = merge(p, (N = ftype(50),))
+
+        m_5= mean(get_forward_model(physics, assets)(p_5))
+        m_10 = mean(get_forward_model(physics, assets)(p_10))
+        m_20 = mean(get_forward_model(physics, assets)(p_20))
+        m_50= mean(get_forward_model(physics, assets)(p_50))
+        v_5 = var(get_forward_model(physics, assets)(p_5))
+        v_10 = var(get_forward_model(physics, assets)(p_10))
+        v_20 = var(get_forward_model(physics, assets)(p_20))
+        v_50 = var(get_forward_model(physics, assets)(p_50))
+    
+        f = Figure()
+        ax = Axis(f[1,1])
+        
+        plot!(ax, assets.energy, data, color=:black, label="Observed")
+        stephist!(ax, assets.energy, weights=m, bins=assets.energy_bins, label="Expected")
+        barplot!(ax, assets.energy, m .+ sqrt.(v), width=diff(assets.energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+        
+        ax.ylabel="Counts"
+        ax.title="Daya Bay"
+        axislegend(ax, framevisible = false)
+        
+        
+        ax2 = Axis(f[2,1])
+        plot!(ax2, assets.energy, data ./ m, color=:black, label="Observed")
+        hlines!(ax2, 1, label="Expected")
+        barplot!(ax2, assets.energy, 1 .+ sqrt.(v) ./ m, width=diff(assets.energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+        ylims!(ax2, 0.9, 1.1)
+        
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+        
+        rowsize!(f.layout, 1, Relative(3/4))
+        rowgap!(f.layout, 1, 0)
+        
+        ax2.xlabel="Eₚ (MeV)"
+        ax2.ylabel="Counts/Expected"
+    
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        
+        ylims!(ax, 0, 60000)
+        
+        f
+    
+    end
+end
+
 end
