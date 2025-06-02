@@ -172,3 +172,194 @@ function get_plot(physics, assets)
 end
 
 end
+
+
+function get_plot( physics, assets)
+    function plot(params, d=assets.observed)
+        N_values = [5, 10, 20, 50]
+        colors = [:red, :blue, :green, :orange]  # Different colors for each N
+        
+        # Calculate all means and variances first
+        all_means = []
+        all_variances = []
+        
+        for N in N_values
+            p_N = merge(params, (N = Float64(N),))
+            m = mean(get_forward_model(physics, assets)(p_N))
+            v = var(get_forward_model(physics, assets)(p_N))
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+        
+        # Generate individual plots for each N value
+        for (i, N) in enumerate(N_values)
+            m = all_means[i]
+            v = all_variances[i]
+            
+            f = Figure()
+            
+            for (j, ch) in enumerate([:CC, :NC])
+                energy_bins = assets.ch_data["FD"*String(ch)].bin_edges
+                energy = 0.5 .* (energy_bins[1:end-1] .+ energy_bins[2:end])
+                
+                ax = Axis(f[1,j])
+                plot!(ax, energy, d[ch] ./ diff(energy_bins), color=:black, label="Observed")
+                stephist!(ax, energy, weights=m[ch] ./ diff(energy_bins), bins=energy_bins, label="Expected")
+                barplot!(ax, energy, (m[ch] .+ sqrt.(v[ch])) ./ diff(energy_bins), width=diff(energy_bins), gap=0, fillto= (m[ch] .- sqrt.(v[ch])) ./ diff(energy_bins), alpha=0.5, label="Standard Deviation")
+                
+                ax.ylabel="Counts / GeV"
+                ax.title="MINOS/MINOS+ Far Detector "*String(ch)*" (N = $N)"
+                axislegend(ax, framevisible = false)
+                
+                ax2 = Axis(f[2,j])
+                plot!(ax2, energy, d[ch] ./ m[ch], color=:black, label="Observed")
+                hlines!(ax2, 1, label="Expected")
+                barplot!(ax2, energy, 1 .+ sqrt.(v[ch]) ./ m[ch], width=diff(energy_bins), gap=0, fillto= 1 .- sqrt.(v[ch])./m[ch], alpha=0.5, label="Standard Deviation")
+                ylims!(ax2, 0.7, 1.3)
+                
+                ax.xticksvisible = false
+                ax.xticklabelsvisible = false
+                
+                rowsize!(f.layout, 1, Relative(3/4))
+                rowgap!(f.layout, 1, 0)
+                
+                ax2.xlabel="Reconstructed Energy (GeV)"
+                ax2.ylabel="Counts/Expected"
+                
+                xlims!(ax, minimum(energy_bins), maximum(energy_bins))
+                xlims!(ax2, minimum(energy_bins), maximum(energy_bins))
+            end
+            
+            ylims!(f.content[1], 0, 800)
+            ylims!(f.content[4], 0, 600)
+            
+            display(f)
+            save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_N_$N.png", f)
+        end
+        
+        # Generate comparison plots with all N values for each channel
+        for (ch_idx, ch) in enumerate([:CC, :NC])
+            energy_bins = assets.ch_data["FD"*String(ch)].bin_edges
+            energy = 0.5 .* (energy_bins[1:end-1] .+ energy_bins[2:end])
+            
+            f_comp = Figure()
+            ax_comp = Axis(f_comp[1,1])
+            
+            # Plot observed data
+            scatter!(ax_comp, energy, d[ch] ./ diff(energy_bins), color=:black, label="Observed")
+            
+            # Plot all expected values
+            for (i, N) in enumerate(N_values)
+                m = all_means[i]
+                v = all_variances[i]
+                stephist!(ax_comp, energy, weights=m[ch] ./ diff(energy_bins), bins=energy_bins, 
+                        color=colors[i], label="Expected N=$N")
+                # Add uncertainty bands
+                barplot!(ax_comp, energy, (m[ch] .+ sqrt.(v[ch])) ./ diff(energy_bins), width=diff(energy_bins), 
+                        gap=0, fillto= (m[ch] .- sqrt.(v[ch])) ./ diff(energy_bins), alpha=0.2, color=colors[i])
+            end
+            
+            ax_comp.ylabel = "Counts / GeV"
+            ax_comp.xlabel = "Reconstructed Energy (GeV)"
+            ax_comp.title = "MINOS/MINOS+ Far Detector "*String(ch)*" - Comparison of All N Values"
+            axislegend(ax_comp, framevisible = false, position = :rt)
+            
+            xlims!(ax_comp, minimum(energy_bins), maximum(energy_bins))
+            ylims!(ax_comp, 0, ch == :CC ? 800 : 600)
+            
+            display(f_comp)
+            save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_"*String(ch)*"_N_comp.png", f_comp)
+            
+            # Generate ratio comparison plot for this channel
+            f_ratio = Figure()
+            ax_ratio = Axis(f_ratio[1,1])
+            
+            # Plot ratios for all N values
+            for (i, N) in enumerate(N_values)
+                m = all_means[i]
+                v = all_variances[i]
+                lines!(ax_ratio, energy, d[ch] ./ m[ch], color=colors[i], label="Data/Expected N=$N")
+                # Add uncertainty bands for ratios
+                barplot!(ax_ratio, energy, 1 .+ sqrt.(v[ch]) ./ m[ch], width=diff(energy_bins), 
+                        gap=0, fillto= 1 .- sqrt.(v[ch])./m[ch], alpha=0.2, color=colors[i])
+            end
+            
+            hlines!(ax_ratio, 1, color=:black, linestyle=:dash, label="Unity")
+            
+            ax_ratio.ylabel = "Data/Expected"
+            ax_ratio.xlabel = "Reconstructed Energy (GeV)"
+            ax_ratio.title = "MINOS/MINOS+ Far Detector "*String(ch)*" - Ratio Comparison of All N Values"
+            axislegend(ax_ratio, framevisible = false, position = :rt)
+            
+            xlims!(ax_ratio, minimum(energy_bins), maximum(energy_bins))
+            ylims!(ax_ratio, 0.7, 1.3)
+            
+            display(f_ratio)
+            save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_"*String(ch)*"_N_ratio.png", f_ratio)
+        end
+        
+        # Generate combined comparison plot (both CC and NC channels together)
+        f_combined = Figure()
+        
+        for (j, ch) in enumerate([:CC, :NC])
+            energy_bins = assets.ch_data["FD"*String(ch)].bin_edges
+            energy = 0.5 .* (energy_bins[1:end-1] .+ energy_bins[2:end])
+            
+            ax_comp = Axis(f_combined[1,j])
+            
+            # Plot observed data
+            scatter!(ax_comp, energy, d[ch] ./ diff(energy_bins), color=:black, label="Observed")
+            
+            # Plot all expected values
+            for (i, N) in enumerate(N_values)
+                m = all_means[i]
+                v = all_variances[i]
+                stephist!(ax_comp, energy, weights=m[ch] ./ diff(energy_bins), bins=energy_bins, 
+                        color=colors[i], label="Expected N=$N")
+                # Add uncertainty bands
+                barplot!(ax_comp, energy, (m[ch] .+ sqrt.(v[ch])) ./ diff(energy_bins), width=diff(energy_bins), 
+                        gap=0, fillto= (m[ch] .- sqrt.(v[ch])) ./ diff(energy_bins), alpha=0.2, color=colors[i])
+            end
+            
+            ax_comp.ylabel = "Counts / GeV"
+            ax_comp.xlabel = "Reconstructed Energy (GeV)"
+            ax_comp.title = "MINOS/MINOS+ "*String(ch)*" - All N Values"
+            if j == 2  # Only show legend on right panel
+                axislegend(ax_comp, framevisible = false, position = :rt)
+            end
+            
+            xlims!(ax_comp, minimum(energy_bins), maximum(energy_bins))
+            ylims!(ax_comp, 0, ch == :CC ? 800 : 600)
+            
+            # Add ratio plots below
+            ax_ratio = Axis(f_combined[2,j])
+            
+            for (i, N) in enumerate(N_values)
+                m = all_means[i]
+                v = all_variances[i]
+                lines!(ax_ratio, energy, d[ch] ./ m[ch], color=colors[i], label="Data/Expected N=$N")
+                barplot!(ax_ratio, energy, 1 .+ sqrt.(v[ch]) ./ m[ch], width=diff(energy_bins), 
+                        gap=0, fillto= 1 .- sqrt.(v[ch])./m[ch], alpha=0.2, color=colors[i])
+            end
+            
+            hlines!(ax_ratio, 1, color=:black, linestyle=:dash, label="Unity")
+            
+            ax_ratio.ylabel = "Data/Expected"
+            ax_ratio.xlabel = "Reconstructed Energy (GeV)"
+            
+            xlims!(ax_ratio, minimum(energy_bins), maximum(energy_bins))
+            ylims!(ax_ratio, 0.7, 1.3)
+            
+            # Format layout
+            ax_comp.xticksvisible = false
+            ax_comp.xticklabelsvisible = false
+            rowsize!(f_combined.layout, 1, Relative(3/4))
+            rowgap!(f_combined.layout, 1, 0)
+        end
+        
+        display(f_combined)
+        save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_combined_N_comp.png", f_combined)
+        
+        return f_combined  # Return the final combined plot
+    end
+end
