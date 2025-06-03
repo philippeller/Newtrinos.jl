@@ -1,7 +1,7 @@
 name = "Newtrinos"
 uuid = "5b289081-bab5-45e8-97fc-86872f1653a0"
 authors = ["Philipp Eller"]
-version = "1.0.0-DEV"
+version = "0.0.1"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
