@@ -258,19 +258,19 @@ function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti
 end   
 
 function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, interactionv::SI)
-    H = MMatrix{size(H_eff)...}(H_eff)
+    H_mat = zeros(typeof(e), size(H_eff))
     if anti
-        H[1,1] -= A * layer.p_density * 2 * e * 1e9
+        H_mat[1,1] -= A * layer.p_density * 2 * e * 1e9
         for i in 1:3
-            H[i,i] += A * layer.n_density * e * 1e9
+            H_mat[i,i] += A * layer.n_density * e * 1e9
         end
     else
-        H[1,1] += A * layer.p_density * 2 * e * 1e9
+        H_mat[1,1] += A * layer.p_density * 2 * e * 1e9
         for i in 1:3
-            H[i,i] -= A * layer.n_density * e * 1e9
+            H_mat[i,i] -= A * layer.n_density * e * 1e9
         end
     end
-    H = Hermitian(SMatrix(H))
+    H = Hermitian(H_eff + H_mat)
     tmp = eigen(H)
     #tmp = fast_eigen(H)
     tmp.vectors, tmp.values
@@ -456,7 +456,9 @@ end
 function get_matrices(cfg::ThreeFlavour)
     function matrices(params::NamedTuple)
         U = get_PMNS(params)
-        h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
+        T = promote_type(typeof(params.Δm²₂₁), typeof(params.Δm²₃₁))
+        h = @SVector [zero(T), params.Δm²₂₁, params.Δm²₃₁]
+        #h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
         return U, h
     end
 end
