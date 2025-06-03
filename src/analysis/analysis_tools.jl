@@ -62,9 +62,10 @@ function find_mle(likelihood, prior, params)
     	end
     end
 
-    #@info msg
+    @info msg
     # THIS ONE WORKS:
-    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=10000)))
+    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
+    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), ))
 
     # This one also works, and IS thread safe:
 
@@ -159,7 +160,7 @@ function find_mle_cached(likelihood, prior, params, cache_dir)
     end
     
     if isnothing(opt_result)
-        opt_result = find_mle(likelihood, prior, deepcopy(params))
+        opt_result = find_mle(likelihood, prior, params)
     end
 
     if !isnothing(cache_dir)
@@ -176,7 +177,7 @@ function _profile(likelihood, scanpoints, params, cache_dir)
     log_posteriors = Array{Any}(undef, size(scanpoints))
 
     @showprogress Threads.@threads for i in eachindex(scanpoints)
-        opt_result = find_mle_cached(likelihood, scanpoints[i], params, cache_dir)
+        opt_result = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
         llhs[i] = opt_result[1]
         log_posteriors[i] = opt_result[2]
         results[i] = opt_result[3]
