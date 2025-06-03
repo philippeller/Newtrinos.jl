@@ -148,9 +148,9 @@ function get_forward_model(physics, assets)
     end
 end
 
-function get_plot(physics, assets)
+function get_plot_old(physics, assets)
 
-    function plot(params, data=assets.observed)
+    function plot_old(params, data=assets.observed)
     
         m = mean(get_forward_model(physics, assets)(params))
         v = var(get_forward_model(physics, assets)(params))
@@ -194,4 +194,126 @@ function get_plot(physics, assets)
     end
 end
 
+function get_plot(physics, assets)
+    function plot(params, data=assets.observed)
+        # Define parameter values to compare (adjust these based on your physics)
+        # For KamLAND, these might be different oscillation parameters
+        param_values = [5, 10, 20, 50]  # N parameter values
+        param_name = "N"  # Parameter name
+        colors = [:red, :blue, :green, :orange]  # Different colors for each parameter value
+        
+        # Calculate all means and variances first
+        all_means = []
+        all_variances = []
+        
+        for val in param_values
+            # Merge parameter - adjust the parameter name as needed
+            p_val = merge(params, (Symbol(param_name) => Float64(val),))
+            m = mean(get_forward_model(physics, assets)(p_val))
+            v = var(get_forward_model(physics, assets)(p_val))
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+        
+        # Generate individual plots for each parameter value
+        for (i, val) in enumerate(param_values)
+            m = all_means[i]
+            v = all_variances[i]
+            
+            f = Figure()
+            ax = Axis(f[1,1])
+            
+            plot!(ax, assets.Ep, data, color=:black, label="Observed")
+            stephist!(ax, assets.Ep, weights=m, bins=assets.Ep_bins, label="Expected")
+            barplot!(ax, assets.Ep, m .+ sqrt.(v), width=diff(assets.Ep_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+            
+            ax.ylabel = "Counts"
+            ax.title = "KamLAND ($param_name = $val)"
+            axislegend(ax, framevisible = false)
+            
+            ax2 = Axis(f[2,1])
+            plot!(ax2, assets.Ep, data ./ m, color=:black, label="Observed")
+            hlines!(ax2, 1, label="Expected")
+            barplot!(ax2, assets.Ep, 1 .+ sqrt.(v) ./ m, width=diff(assets.Ep_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+            ylims!(ax2, 0.3, 1.7)
+            
+            ax.xticksvisible = false
+            ax.xticklabelsvisible = false
+            
+            rowsize!(f.layout, 1, Relative(3/4))
+            rowgap!(f.layout, 1, 0)
+            
+            ax2.xlabel = "Eₚ (MeV)"
+            ax2.ylabel = "Counts/Expected"
+        
+            xlims!(ax, minimum(assets.Ep_bins), maximum(assets.Ep_bins))
+            xlims!(ax2, minimum(assets.Ep_bins), maximum(assets.Ep_bins))
+            
+            ylims!(ax, 0, 300)  # Adjusted for KamLAND count range
+            
+            display(f)
+            #save("/home/sofialon/Newtrinos.jl/natural plot/kamland/kamland_data_NNM_$(param_name)_$val.png", f)
+        end
+        
+        # Generate comparison plot with all parameter values
+        f_comp = Figure()
+        ax_comp = Axis(f_comp[1,1])
+        
+        # Plot observed data
+        scatter!(ax_comp, assets.Ep, data, color=:black, label="Observed")
+        
+        # Plot all expected values
+        for (i, val) in enumerate(param_values)
+            m = all_means[i]
+            v = all_variances[i]
+            stephist!(ax_comp, assets.Ep, weights=m, bins=assets.Ep_bins, 
+                    color=colors[i], label="Expected $param_name=$val")
+            # Add uncertainty bands
+            barplot!(ax_comp, assets.Ep, m .+ sqrt.(v), width=diff(assets.Ep_bins), 
+                    gap=0, fillto= m .- sqrt.(v), alpha=0.2, color=colors[i])
+        end
+        
+        ax_comp.ylabel = "Counts"
+        ax_comp.xlabel = "Eₚ (MeV)"
+        ax_comp.title = "KamLAND - Comparison of All $param_name Values"
+        axislegend(ax_comp, framevisible = false, position = :rt)
+        
+        xlims!(ax_comp, minimum(assets.Ep_bins), maximum(assets.Ep_bins))
+        ylims!(ax_comp, 0, 300)  # Adjusted for KamLAND count range
+        
+        display(f_comp)
+        #save("/home/sofialon/Newtrinos.jl/natural plot/kamland/kamland_data_NNM_$(param_name)_comp.png", f_comp)
+        
+        # Generate ratio comparison plot
+        f_ratio = Figure()
+        ax_ratio = Axis(f_ratio[1,1])
+        
+        # Plot ratios for all parameter values
+        for (i, val) in enumerate(param_values)
+            m = all_means[i]
+            v = all_variances[i]
+            lines!(ax_ratio, assets.Ep, data ./ m, color=colors[i], label="Data/Expected $param_name=$val")
+            # Add uncertainty bands for ratios
+            barplot!(ax_ratio, assets.Ep, 1 .+ sqrt.(v) ./ m, width=diff(assets.Ep_bins), 
+                    gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.2, color=colors[i])
+        end
+        
+        hlines!(ax_ratio, 1, color=:black, linestyle=:dash, label="Unity")
+        
+        ax_ratio.ylabel = "Data/Expected"
+        ax_ratio.xlabel = "Eₚ (MeV)"
+        ax_ratio.title = "KamLAND - Ratio Comparison of All $param_name Values"
+        axislegend(ax_ratio, framevisible = false, position = :rt)
+        
+        xlims!(ax_ratio, minimum(assets.Ep_bins), maximum(assets.Ep_bins))
+        ylims!(ax_ratio, 0.3, 1.7)  # Kept the wider range from original KamLAND code
+        
+        display(f_ratio)
+        #save("/home/sofialon/Newtrinos.jl/natural plot/kamland/kamland_data_NNM_$(param_name)_ratio.png", f_ratio)
+    end
+    
 end
+end
+
+
+
