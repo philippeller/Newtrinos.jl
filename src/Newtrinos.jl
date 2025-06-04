@@ -21,5 +21,6 @@ include("experiments/minos/minos_sterile_16e20_POT/minos.jl")
 include("experiments/icecube/deepcore_3y_highstats_sample_b/deepcore.jl")
 include("experiments/kamland/kamland_7years/kamland.jl")
 include("experiments/km3net/orca6_433kton/orca.jl")
+include("experiments/nova/nova.jl")
 
 end

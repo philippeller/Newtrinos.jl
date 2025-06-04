@@ -1,4 +1,4 @@
-module Nova
+module nova
 
 using LinearAlgebra
 using Distributions
@@ -10,7 +10,7 @@ using Logging
 using Statistics
 import ..Newtrinos
 
-@kwdef struct NovaExperiment <: Newtrinos.Experiment
+@kwdef struct novaExperiment <: Newtrinos.Experiment
     physics::NamedTuple
     params::NamedTuple
     priors::NamedTuple
@@ -55,7 +55,7 @@ end
 function configure(physics)
     physics = (;physics.osc, physics.xsec)
     assets = get_assets(physics)
-    return NovaExperiment(
+    return novaExperiment(
         physics = physics,
         params = (;),
         priors = (;),
@@ -301,7 +301,9 @@ function smearnorm(energies, probabilities, percent, width=10, e_scale=1.0, e_bi
 end
 
 function calculate_energy_edges(energy_centers)
+
     """Calculate bin edges from bin centers for logarithmic binning"""
+    
     if length(energy_centers) < 2
         throw(ArgumentError("Need at least 2 energy centers"))
     end
@@ -528,81 +530,22 @@ function make_nue_predictions(params, physics, assets)
     return predictions
 end
 
-function calculate_nllh_numu(params, physics, assets)
-    """Calculate negative log-likelihood for muon neutrino disappearance"""
-    
-    predictions = make_numu_predictions(params, physics, assets)
-    
-    nllh_total = 0.0
-    epsilon = 1e-10
-    
-    # Process each quartile
-    for i in 1:4
-        # Neutrino quartile
-        observed = assets.numu_data.quartiles[i]["observed"]
-        predicted = predictions["numu"][i] .+ epsilon
-        
-        mask = .!((predicted .== epsilon) .& (observed .== 0))
-        nllh_total += sum(predicted[mask] .- observed[mask] .* log.(predicted[mask]))
-        
-        # Antineutrino quartile
-        observed_bar = assets.numubar_data.quartiles[i]["observed"]
-        predicted_bar = predictions["numubar"][i] .+ epsilon
-        
-        mask_bar = .!((predicted_bar .== epsilon) .& (observed_bar .== 0))
-        nllh_total += sum(predicted_bar[mask_bar] .- observed_bar[mask_bar] .* log.(predicted_bar[mask_bar]))
-    end
-    
-    return nllh_total
-end
-
-function calculate_nllh_nue(params, physics, assets)
-    """Calculate negative log-likelihood for electron neutrino appearance"""
-    
-    predictions = make_nue_predictions(params, physics, assets)
-    
-    nllh_total = 0.0
-    epsilon = 1e-10
-    
-    # Process each segment
-    for segment in 1:3
-        # Neutrino segment
-        observed_nu = getfield(assets.nue_data.observed, Symbol("segment$(segment)"))
-        predicted_nu = predictions["nue"]["segment$(segment)"] .* sum(observed_nu) .+ epsilon
-        
-        mask_nu = .!((predicted_nu .== epsilon) .& (observed_nu .== 0))
-        nllh_total += sum(predicted_nu[mask_nu] .- observed_nu[mask_nu] .* log.(predicted_nu[mask_nu]))
-        
-        # Antineutrino segment
-        observed_nubar = getfield(assets.nuebar_data.observed, Symbol("segment$(segment)"))
-        predicted_nubar = predictions["nuebar"]["segment$(segment)"] .* sum(observed_nubar) .+ epsilon
-        
-        mask_nubar = .!((predicted_nubar .== epsilon) .& (observed_nubar .== 0))
-        nllh_total += sum(predicted_nubar[mask_nubar] .- observed_nubar[mask_nubar] .* log.(predicted_nubar[mask_nubar]))
-    end
-    
-    return nllh_total
-end
-
 function get_forward_model(physics, assets)
-    """Create the forward model function combining all channels"""
-    
+
     function forward_model(params)
-        # Calculate likelihoods for both channels
-        nllh_numu = calculate_nllh_numu(params, physics, assets)
-        nllh_nue = calculate_nllh_nue(params, physics, assets)
+        exp_events_numu = make_numu_predictions(params, physics, assets)
+        exp_events_nue = make_nue_predictions(params, physics, assets)
         
-        # Return as exponential of negative log-likelihood
-        total_nllh = nllh_numu + nllh_nue
-        
-        # For BAT compatibility, return as distribution
-        return Distributions.product_distribution([
-            Distributions.Exponential(1/total_nllh)
-        ])
+       
+        return (
+            numu = Poisson.(exp_events_numu),
+            nue = Poisson.(exp_events_nue)
+        )
     end
-    
     return forward_model
 end
+
+
 
 function get_plot(physics, assets)
     """Create plotting function for NOvA data and predictions"""
@@ -674,3 +617,176 @@ function get_plot(physics, assets)
 end
 
 end  # module Nova
+
+
+#outside the module
+
+function calculate_nllh_numu(params, physics, assets)
+    
+    
+    predictions = make_numu_predictions(params, physics, assets)
+    
+    nllh_total = 0.0
+    epsilon = 1e-10
+    
+    # Process each quartile
+    for i in 1:4
+        # Neutrino quartile
+        observed = assets.numu_data.quartiles[i]["observed"]
+        predicted = predictions["numu"][i] .+ epsilon
+        
+        mask = .!((predicted .== epsilon) .& (observed .== 0))
+        nllh_total += sum(predicted[mask] .- observed[mask] .* log.(predicted[mask]))
+        
+        # Antineutrino quartile
+        observed_bar = assets.numubar_data.quartiles[i]["observed"]
+        predicted_bar = predictions["numubar"][i] .+ epsilon
+        
+        mask_bar = .!((predicted_bar .== epsilon) .& (observed_bar .== 0))
+        nllh_total += sum(predicted_bar[mask_bar] .- observed_bar[mask_bar] .* log.(predicted_bar[mask_bar]))
+    end
+    
+    return nllh_total
+end
+
+function calculate_nllh_nue(params, physics, assets)
+    """Calculate negative log-likelihood for electron neutrino appearance"""
+    
+    predictions = make_nue_predictions(params, physics, assets)
+    
+    nllh_total = 0.0
+    epsilon = 1e-10
+    
+    # Process each segment
+    for segment in 1:3
+        # Neutrino segment
+        observed_nu = getfield(assets.nue_data.observed, Symbol("segment$(segment)"))
+        predicted_nu = predictions["nue"]["segment$(segment)"] .* sum(observed_nu) .+ epsilon
+        
+        mask_nu = .!((predicted_nu .== epsilon) .& (observed_nu .== 0))
+        nllh_total += sum(predicted_nu[mask_nu] .- observed_nu[mask_nu] .* log.(predicted_nu[mask_nu]))
+        
+        # Antineutrino segment
+        observed_nubar = getfield(assets.nuebar_data.observed, Symbol("segment$(segment)"))
+        predicted_nubar = predictions["nuebar"]["segment$(segment)"] .* sum(observed_nubar) .+ epsilon
+        
+        mask_nubar = .!((predicted_nubar .== epsilon) .& (observed_nubar .== 0))
+        nllh_total += sum(predicted_nubar[mask_nubar] .- observed_nubar[mask_nubar] .* log.(predicted_nubar[mask_nubar]))
+    end
+    
+    return nllh_total
+end
+
+function get_forward_model(physics, assets)
+    """Create the forward model function combining all channels"""
+    
+    function forward_model(params)
+        # Calculate likelihoods for both channels
+        nllh_numu = calculate_nllh_numu(params, physics, assets)
+        nllh_nue = calculate_nllh_nue(params, physics, assets)
+        
+        # Return as exponential of negative log-likelihood
+        total_nllh = nllh_numu + nllh_nue
+        
+        return Distributions.product_distribution([
+            Distributions.Exponential(1/total_nllh)
+        ])
+    end
+    
+    return forward_model
+end
+
+
+function forward_model_numu(params, physics, assets)
+    """Forward model for νμ disappearance channel"""
+    # Get predictions
+    expected_numu = get_expected_numu(params, physics, assets)
+    expected_numubar = get_expected_numubar(params, physics, assets)
+    
+    # Combine neutrino and antineutrino data
+    expected_total = vcat(expected_numu, expected_numubar)
+    observed_total = vcat(
+        get_observed_data(assets.numu_data, :neutrino),
+        get_observed_data(assets.numubar_data, :antineutrino)
+    )
+    
+    # Build covariance matrix
+    covariance = build_covariance_numu(expected_total, assets)
+    
+    return Distributions.MvNormal(expected_total, covariance)
+end
+
+function forward_model_nue(params, physics, assets)
+    """Forward model for νe appearance channel"""
+    # Get predictions  
+    expected_nue = get_expected_nue(params, physics, assets)
+    expected_nuebar = get_expected_nuebar(params, physics, assets)
+    
+    # Combine neutrino and antineutrino data
+    expected_total = vcat(expected_nue, expected_nuebar)
+    observed_total = vcat(
+        get_observed_data(assets.nue_data, :neutrino),
+        get_observed_data(assets.nuebar_data, :antineutrino)
+    )
+    
+    # Build covariance matrix
+    covariance = build_covariance_nue(expected_total, assets)
+    
+    return Distributions.MvNormal(expected_total, covariance)
+end
+
+
+
+function get_forward_model(physics, assets)
+    """Create the forward model combining all NOvA channels"""
+    
+    function forward_model(params)
+        # Create distributions for each channel
+        numu_dist = forward_model_numu(params, physics, assets)
+        nue_dist = forward_model_nue(params, physics, assets)
+        
+        # Return product distribution for joint analysis
+        return Distributions.StructArray((
+            numu = numu_dist,
+            nue = nue_dist
+        ))
+    end
+    
+    return forward_model
+end
+
+function build_covariance_numu(expected_events, assets)
+    """Build covariance matrix for νμ channel"""
+    n_bins = length(expected_events)
+    
+    # Statistical uncertainty (Poisson)
+    stat_cov = Diagonal(expected_events)
+    
+    # Systematic uncertainties
+    sys_cov = zeros(n_bins, n_bins)
+    
+    # Energy scale uncertainties (correlated across quartiles)
+    energy_scale_frac = assets.systematics.energy_scale_uncertainty
+    for i in 1:n_bins, j in 1:n_bins
+        quartile_i = get_quartile_index(i)
+        quartile_j = get_quartile_index(j)
+        correlation = assets.systematics.energy_scale_correlation[quartile_i, quartile_j]
+        sys_cov[i,j] += (energy_scale_frac * expected_events[i]) * 
+                        (energy_scale_frac * expected_events[j]) * correlation
+    end
+    
+    # Flux uncertainties (fully correlated)
+    flux_frac = assets.systematics.flux_uncertainty
+    flux_vector = flux_frac .* expected_events
+    sys_cov += flux_vector * flux_vector'
+    
+    # Cross-section uncertainties
+    for reaction in assets.systematics.xsec_reactions
+        frac = assets.systematics.xsec_uncertainty[reaction]
+        weights = get_xsec_weights(expected_events, reaction, assets)
+        sys_cov += (frac^2) * (weights * weights')
+    end
+    
+    total_cov = stat_cov + sys_cov
+    return Symmetric(total_cov)
+end
