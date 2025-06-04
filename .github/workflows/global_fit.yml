@@ -26,12 +26,15 @@ jobs:
 
     - name: Run Julia script
       run: |
-        julia --project=. src/analysis/analysis.jl --experiments dayabay minos --task profile --name test --ordering NO --plot
+        julia --project=. src/analysis/analysis.jl --experiments dayabay minos kamland deepcore orca --task profile --name test_NO --ordering NO --plot
+        julia --project=. src/analysis/analysis.jl --experiments dayabay minos kamland deepcore orca --task profile --name test_IO --ordering IO --plot
 
     - name: Upload output
       uses: actions/upload-artifact@v4
       with:
         name: newtrinos-output
         path: |
-          test.png
-          test.jld2
+          test_NO.png
+          test_NO.jld2
+          test_IO.png
+          test_IO.jld2
