@@ -6,7 +6,7 @@ abstract type Experiment end
 
 export Physics, Experiment
 export NewtrinosResult, plot
-export make_init_samples, whack_a_moles, whack_many_moles
+export make_init_samples, make_prior_samples, whack_a_moles, whack_many_moles
 
 include("physics/osc.jl")
 using .osc

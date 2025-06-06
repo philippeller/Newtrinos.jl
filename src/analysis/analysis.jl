@@ -60,9 +60,11 @@ context = set_batcontext(ad = adsel)
 name = args["name"]
 
 osc_cfg = Newtrinos.osc.OscillationConfig(
-    flavour=Newtrinos.osc.ThreeFlavour(ordering=Symbol(args["ordering"])),
-    propagation=Newtrinos.osc.Basic(),
-    states=Newtrinos.osc.All(),
+    flavour=Newtrinos.osc.Darkdim_Lambda(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=Symbol(args["ordering"]))),
+    #propagation=Newtrinos.osc.Basic(),
+    propagation=Newtrinos.osc.Damping(),
+    #states=Newtrinos.osc.All(),
+    states=Newtrinos.osc.Cut(cutoff=1.),
     interaction=Newtrinos.osc.SI()
     )
 osc = Newtrinos.osc.configure(osc_cfg)
@@ -85,12 +87,18 @@ experiments = configure_experiments(args["experiments"], physics)
 
 # Variables to condition on (=fix)
 #conditional_vars = [:θ₁₂, :θ₁₃, :δCP, :Δm²₂₁, :nutau_cc_norm]
-conditional_vars = []
+#conditional_vars = [:Darkdim_radius, :δCP, :λ₁, :λ₂, :λ₃]
+
+conditional_vars = Dict(:δCP=>0., :λ₁=>1., :λ₂=>1., :λ₃=>1.)
+#conditional_vars = []
 
 # For profile / scan task only: choose scan grid
 vars_to_scan = OrderedDict()
 #vars_to_scan[:θ₂₃] = 31
-vars_to_scan[:Δm²₃₁] = 31
+#vars_to_scan[:Δm²₃₁] = 31
+
+
+vars_to_scan[:ca2] = 11
 
 ###### END CONFIG ######
 
@@ -99,9 +107,20 @@ likelihood = Newtrinos.generate_likelihood(experiments);
 p = Newtrinos.get_params(experiments)
 priors = Newtrinos.get_priors(experiments)
 
-function condition(priors::NamedTuple, conditional_vars, p)
+function condition(priors::NamedTuple, conditional_vars::AbstractArray, p)
     for var in conditional_vars
         @reset priors[var] = p[var]
+    end
+    priors
+end
+
+function condition(priors::NamedTuple, conditional_vars::AbstractDict, p)
+    for var in keys(conditional_vars)
+        if isnothing(conditional_vars[var])
+            @reset priors[var] = p[var]
+        else
+            @reset priors[var] = conditional_vars[var]
+        end
     end
     priors
 end
@@ -121,9 +140,10 @@ if lowercase(args["task"]) == "nestedsampling"
 elseif lowercase(args["task"]) == "importancesampling"
     prior = distprod(;priors...)
     posterior = PosteriorMeasure(likelihood, prior)
-    init_samples =  make_init_samples(posterior, 10, 100_000)
+    init_samples =  make_prior_samples(posterior, 1_000)
+    #init_samples =  make_init_samples(posterior, 10, 100_000)
     FileIO.save(name * "_init_samples.jld2", Dict(String(a)=>init_samples[a] for a in keys(init_samples)))
-    whack_samples = whack_many_moles(posterior, init_samples, target_efficiency=0.09)
+    whack_samples = whack_many_moles(posterior, init_samples, target_samplesize=100_000, cache_dir=name)
     FileIO.save(name * ".jld2", Dict(String(a)=>whack_samples[a] for a in keys(whack_samples)))
 else
     if lowercase(args["task"]) == "profile"

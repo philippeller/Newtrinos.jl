@@ -56,6 +56,17 @@ end
 
 # end
 
+function make_prior_samples(posterior, nsamples=10_000)
+    pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
+    pr_dist = MvNormal(zeros(pstr.prior.dist._dim), ones(pstr.prior.dist._dim))
+
+    @info "Generating initial samples"
+    smpls_p = importance_sampling(pstr, pr_dist, nsamples)
+
+    (approx_dist=pr_dist, samples_p=smpls_p, samples_user=bat_transform(inverse(f_trafo), smpls_p).result)
+
+end
+
 function make_init_samples(posterior, nseeds=10, nsamples=10_000)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
 
@@ -168,7 +179,7 @@ function whack_a_mole(posterior, init_samples, n_whack=100)
     
 end
 
-function whack_many_moles(posterior, init_samples; target_efficiency=0.5, maxiter=100, n_parallel=Threads.nthreads())
+function whack_many_moles(posterior, init_samples; target_efficiency=Inf, target_samplesize=Inf, maxiter=100, n_parallel=Threads.nthreads(), cache_dir=nothing)
 
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
     smpls_p = init_samples.samples_p
@@ -178,9 +189,9 @@ function whack_many_moles(posterior, init_samples; target_efficiency=0.5, maxite
     #approx_dist = MvNormal(μ, Σ)
     approx_dist = init_samples.approx_dist
 
-    if init_samples.approx_dist isa MixtureModel
-        approx_mix = approx_dist
-        mode_logd_p_mix = [logdensityof(pstr, mode(approx_dist)) for approx_dist in approx_mix.components]
+    if approx_dist isa MixtureModel
+        approx_mix = init_samples.approx_dist
+        mode_logd_p_mix = [logdensityof(pstr, mode(d)) for d in approx_mix.components]
         #mode_logd_q_mix = [logdensityof(approx_dist, mode(approx_dist)) for approx_dist in approx_mix.components]
     else
         approx_mix = Distributions.MixtureModel([approx_dist], [1])
@@ -189,8 +200,13 @@ function whack_many_moles(posterior, init_samples; target_efficiency=0.5, maxite
     end
     
     samples_mix = smpls_p
-
     iter = 0
+
+    if !isnothing(cache_dir)
+        if !isdir(cache_dir)
+            mkdir(cache_dir)
+        end
+    end
     
     while true
 
@@ -199,7 +215,7 @@ function whack_many_moles(posterior, init_samples; target_efficiency=0.5, maxite
         eff = ess / length(samples_mix)
         @info "Efficiency = $eff"
 
-        if (eff > target_efficiency) | (iter > maxiter)
+        if (eff > target_efficiency) | (iter > maxiter) | (ess > target_samplesize)
             break
         end
         
@@ -248,6 +264,10 @@ function whack_many_moles(posterior, init_samples; target_efficiency=0.5, maxite
         samples_mix.weight .= w;
 
         iter += 1
+
+        if !isnothing(cache_dir)
+            FileIO.save(joinpath(cache_dir, "molewhacker_iter_$(iter).jld2"), Dict("approx_dist"=>approx_mix, "samples_p"=>samples_mix, "samples_user"=>bat_transform(inverse(f_trafo), samples_mix).result))
+        end
 
     end
 
