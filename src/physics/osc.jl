@@ -575,15 +575,14 @@ function get_matrices(cfg::NND)
         r= params[:r]
 
         matrix = zeros(N, N)
-    
-        for i in 1:N
+        Threads.@threads for i in 1:N
             for j in 1:N
                 if i == j
-                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)  
+                    matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
                 else
-                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
+                    matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
                 end
-            
+
             end
         end
         eigvalues, Usector =eigen(matrix)
@@ -639,7 +638,7 @@ function get_matrices_new(cfg::NND)
         # Use N_int for all structural operations
         matrix = zeros(typeof(params[:r]), N_int, N_int)
         
-        for i in 1:N_int  
+        Threads.@threads for i in 1:N_int  
             for j in 1:N_int 
                 sqrt_i = sqrt(2*(i-1) + params[:r])
                 sqrt_j = sqrt(2*(j-1) + params[:r])
@@ -696,7 +695,7 @@ function get_matrices(cfg::NNM)
 
         matrix = zeros(N, N)
     
-        for i in 1:N
+        Threads.@threads for i in 1:N
             for j in 1:N
                 if i == j
                 matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)  
