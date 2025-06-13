@@ -111,27 +111,109 @@ end
 function load_nue_data(data_file, mc_file, energy_edges)
     """Load electron neutrino data with 3 segments"""
     
-    # Read observed data from ROOT histogram
-    data_hist = data_file["neutrino_mode_nue"]
-    data_values = data_hist.fN > 0 ? data_hist.fArray : data_hist.fArray[1:data_hist.fN]
+    # Find the correct key first
+    println("Available keys in data_file:")
+    data_keys = collect(keys(data_file))
+    println(data_keys)
     
-    observed1 = data_values[2:9]  # Julia 1-indexed
-    observed2 = data_values[11:18]
-    observed3 = vcat(data_values[19:21], zeros(5))  # Pad with zeros
+    # Look for neutrino data key
+    nue_key = nothing
+    for key in data_keys
+        key_str = string(key)
+        if occursin("nue", lowercase(key_str))
+            nue_key = key
+            println("Found nue key: ", key)
+            break
+        end
+    end
     
-    # Load Monte Carlo components for each segment
+    if nue_key === nothing
+        # If no "nue" key found, try the first available key for debugging
+        nue_key = data_keys[1]
+        println("No 'nue' key found, using first key: ", nue_key)
+    end
+    
+    # Read observed data histogram
+    data_hist = data_file[nue_key]
+    println("Type of data_hist: ", typeof(data_hist))
+    println("Keys in data_hist: ", keys(data_hist))
+    
+    # Extract data values - AVOID using .fN completely
+    if haskey(data_hist, :fArray)
+        data_values = data_hist[:fArray]
+        println("Using symbol key :fArray")
+    elseif haskey(data_hist, "fArray")
+        data_values = data_hist["fArray"]
+        println("Using string key \"fArray\"")
+    else
+        # Look for any array-like field
+        for key in keys(data_hist)
+            val = data_hist[key]
+            if isa(val, Vector) && length(val) > 20  # Assuming we need at least 21 elements
+                data_values = val
+                println("Using array field: ", key)
+                break
+            end
+        end
+        if !@isdefined(data_values)
+            error("Cannot find histogram data array. Available keys: $(keys(data_hist))")
+        end
+    end
+    
+    println("Length of data_values: ", length(data_values))
+    println("First few values: ", data_values[1:min(10, length(data_values))])
+    
+    # Extract segments (make sure we have enough data)
+    if length(data_values) >= 21
+        observed1 = data_values[2:9]
+        observed2 = data_values[11:18]  
+        observed3 = vcat(data_values[19:21], zeros(5))
+    else
+        error("Not enough data values. Expected at least 21, got $(length(data_values))")
+    end
+    
+    # Load Monte Carlo components
     mc_components = Dict{String, Vector{Vector{Float64}}}()
     
-    # Get all keys from MC file for nue FHC predictions
-    for key in keys(mc_file)
-        if startswith(string(key), "prediction_components_nue_fhc")
-            component_name = replace(string(key), r"_\d+$" => "")  # Remove trailing numbers
+    println("\nProcessing MC file...")
+    mc_keys = collect(keys(mc_file))
+    println("Available MC keys: ", mc_keys)
+    
+    for key in mc_keys
+        key_str = string(key)
+        if occursin("prediction", lowercase(key_str)) && occursin("nue", lowercase(key_str))
+            println("Processing MC key: ", key)
+            component_name = replace(key_str, r"_\d+$" => "")
             mc_hist = mc_file[key]
-            mc_values = mc_hist.fN > 0 ? mc_hist.fArray : mc_hist.fArray[1:mc_hist.fN]
             
-            mc_components[component_name * "1"] = mc_values[1:8]
-            mc_components[component_name * "2"] = mc_values[9:16]
-            mc_components[component_name * "3"] = vcat(mc_values[17:21], zeros(3))
+            # Extract MC values the same way - NO .fN access
+            if haskey(mc_hist, :fArray)
+                mc_values = mc_hist[:fArray]
+            elseif haskey(mc_hist, "fArray")
+                mc_values = mc_hist["fArray"]
+            else
+                # Look for any vector field
+                mc_values = nothing
+                for mc_key in keys(mc_hist)
+                    val = mc_hist[mc_key]
+                    if isa(val, Vector) && length(val) > 20
+                        mc_values = val
+                        break
+                    end
+                end
+                if mc_values === nothing
+                    println("Warning: Cannot find MC data for key $key")
+                    continue
+                end
+            end
+            
+            if length(mc_values) >= 21
+                mc_components[component_name * "1"] = mc_values[1:8]
+                mc_components[component_name * "2"] = mc_values[9:16]
+                mc_components[component_name * "3"] = vcat(mc_values[17:21], zeros(3))
+            else
+                println("Warning: MC values too short for key $key")
+            end
         end
     end
     
@@ -175,7 +257,6 @@ function load_nuebar_data(data_file, mc_file, energy_edges)
         energy_edges = energy_edges
     )
 end
-
 function load_numu_data(data_file, mc_file)
     """Load muon neutrino data by quartiles"""
     
@@ -186,29 +267,62 @@ function load_numu_data(data_file, mc_file)
     numu_total = Dict{String, Vector{Float64}}()
     numubar_total = Dict{String, Vector{Float64}}()
     
-    # Get energy edges from first quartile
+    # Get energy edges from first quartile histogram
     first_quartile_hist = data_file["neutrino_mode_numu_quartile1"]
-    # Extract bin edges from ROOT histogram
-    energy_edges = first_quartile_hist.fXaxis.fXbins.fArray
-    if isempty(energy_edges)
-        # If fXbins is empty, use fXmin, fXmax, fNbins to construct edges
-        nbins = first_quartile_hist.fXaxis.fNbins
-        xmin = first_quartile_hist.fXaxis.fXmin
-        xmax = first_quartile_hist.fXaxis.fXmax
-        energy_edges = range(xmin, xmax, length=nbins+1)
+    
+    # Extract energy edges using the correct path (discovered from exploration)
+    energy_edges = nothing
+    
+    # The exploration showed that fXaxis_fXbins is directly on the histogram
+    if haskey(first_quartile_hist, :fXaxis_fXbins)
+        energy_edges = first_quartile_hist[:fXaxis_fXbins]
+        println("✅ Found energy edges in fXaxis_fXbins")
+        println("   Length: ", length(energy_edges))
+        println("   Values: ", energy_edges)
+    elseif haskey(first_quartile_hist, "fXaxis_fXbins")
+        energy_edges = first_quartile_hist["fXaxis_fXbins"]
+        println("✅ Found energy edges in fXaxis_fXbins (string key)")
+        println("   Length: ", length(energy_edges))
+        println("   Values: ", energy_edges)
+    else
+        # Fallback: construct from fXaxis_fNbins, fXaxis_fXmin, fXaxis_fXmax
+        println("⚠️  fXaxis_fXbins not found, constructing from axis parameters")
+        
+        nbins = get(first_quartile_hist, :fXaxis_fNbins, get(first_quartile_hist, "fXaxis_fNbins", 19))
+        xmin = get(first_quartile_hist, :fXaxis_fXmin, get(first_quartile_hist, "fXaxis_fXmin", 0.0))
+        xmax = get(first_quartile_hist, :fXaxis_fXmax, get(first_quartile_hist, "fXaxis_fXmax", 5.0))
+        
+        println("   Constructing from: nbins=$(nbins), xmin=$(xmin), xmax=$(xmax)")
+        energy_edges = collect(range(xmin, xmax, length=nbins+1))
+        println("   Constructed edges: ", energy_edges)
     end
     
-    # Initialize total arrays
-    n_bins = length(energy_edges) - 1
-    numu_total["NoOscillations_Signal"] = zeros(n_bins)
-    numu_total["Oscillated_Signal"] = zeros(n_bins)
-    numu_total["NoOscillations_Total_beam_bkg"] = zeros(n_bins)
-    numu_total["Cosmic_bkg"] = zeros(n_bins)
+    # Final fallback if we still don't have energy edges
+    if energy_edges === nothing
+        println("❌ Could not extract energy edges, using default")
+        energy_edges = collect(range(0.0, 5.0, length=20))  # 19 bins based on exploration
+    end
     
-    numubar_total["NoOscillations_Signal"] = zeros(n_bins)
-    numubar_total["Oscillated_Signal"] = zeros(n_bins)
-    numubar_total["NoOscillations_Total_beam_bkg"] = zeros(n_bins)
-    numubar_total["Cosmic_bkg"] = zeros(n_bins)
+    # From exploration: we have 19 bins and data arrays with 21 elements
+    # The data structure is likely: [underflow, bin1, bin2, ..., bin19, overflow]
+    n_bins = length(energy_edges) - 1  # This should be 19
+    data_length = 21  # Based on your debug output
+    
+    println("Energy edges: ", energy_edges)
+    println("Number of bins: ", n_bins)
+    println("Expected data array length: ", data_length)
+    
+    # Data extraction indices: skip underflow (index 1), take bins 2:20
+    data_start_idx = 2
+    data_end_idx = n_bins + 1  # This will be 20, so indices 2:20 = 19 elements
+    
+    println("Data extraction: indices [$(data_start_idx):$(data_end_idx)] = $(data_end_idx - data_start_idx + 1) elements")
+    
+    # Initialize total arrays with correct bin count
+    for component in ["NoOscillations_Signal", "Oscillated_Signal", "NoOscillations_Total_beam_bkg", "Cosmic_bkg"]
+        numu_total[component] = zeros(n_bins)
+        numubar_total[component] = zeros(n_bins)
+    end
     
     for q in 1:4
         # Load neutrino quartile
@@ -216,53 +330,223 @@ function load_numu_data(data_file, mc_file)
         
         # Load observed data for this quartile
         quartile_hist = data_file["neutrino_mode_numu_quartile$(q)"]
-        quartile_data["observed"] = quartile_hist.fN > 0 ? quartile_hist.fArray : quartile_hist.fArray[1:quartile_hist.fN]
+        
+        # Extract observed data - skip underflow/overflow bins
+        if haskey(quartile_hist, :fSumw2)
+            raw_data = quartile_hist[:fSumw2]
+            println("Quartile $(q) fSumw2 length: ", length(raw_data))
+            
+            if length(raw_data) == data_length
+                # Extract the physics bins (skip underflow at index 1, skip overflow at index 21)
+                observed_data = raw_data[data_start_idx:data_end_idx]
+                println("   Extracted $(length(observed_data)) physics bins")
+            else
+                println("   Warning: Unexpected data length $(length(raw_data)), expected $(data_length)")
+                # Try to extract what we can
+                if length(raw_data) >= n_bins
+                    observed_data = raw_data[1:n_bins]
+                else
+                    observed_data = vcat(raw_data, zeros(n_bins - length(raw_data)))
+                end
+            end
+        elseif haskey(quartile_hist, "fSumw2")
+            raw_data = quartile_hist["fSumw2"]
+            println("Quartile $(q) fSumw2 (string) length: ", length(raw_data))
+            
+            if length(raw_data) == data_length
+                observed_data = raw_data[data_start_idx:data_end_idx]
+                println("   Extracted $(length(observed_data)) physics bins")
+            else
+                println("   Warning: Unexpected data length $(length(raw_data)), expected $(data_length)")
+                if length(raw_data) >= n_bins
+                    observed_data = raw_data[1:n_bins]
+                else
+                    observed_data = vcat(raw_data, zeros(n_bins - length(raw_data)))
+                end
+            end
+        else
+            println("Warning: Cannot find fSumw2 for neutrino quartile $(q)")
+            observed_data = zeros(n_bins)
+        end
+        
+        quartile_data["observed"] = observed_data
         quartile_data["energy_edges"] = energy_edges
         
+        println("Quartile $(q) observed data length: ", length(observed_data))
+        println("Observed data: ", observed_data)
+        
         # Load MC components for this quartile
-        for key in keys(mc_file)
-            if startswith(string(key), "prediction_components_numu_fhc_Quartile$(q)")
-                component_name = replace(string(key), r"_\d+$" => "")
-                mc_hist = mc_file[key]
-                mc_values = mc_hist.fN > 0 ? mc_hist.fArray : mc_hist.fArray[1:mc_hist.fN]
-                quartile_data[component_name] = mc_values
+        quartile_mc_key = "prediction_components_numu_fhc_Quartile$(q-1)"
+        
+        if haskey(mc_file, quartile_mc_key)
+            mc_dir = mc_file[quartile_mc_key]
+            
+            if isa(mc_dir, UnROOT.ROOTDirectory)
+                # MC is a directory with components
+                for component_name in keys(mc_dir)
+                    component_hist = mc_dir[component_name]
+                    
+                    # Extract MC data using same logic as observed data
+                    mc_data = nothing
+                    if haskey(component_hist, :fSumw2)
+                        raw_mc_data = component_hist[:fSumw2]
+                        if length(raw_mc_data) == data_length
+                            mc_data = raw_mc_data[data_start_idx:data_end_idx]
+                        elseif length(raw_mc_data) >= n_bins
+                            mc_data = raw_mc_data[1:n_bins]
+                        else
+                            mc_data = vcat(raw_mc_data, zeros(n_bins - length(raw_mc_data)))
+                        end
+                    elseif haskey(component_hist, "fSumw2")
+                        raw_mc_data = component_hist["fSumw2"]
+                        if length(raw_mc_data) == data_length
+                            mc_data = raw_mc_data[data_start_idx:data_end_idx]
+                        elseif length(raw_mc_data) >= n_bins
+                            mc_data = raw_mc_data[1:n_bins]
+                        else
+                            mc_data = vcat(raw_mc_data, zeros(n_bins - length(raw_mc_data)))
+                        end
+                    else
+                        println("Warning: No data found for MC component $(component_name) in quartile $(q)")
+                        mc_data = zeros(n_bins)
+                    end
+                    
+                    quartile_data[string(component_name)] = mc_data
+                    println("Quartile $(q), MC component $(component_name): length=$(length(mc_data))")
+                end
+            else
+                # Single histogram case
+                if haskey(mc_dir, :fSumw2)
+                    raw_mc_data = mc_dir[:fSumw2]
+                    if length(raw_mc_data) == data_length
+                        quartile_data[quartile_mc_key] = raw_mc_data[data_start_idx:data_end_idx]
+                    else
+                        quartile_data[quartile_mc_key] = raw_mc_data[1:min(n_bins, length(raw_mc_data))]
+                    end
+                elseif haskey(mc_dir, :fArray)
+                    fN = get(mc_dir, :fN, length(mc_dir[:fArray]))
+                    n_entries = isa(fN, Vector) ? fN[1] : fN
+                    quartile_data[quartile_mc_key] = n_entries > 0 ? mc_dir[:fArray][1:min(n_bins, n_entries)] : zeros(n_bins)
+                end
             end
+        else
+            println("Warning: MC key $(quartile_mc_key) not found")
         end
         
         push!(numu_quartiles, quartile_data)
         
         # Accumulate totals
-        numu_total["NoOscillations_Signal"] += quartile_data["NoOscillations_Signal"]
-        numu_total["Oscillated_Signal"] += quartile_data["Oscillated_Signal"]
-        numu_total["NoOscillations_Total_beam_bkg"] += quartile_data["NoOscillations_Total_beam_bkg"]
-        numu_total["Cosmic_bkg"] += quartile_data["Cosmic_bkg"]
+        for component in ["NoOscillations_Signal", "Oscillated_Signal", "NoOscillations_Total_beam_bkg", "Cosmic_bkg"]
+            if haskey(quartile_data, component)
+                data_vec = quartile_data[component]
+                if length(data_vec) == n_bins
+                    numu_total[component] += data_vec
+                    println("   Added $(component) to total: length=$(length(data_vec))")
+                else
+                    println("   Warning: $(component) has wrong length $(length(data_vec)), expected $(n_bins)")
+                end
+            end
+        end
         
-        # Load antineutrino quartile
+        # Load antineutrino quartile (same logic)
         quartile_data_bar = Dict{String, Any}()
         
-        # Load observed antineutrino data for this quartile
         quartile_hist_bar = data_file["antineutrino_mode_numu_quartile$(q)"]
-        quartile_data_bar["observed"] = quartile_hist_bar.fN > 0 ? quartile_hist_bar.fArray : quartile_hist_bar.fArray[1:quartile_hist_bar.fN]
+        
+        # Extract observed antineutrino data
+        if haskey(quartile_hist_bar, :fSumw2)
+            raw_data = quartile_hist_bar[:fSumw2]
+            if length(raw_data) == data_length
+                observed_data_bar = raw_data[data_start_idx:data_end_idx]
+            elseif length(raw_data) >= n_bins
+                observed_data_bar = raw_data[1:n_bins]
+            else
+                observed_data_bar = vcat(raw_data, zeros(n_bins - length(raw_data)))
+            end
+        elseif haskey(quartile_hist_bar, "fSumw2")
+            raw_data = quartile_hist_bar["fSumw2"]
+            if length(raw_data) == data_length
+                observed_data_bar = raw_data[data_start_idx:data_end_idx]
+            elseif length(raw_data) >= n_bins
+                observed_data_bar = raw_data[1:n_bins]
+            else
+                observed_data_bar = vcat(raw_data, zeros(n_bins - length(raw_data)))
+            end
+        else
+            println("Warning: Cannot find data for antineutrino quartile $(q)")
+            observed_data_bar = zeros(n_bins)
+        end
+        
+        quartile_data_bar["observed"] = observed_data_bar
         quartile_data_bar["energy_edges"] = energy_edges
         
-        # Load MC components for antineutrino quartile
-        for key in keys(mc_file)
-            if startswith(string(key), "prediction_components_numu_rhc_Quartile$(q)")
-                component_name = replace(string(key), r"_\d+$" => "")
-                mc_hist = mc_file[key]
-                mc_values = mc_hist.fN > 0 ? mc_hist.fArray : mc_hist.fArray[1:mc_hist.fN]
-                quartile_data_bar[component_name] = mc_values
+        # Load MC components for antineutrino quartile (same logic as neutrino)
+        quartile_mc_key_bar = "prediction_components_numu_rhc_Quartile$(q-1)"
+        
+        if haskey(mc_file, quartile_mc_key_bar)
+            mc_dir_bar = mc_file[quartile_mc_key_bar]
+            
+            if isa(mc_dir_bar, UnROOT.ROOTDirectory)
+                for component_name in keys(mc_dir_bar)
+                    component_hist = mc_dir_bar[component_name]
+                    
+                    if haskey(component_hist, :fSumw2)
+                        raw_mc_data = component_hist[:fSumw2]
+                        if length(raw_mc_data) == data_length
+                            quartile_data_bar[string(component_name)] = raw_mc_data[data_start_idx:data_end_idx]
+                        else
+                            quartile_data_bar[string(component_name)] = raw_mc_data[1:min(n_bins, length(raw_mc_data))]
+                        end
+                    elseif haskey(component_hist, "fSumw2")
+                        raw_mc_data = component_hist["fSumw2"]
+                        if length(raw_mc_data) == data_length
+                            quartile_data_bar[string(component_name)] = raw_mc_data[data_start_idx:data_end_idx]
+                        else
+                            quartile_data_bar[string(component_name)] = raw_mc_data[1:min(n_bins, length(raw_mc_data))]
+                        end
+                    else
+                        println("Warning: No data found for antineutrino MC component $(component_name) in quartile $(q)")
+                    end
+                end
+            else
+                # Single histogram case
+                if haskey(mc_dir_bar, :fSumw2)
+                    raw_mc_data = mc_dir_bar[:fSumw2]
+                    if length(raw_mc_data) == data_length
+                        quartile_data_bar[quartile_mc_key_bar] = raw_mc_data[data_start_idx:data_end_idx]
+                    else
+                        quartile_data_bar[quartile_mc_key_bar] = raw_mc_data[1:min(n_bins, length(raw_mc_data))]
+                    end
+                elseif haskey(mc_dir_bar, :fArray)
+                    fN = get(mc_dir_bar, :fN, length(mc_dir_bar[:fArray]))
+                    n_entries = isa(fN, Vector) ? fN[1] : fN
+                    quartile_data_bar[quartile_mc_key_bar] = n_entries > 0 ? mc_dir_bar[:fArray][1:min(n_bins, n_entries)] : zeros(n_bins)
+                end
             end
+        else
+            println("Warning: Antineutrino MC key $(quartile_mc_key_bar) not found")
         end
         
         push!(numubar_quartiles, quartile_data_bar)
         
         # Accumulate antineutrino totals
-        numubar_total["NoOscillations_Signal"] += quartile_data_bar["NoOscillations_Signal"]
-        numubar_total["Oscillated_Signal"] += quartile_data_bar["Oscillated_Signal"]
-        numubar_total["NoOscillations_Total_beam_bkg"] += quartile_data_bar["NoOscillations_Total_beam_bkg"]
-        numubar_total["Cosmic_bkg"] += quartile_data_bar["Cosmic_bkg"]
+        for component in ["NoOscillations_Signal", "Oscillated_Signal", "NoOscillations_Total_beam_bkg", "Cosmic_bkg"]
+            if haskey(quartile_data_bar, component)
+                data_vec = quartile_data_bar[component]
+                if length(data_vec) == n_bins
+                    numubar_total[component] += data_vec
+                else
+                    println("   Warning: antineutrino $(component) has wrong length $(length(data_vec)), expected $(n_bins)")
+                end
+            end
+        end
     end
+    
+    println("\n✅ Data loading complete!")
+    println("Energy edges: ", energy_edges)
+    println("Number of bins: ", n_bins)
+    println("Neutrino total components: ", keys(numu_total))
+    println("Antineutrino total components: ", keys(numubar_total))
     
     numu_data = (
         quartiles = numu_quartiles,
@@ -406,12 +690,12 @@ function make_numu_predictions(params, physics, assets)
     
     # Calculate oscillation probabilities for neutrinos
     p_nu = physics.osc.osc_prob(energy_grid * assets.numu_e_scale .+ assets.numu_e_bias, 
-                               L, params, false, density)
+                               L, params; anti=false)
     p_nu_survival = p_nu[:, 1, 2, 2]  # νμ → νμ survival probability
     
     # Calculate for antineutrinos
     p_nubar = physics.osc.osc_prob(energy_grid * assets.numu_e_scale .+ assets.numu_e_bias, 
-                                  L, params, true, density)
+                                  L, params; anti=true)
     p_nubar_survival = p_nubar[:, 1, 2, 2]  # ν̄μ → ν̄μ survival probability
     
     # Apply smearing and make predictions for each quartile
@@ -433,8 +717,7 @@ function make_numu_predictions(params, physics, assets)
         # Calculate prediction
         prediction = (quartile_data["NoOscillations_Signal"] .* p_rebinned .+
                      quartile_data["NoOscillations_Total_beam_bkg"] .+
-                     quartile_data["Cosmic_bkg"]) .* params["nova_norm"]
-        
+                     quartile_data["Cosmic_bkg"]) 
         push!(predictions["numu"], prediction)
         
         # Antineutrino quartile
@@ -448,8 +731,7 @@ function make_numu_predictions(params, physics, assets)
         
         prediction_bar = (quartile_data_bar["NoOscillations_Signal"] .* p_rebinned_bar .+
                          quartile_data_bar["NoOscillations_Total_beam_bkg"] .+
-                         quartile_data_bar["Cosmic_bkg"]) .* params["nova_norm"]
-        
+                         quartile_data_bar["Cosmic_bkg"]) 
         push!(predictions["numubar"], prediction_bar)
     end
     
@@ -468,11 +750,11 @@ function make_nue_predictions(params, physics, assets)
     
     # Calculate νμ → νe oscillation probabilities
     p_nu = physics.osc.osc_prob(energy_grid * assets.nue_e_scale .+ assets.nue_e_bias,
-                               L, params, false, density)
+                               L, params; anti=false)
     p_nu_appearance = p_nu[:, 1, 2, 1]  # νμ → νe probability
     
     p_nubar = physics.osc.osc_prob(energy_grid * assets.nue_e_scale .+ assets.nue_e_bias,
-                                  L, params, true, density)
+                                  L, params; anti=true)
     p_nubar_appearance = p_nubar[:, 1, 2, 1]  # ν̄μ → ν̄e probability
     
     # Apply smearing
@@ -618,175 +900,3 @@ end
 
 end  # module Nova
 
-
-#outside the module
-
-function calculate_nllh_numu(params, physics, assets)
-    
-    
-    predictions = make_numu_predictions(params, physics, assets)
-    
-    nllh_total = 0.0
-    epsilon = 1e-10
-    
-    # Process each quartile
-    for i in 1:4
-        # Neutrino quartile
-        observed = assets.numu_data.quartiles[i]["observed"]
-        predicted = predictions["numu"][i] .+ epsilon
-        
-        mask = .!((predicted .== epsilon) .& (observed .== 0))
-        nllh_total += sum(predicted[mask] .- observed[mask] .* log.(predicted[mask]))
-        
-        # Antineutrino quartile
-        observed_bar = assets.numubar_data.quartiles[i]["observed"]
-        predicted_bar = predictions["numubar"][i] .+ epsilon
-        
-        mask_bar = .!((predicted_bar .== epsilon) .& (observed_bar .== 0))
-        nllh_total += sum(predicted_bar[mask_bar] .- observed_bar[mask_bar] .* log.(predicted_bar[mask_bar]))
-    end
-    
-    return nllh_total
-end
-
-function calculate_nllh_nue(params, physics, assets)
-    """Calculate negative log-likelihood for electron neutrino appearance"""
-    
-    predictions = make_nue_predictions(params, physics, assets)
-    
-    nllh_total = 0.0
-    epsilon = 1e-10
-    
-    # Process each segment
-    for segment in 1:3
-        # Neutrino segment
-        observed_nu = getfield(assets.nue_data.observed, Symbol("segment$(segment)"))
-        predicted_nu = predictions["nue"]["segment$(segment)"] .* sum(observed_nu) .+ epsilon
-        
-        mask_nu = .!((predicted_nu .== epsilon) .& (observed_nu .== 0))
-        nllh_total += sum(predicted_nu[mask_nu] .- observed_nu[mask_nu] .* log.(predicted_nu[mask_nu]))
-        
-        # Antineutrino segment
-        observed_nubar = getfield(assets.nuebar_data.observed, Symbol("segment$(segment)"))
-        predicted_nubar = predictions["nuebar"]["segment$(segment)"] .* sum(observed_nubar) .+ epsilon
-        
-        mask_nubar = .!((predicted_nubar .== epsilon) .& (observed_nubar .== 0))
-        nllh_total += sum(predicted_nubar[mask_nubar] .- observed_nubar[mask_nubar] .* log.(predicted_nubar[mask_nubar]))
-    end
-    
-    return nllh_total
-end
-
-function get_forward_model(physics, assets)
-    """Create the forward model function combining all channels"""
-    
-    function forward_model(params)
-        # Calculate likelihoods for both channels
-        nllh_numu = calculate_nllh_numu(params, physics, assets)
-        nllh_nue = calculate_nllh_nue(params, physics, assets)
-        
-        # Return as exponential of negative log-likelihood
-        total_nllh = nllh_numu + nllh_nue
-        
-        return Distributions.product_distribution([
-            Distributions.Exponential(1/total_nllh)
-        ])
-    end
-    
-    return forward_model
-end
-
-
-function forward_model_numu(params, physics, assets)
-    """Forward model for νμ disappearance channel"""
-    # Get predictions
-    expected_numu = get_expected_numu(params, physics, assets)
-    expected_numubar = get_expected_numubar(params, physics, assets)
-    
-    # Combine neutrino and antineutrino data
-    expected_total = vcat(expected_numu, expected_numubar)
-    observed_total = vcat(
-        get_observed_data(assets.numu_data, :neutrino),
-        get_observed_data(assets.numubar_data, :antineutrino)
-    )
-    
-    # Build covariance matrix
-    covariance = build_covariance_numu(expected_total, assets)
-    
-    return Distributions.MvNormal(expected_total, covariance)
-end
-
-function forward_model_nue(params, physics, assets)
-    """Forward model for νe appearance channel"""
-    # Get predictions  
-    expected_nue = get_expected_nue(params, physics, assets)
-    expected_nuebar = get_expected_nuebar(params, physics, assets)
-    
-    # Combine neutrino and antineutrino data
-    expected_total = vcat(expected_nue, expected_nuebar)
-    observed_total = vcat(
-        get_observed_data(assets.nue_data, :neutrino),
-        get_observed_data(assets.nuebar_data, :antineutrino)
-    )
-    
-    # Build covariance matrix
-    covariance = build_covariance_nue(expected_total, assets)
-    
-    return Distributions.MvNormal(expected_total, covariance)
-end
-
-
-
-function get_forward_model(physics, assets)
-    """Create the forward model combining all NOvA channels"""
-    
-    function forward_model(params)
-        # Create distributions for each channel
-        numu_dist = forward_model_numu(params, physics, assets)
-        nue_dist = forward_model_nue(params, physics, assets)
-        
-        # Return product distribution for joint analysis
-        return Distributions.StructArray((
-            numu = numu_dist,
-            nue = nue_dist
-        ))
-    end
-    
-    return forward_model
-end
-
-function build_covariance_numu(expected_events, assets)
-    """Build covariance matrix for νμ channel"""
-    n_bins = length(expected_events)
-    
-    # Statistical uncertainty (Poisson)
-    stat_cov = Diagonal(expected_events)
-    
-    # Systematic uncertainties
-    sys_cov = zeros(n_bins, n_bins)
-    
-    # Energy scale uncertainties (correlated across quartiles)
-    energy_scale_frac = assets.systematics.energy_scale_uncertainty
-    for i in 1:n_bins, j in 1:n_bins
-        quartile_i = get_quartile_index(i)
-        quartile_j = get_quartile_index(j)
-        correlation = assets.systematics.energy_scale_correlation[quartile_i, quartile_j]
-        sys_cov[i,j] += (energy_scale_frac * expected_events[i]) * 
-                        (energy_scale_frac * expected_events[j]) * correlation
-    end
-    
-    # Flux uncertainties (fully correlated)
-    flux_frac = assets.systematics.flux_uncertainty
-    flux_vector = flux_frac .* expected_events
-    sys_cov += flux_vector * flux_vector'
-    
-    # Cross-section uncertainties
-    for reaction in assets.systematics.xsec_reactions
-        frac = assets.systematics.xsec_uncertainty[reaction]
-        weights = get_xsec_weights(expected_events, reaction, assets)
-        sys_cov += (frac^2) * (weights * weights')
-    end
-    
-    total_cov = stat_cov + sys_cov
-    return Symmetric(total_cov)
-end
