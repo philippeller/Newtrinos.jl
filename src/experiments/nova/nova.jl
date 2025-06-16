@@ -81,6 +81,32 @@ function get_assets(physics; datadir = @__DIR__)
     
     # Load muon neutrino data by quartiles
     numu_data, numubar_data = load_numu_data(data_file, mc_file)
+
+   
+
+        # Instead of the nested structure:
+    # observed = (
+    #     nue_data = nue_data.observed,
+    #     nuebar_data = nuebar_data.observed, 
+    #     numu_data = numu_data.observed,
+    #     numubar_data = numubar_data.observed    
+    # )
+
+    # Create a single flattened vector:
+    observed_flat = Vector{Float64}()
+
+    # Flatten in the same order as your forward model:
+    append!(observed_flat, nue_data.observed.segment1)
+    append!(observed_flat, nue_data.observed.segment2) 
+    append!(observed_flat, nue_data.observed.segment3)
+    append!(observed_flat, nuebar_data.observed.segment1)
+    append!(observed_flat, nuebar_data.observed.segment2)
+    append!(observed_flat, nuebar_data.observed.segment3)
+    append!(observed_flat, numu_data.observed)
+    append!(observed_flat, numubar_data.observed)
+
+    # Use this flattened structure:
+    observed = observed_flat   
     
     # NOvA baseline and matter density
     L = 810.0  # km
@@ -101,7 +127,8 @@ function get_assets(physics; datadir = @__DIR__)
         numu_e_scale = 1.05,
         numu_e_bias = 0.0,
         nue_e_scale = 0.65,
-        nue_e_bias = 0.02
+        nue_e_bias = 0.02,
+        observed = observed
     )
     
     # Files are automatically closed by UnROOT when going out of scope
@@ -291,7 +318,7 @@ function load_nuebar_data(data_file, mc_file, energy_edges)
     )
 end
 
-function load_numu_data(data_file, mc_file)
+function load_numu_data_old(data_file, mc_file)
     """Load muon neutrino data by quartiles"""
     
     numu_quartiles = []
@@ -620,6 +647,383 @@ function load_numu_data(data_file, mc_file)
     return numu_data, numubar_data
 end
 
+function load_numu_data(data_file, mc_file)
+    """Load muon neutrino data by quartiles with proper ROOT histogram handling"""
+    
+    # Validation tracking
+    validation_errors = String[]
+    validation_warnings = String[]
+    
+    println("🔄 Starting data loading with ROOT histogram analysis...")
+    
+    # Get energy binning from first quartile
+    first_hist = data_file["neutrino_mode_numu_quartile1"]
+    energy_edges = extract_energy_edges(first_hist)
+    n_bins = length(energy_edges) - 1
+    
+    println("📊 Energy binning: $(n_bins) bins from $(energy_edges[1]) to $(energy_edges[end]) GeV")
+    
+    # Initialize storage
+    expected_components = ["NoOscillations_Signal", "Oscillated_Signal", "NoOscillations_Total_beam_bkg", "Cosmic_bkg","Oscillated_Total_pred"]
+    numu_total = Dict(comp => zeros(Float64, n_bins) for comp in expected_components)
+    numubar_total = Dict(comp => zeros(Float64, n_bins) for comp in expected_components)
+    numu_observed_total = zeros(Float64, n_bins)  # Observed total for neutrinos
+    numubar_observed_total = zeros(Float64, n_bins)  # Observed total for antineutrinos
+    
+    numu_quartiles = []
+    numubar_quartiles = []
+    
+    # Process each quartile
+    for q in 1:4
+        println("\n🔄 Processing Quartile $q")
+        
+        # Load neutrino data
+        neutrino_data = load_quartile_data(data_file, mc_file, q, "neutrino", n_bins, validation_errors, validation_warnings)
+        push!(numu_quartiles, neutrino_data)
+        
+        # Load antineutrino data  
+        antineutrino_data = load_quartile_data(data_file, mc_file, q, "antineutrino", n_bins, validation_errors, validation_warnings)
+        push!(numubar_quartiles, antineutrino_data)
+        
+        # Accumulate totals
+        accumulate_totals!(numu_total, neutrino_data, expected_components, "neutrino", q, validation_warnings)
+        accumulate_totals!(numubar_total, antineutrino_data, expected_components, "antineutrino", q, validation_warnings)
+        
+        # Accumulate observed data totals
+        if haskey(neutrino_data, "observed")
+            numu_observed_total .+= neutrino_data["observed"]
+            println("    ✅ Added neutrino observed to total: +$(sum(neutrino_data["observed"]))")
+        end
+        
+        if haskey(antineutrino_data, "observed")
+            numubar_observed_total .+= antineutrino_data["observed"]
+            println("    ✅ Added antineutrino observed to total: +$(sum(antineutrino_data["observed"]))")
+        end
+    end
+    
+    # Add energy edges to all quartile data
+    for quartile_data in [numu_quartiles; numubar_quartiles]
+        quartile_data["energy_edges"] = energy_edges
+    end
+    
+    # Return results
+    numu_data = (
+        quartiles = numu_quartiles,
+        total = numu_total,
+        observed = numu_observed_total,  # Add observed total
+        energy_edges = energy_edges,
+        validation_errors = validation_errors,
+        validation_warnings = validation_warnings
+    )
+    
+    numubar_data = (
+        quartiles = numubar_quartiles,
+        total = numubar_total,
+        observed = numubar_observed_total,  # Add observed total
+        energy_edges = energy_edges,
+        validation_errors = validation_errors,
+        validation_warnings = validation_warnings
+    )
+    
+    return numu_data, numubar_data
+end
+
+function extract_energy_edges(histogram)
+    """Extract energy bin edges from ROOT histogram"""
+    
+    # Try different possible locations for bin edges
+    if haskey(histogram, :fXaxis_fXbins)
+        return histogram[:fXaxis_fXbins]
+    elseif haskey(histogram, "fXaxis_fXbins")
+        return histogram["fXaxis_fXbins"]
+    else
+        # Construct from axis parameters
+        nbins = get(histogram, :fXaxis_fNbins, get(histogram, "fXaxis_fNbins", 19))
+        xmin = get(histogram, :fXaxis_fXmin, get(histogram, "fXaxis_fXmin", 0.0))
+        xmax = get(histogram, :fXaxis_fXmax, get(histogram, "fXaxis_fXmax", 5.0))
+        
+        println("⚠️  Constructing energy edges from: nbins=$nbins, xmin=$xmin, xmax=$xmax")
+        return collect(range(xmin, xmax, length=nbins+1))
+    end
+end
+
+function extract_histogram_contents(histogram, hist_name)
+    """Extract bin contents from ROOT histogram using proper UnROOT methods"""
+    
+    # Define candidate fields in order of preference
+    candidate_fields = [
+        (:fN, "fN"),                           # Actual bin contents (what we found!)
+        (:fArray, "fArray"),                   # Standard ROOT bin array
+        (:contents, "contents"),               # UnROOT wrapper field
+        (:weights, "weights"),                 # Alternative name
+        (:fBuffer, "fBuffer")                  # Buffer storage
+    ]
+    
+    # Try each candidate field (both symbol and string versions)
+    for (field_sym, field_desc) in candidate_fields
+        # Try symbol version
+        if haskey(histogram, field_sym)
+            data = histogram[field_sym]
+            if isa(data, AbstractVector{<:Real}) && !isempty(data) && sum(data) > 0
+                println("    ✅ Found $(field_desc): length=$(length(data)), sum=$(sum(data))")
+                return Float64.(data), field_desc
+            elseif isa(data, AbstractVector{<:Real}) && !isempty(data)
+                println("    ⚠️  Found $(field_desc) but sum is zero: length=$(length(data))")
+                # Continue searching for non-zero data
+            end
+        end
+        
+        # Try string version
+        field_str = string(field_sym)
+        if haskey(histogram, field_str)
+            data = histogram[field_str]
+            if isa(data, AbstractVector{<:Real}) && !isempty(data) && sum(data) > 0
+                println("    ✅ Found $(field_desc) (string): length=$(length(data)), sum=$(sum(data))")
+                return Float64.(data), "$(field_desc) (string)"
+            elseif isa(data, AbstractVector{<:Real}) && !isempty(data)
+                println("    ⚠️  Found $(field_desc) (string) but sum is zero: length=$(length(data))")
+                # Continue searching for non-zero data
+            end
+        end
+    end
+    
+    # If no non-zero data found, show debug info and use best available
+    println("    🔍 No non-zero data found. Available numeric vectors in $hist_name:")
+    best_candidate = nothing
+    best_source = "none"
+    
+    for key in keys(histogram)
+        val = histogram[key]
+        if isa(val, AbstractVector{<:Real}) && length(val) > 0
+            val_sum = sum(val)
+            println("      $key: $(typeof(val)), length=$(length(val)), sum=$val_sum")
+            
+            # Keep track of the best non-zero candidate
+            if val_sum > 0 && (best_candidate === nothing || val_sum > sum(best_candidate))
+                best_candidate = val
+                best_source = string(key)
+            end
+        end
+    end
+    
+    # Use best available candidate if found
+    if best_candidate !== nothing
+        println("    📊 Using best available: $best_source with sum=$(sum(best_candidate))")
+        return Float64.(best_candidate), best_source
+    end
+    
+    # Last resort - try fSumw2 but warn heavily
+    if haskey(histogram, :fSumw2)
+        data = histogram[:fSumw2]
+        if isa(data, AbstractVector{<:Real}) && !isempty(data)
+            println("    ⚠️  LAST RESORT: Using fSumw2 (weights squared) - likely incorrect!")
+            return Float64.(data), "fSumw2 (LAST RESORT)"
+        end
+    end
+    
+    if haskey(histogram, "fSumw2")
+        data = histogram["fSumw2"]
+        if isa(data, AbstractVector{<:Real}) && !isempty(data)
+            println("    ⚠️  LAST RESORT: Using fSumw2 string (weights squared) - likely incorrect!")
+            return Float64.(data), "fSumw2 string (LAST RESORT)"
+        end
+    end
+    
+    error("❌ Could not extract any histogram contents from $hist_name")
+end
+
+function extract_physics_bins(raw_data, n_bins, source_name)
+    """Extract physics bins from ROOT histogram data, handling under/overflow"""
+    
+    raw_length = length(raw_data)
+    
+    if raw_length == n_bins + 2
+        # Standard ROOT format: [underflow, bin1, bin2, ..., binN, overflow]
+        physics_data = raw_data[2:end-1]
+        println("    → Extracted $(length(physics_data)) physics bins (skipped under/overflow)")
+    elseif raw_length == n_bins
+        # Just physics bins
+        physics_data = raw_data
+        println("    → Using all $(length(physics_data)) bins as physics bins")
+    elseif raw_length > n_bins
+        # Take first n_bins (assuming no underflow bin)
+        physics_data = raw_data[1:n_bins]
+        println("    → Extracted first $(length(physics_data)) bins from $(raw_length) total")
+    else
+        # Too few bins - pad with zeros
+        physics_data = vcat(raw_data, zeros(n_bins - raw_length))
+        println("    ⚠️  Only $(raw_length) bins available, padded to $(n_bins)")
+    end
+    
+    return physics_data
+end
+
+function load_quartile_data(data_file, mc_file, quartile, mode, n_bins, validation_errors, validation_warnings)
+    """Load observed and MC data for a single quartile"""
+    
+    mode_prefix = mode == "neutrino" ? "neutrino_mode" : "antineutrino_mode"
+    beam_mode = mode == "neutrino" ? "fhc" : "rhc"
+    
+    quartile_data = Dict{String, Any}()
+    
+    # Load observed data
+    obs_hist_key = "$(mode_prefix)_numu_quartile$(quartile)"
+    
+    if haskey(data_file, obs_hist_key)
+        obs_hist = data_file[obs_hist_key]
+        raw_obs, obs_source = extract_histogram_contents(obs_hist, "$(mode) Q$(quartile) observed")
+        observed_data = extract_physics_bins(raw_obs, n_bins, obs_source)
+        
+        quartile_data["observed"] = observed_data
+        
+        # Validate observed data
+        obs_sum = sum(observed_data)
+        println("  📊 Observed $(mode) data: $(obs_source), sum=$(obs_sum)")
+        
+        if obs_sum ≤ 0
+            push!(validation_warnings, "Quartile $quartile $mode: Observed data sum is $obs_sum")
+        end
+        if any(observed_data .< 0)
+            push!(validation_warnings, "Quartile $quartile $mode: Observed data has negative values")
+        end
+    else
+        push!(validation_errors, "Quartile $quartile $mode: Observed data key '$obs_hist_key' not found")
+        quartile_data["observed"] = zeros(n_bins)
+    end
+    
+    # Load MC components
+    mc_key = "prediction_components_numu_$(beam_mode)_Quartile$(quartile-1)"
+    
+    if haskey(mc_file, mc_key)
+        mc_dir = mc_file[mc_key]
+        
+        if isa(mc_dir, UnROOT.ROOTDirectory)
+            println("  🔍 Loading MC components from directory:")
+            
+            for component_name in keys(mc_dir)
+                component_hist = mc_dir[component_name]
+                
+                try
+                    raw_mc, mc_source = extract_histogram_contents(component_hist, "$(mode) Q$(quartile) $(component_name)")
+                    mc_data = extract_physics_bins(raw_mc, n_bins, mc_source)
+                    
+                    quartile_data[string(component_name)] = mc_data
+                    
+                    mc_sum = sum(mc_data)
+                    println("    📈 $(component_name): $(mc_source), sum=$(mc_sum)")
+                    
+                    if mc_sum ≤ 0 && component_name in ["NoOscillations_Signal", "Oscillated_Signal"]
+                        push!(validation_warnings, "Quartile $quartile $mode: $(component_name) sum is $mc_sum")
+                    end
+                    
+                catch e
+                    push!(validation_errors, "Quartile $quartile $mode: Failed to load $(component_name): $e")
+                    quartile_data[string(component_name)] = zeros(n_bins)
+                end
+            end
+        else
+            push!(validation_warnings, "Quartile $quartile $mode: MC data is not a directory structure")
+        end
+    else
+        push!(validation_errors, "Quartile $quartile $mode: MC key '$mc_key' not found")
+    end
+    
+    return quartile_data
+end
+
+function accumulate_totals!(totals_dict, quartile_data, expected_components, mode, quartile, validation_warnings)
+    """Accumulate quartile data into totals"""
+    
+    for component in expected_components
+        if haskey(quartile_data, component)
+            data_vec = quartile_data[component]
+            if length(data_vec) == length(totals_dict[component])
+                totals_dict[component] .+= data_vec
+                component_sum = sum(data_vec)
+                if component_sum > 0
+                    println("    ✅ Added $(component) to $(mode) total: +$(component_sum)")
+                end
+            else
+                push!(validation_warnings, "Quartile $quartile $mode: $(component) length mismatch for totals")
+            end
+        else
+            push!(validation_warnings, "Quartile $quartile $mode: Missing component $(component)")
+        end
+    end
+end
+
+function print_validation_summary(validation_errors, validation_warnings, numu_total, numubar_total, expected_components, energy_edges, n_bins, numu_observed_total, numubar_observed_total)
+    """Print comprehensive validation summary"""
+    
+    println("\n" * "="^60)
+    println("📋 VALIDATION SUMMARY")
+    println("="^60)
+    
+    # Errors
+    if !isempty(validation_errors)
+        println("❌ CRITICAL ERRORS ($(length(validation_errors))):")
+        for (i, error) in enumerate(validation_errors)
+            println("  $i. $error")
+        end
+    else
+        println("✅ No critical errors!")
+    end
+    
+    # Warnings
+    if !isempty(validation_warnings)
+        println("\n⚠️  WARNINGS ($(length(validation_warnings))):")
+        for (i, warning) in enumerate(validation_warnings)
+            println("  $i. $warning")
+        end
+    else
+        println("✅ No warnings!")
+    end
+    
+    # Data summary
+    println("\n📊 FINAL DATA SUMMARY:")
+    println("Energy bins: $n_bins from $(energy_edges[1]) to $(energy_edges[end]) GeV")
+    
+    # Observed data totals
+    println("\n📈 OBSERVED DATA TOTALS:")
+    println("  Neutrino observed total: $(sum(numu_observed_total)) events")
+    println("  Antineutrino observed total: $(sum(numubar_observed_total)) events")
+    
+    println("\n🔍 TOTAL COMPONENT VALIDATION:")
+    for component in expected_components
+        numu_sum = sum(numu_total[component])
+        numubar_sum = sum(numubar_total[component])
+        
+        status_numu = numu_sum > 0 ? "✅" : "⚠️"
+        status_numubar = numubar_sum > 0 ? "✅" : "⚠️"
+        
+        println("  $(component):")
+        println("    $status_numu Neutrino: $(numu_sum)")
+        println("    $status_numubar Antineutrino: $(numubar_sum)")
+    end
+    
+    # Check for critical failures
+    critical_components = ["NoOscillations_Signal", "Oscillated_Signal"]
+    critical_failures = 0
+    
+    for component in critical_components
+        if sum(numu_total[component]) ≤ 0
+            critical_failures += 1
+        end
+        if sum(numubar_total[component]) ≤ 0
+            critical_failures += 1
+        end
+    end
+    
+    if critical_failures > 0
+        println("\n❌ WARNING: $critical_failures critical signal components have zero total!")
+        println("This suggests a problem with the ROOT file structure or data extraction.")
+    else
+        println("\n✅ All critical signal components loaded successfully!")
+    end
+    
+    println("="^60)
+end
+
 function smearnorm(energies, probabilities, percent, width=10, e_scale=1.0, e_bias=0.0)
     """
     Apply energy resolution smearing to oscillation probabilities.
@@ -769,17 +1173,7 @@ function make_numu_predictions(params, physics, assets)
         
         # Rebin to detector energy bins
         quartile_data = assets.numu_data.quartiles[i]
-
         
-        println("🔍 Quartile $i debug:")
-        println("  NoOscillations_Signal: ", quartile_data["NoOscillations_Signal"])
-        println("  NoOscillations_Total_beam_bkg: ", quartile_data["NoOscillations_Total_beam_bkg"])
-        println("  Cosmic_bkg: ", quartile_data["Cosmic_bkg"])
-        println("  Oscillated_Total_pred: ", quartile_data["Oscillated_Total_pred"])
-        
-        # Check if they're actually zeros or just not loaded
-        println("  Sum of NoOscillations_Signal: ", sum(quartile_data["NoOscillations_Signal"]))
-        println("  Sum of Cosmic_bkg: ", sum(quartile_data["Cosmic_bkg"]))
             # Neutrino quartile
 
         p_rebinned = rebin_energy_spectrum(p_smeared, energy_grid, 0.5, 10.0, 
@@ -791,8 +1185,6 @@ function make_numu_predictions(params, physics, assets)
                      quartile_data["NoOscillations_Total_beam_bkg"] .+
                      quartile_data["Cosmic_bkg"]) 
         push!(predictions["numu"], prediction)
-        println("📊 NUMU Quartile $i prediction: ", prediction)
-        println("📊 NUMU Quartile $i NoOscillations_Total_beam_bkg: ", quartile_data["NoOscillations_Total_beam_bkg"])
         # Antineutrino quartile
         p_smeared_bar = smearnorm(energy_grid, p_nubar_survival, assets.numubar_smearing[i], 4,
                                 assets.numu_e_scale, assets.numu_e_bias)
@@ -806,7 +1198,7 @@ function make_numu_predictions(params, physics, assets)
                          quartile_data_bar["NoOscillations_Total_beam_bkg"] .+
                          quartile_data_bar["Cosmic_bkg"]) 
         push!(predictions["numubar"], prediction_bar)
-        println("   📊 NUMUBAR Quartile $i prediction: ", prediction_bar)
+      
     end
     
     return predictions
@@ -888,23 +1280,53 @@ function make_nue_predictions(params, physics, assets)
     
     return predictions
 end
-
 function get_forward_model(physics, assets)
-
     function forward_model(params)
         exp_events_numu = make_numu_predictions(params, physics, assets)
         exp_events_nue = make_nue_predictions(params, physics, assets)
         
-       
-        return (
-            numu = Poisson.(exp_events_numu),
-            nue = Poisson.(exp_events_nue)
-        )
+        # Flatten everything into a single vector
+        all_predictions = Vector{Float64}()
+        
+        # NUE segments - these should be Vector{Float64}
+        append!(all_predictions, exp_events_nue["nue"]["segment1"])
+        append!(all_predictions, exp_events_nue["nue"]["segment2"])
+        append!(all_predictions, exp_events_nue["nue"]["segment3"])
+        
+        # NUEBAR segments - these should be Vector{Float64}
+        append!(all_predictions, exp_events_nue["nuebar"]["segment1"])
+        append!(all_predictions, exp_events_nue["nuebar"]["segment2"])
+        append!(all_predictions, exp_events_nue["nuebar"]["segment3"])
+        
+        # NUMU data - check if it's nested or flat
+        numu_data = exp_events_numu["numu"]
+        if isa(numu_data, Vector{Vector{Float64}})
+            # If it's a vector of vectors, flatten it
+            for vec in numu_data
+                append!(all_predictions, vec)
+            end
+        else
+            # If it's already flat, just append
+            append!(all_predictions, numu_data)
+        end
+        
+        # NUMUBAR data - same treatment
+        numubar_data = exp_events_numu["numubar"]
+        if isa(numubar_data, Vector{Vector{Float64}})
+            # If it's a vector of vectors, flatten it
+            for vec in numubar_data
+                append!(all_predictions, vec)
+            end
+        else
+            # If it's already flat, just append
+            append!(all_predictions, numubar_data)
+        end
+        
+        # Return vector of Poisson distributions
+        return Poisson.(max.(all_predictions, 1e-10))
     end
     return forward_model
 end
-
-
 
 function get_plot_old(physics, assets)
     """Create plotting function for NOvA data and predictions"""
@@ -996,7 +1418,7 @@ end
 function get_plot(physics, assets)
 
     function plot(params)
-        f = Figure(resolution=(1200, 1000))  # Made taller to accommodate more data
+        f = Figure(resolution=(1400, 1200))  # Made wider to accommodate total plots
         
         # Get predictions
         numu_predictions = make_numu_predictions(params, physics, assets)
@@ -1023,7 +1445,7 @@ function get_plot(physics, assets)
             
             ax.xlabel = "Energy (GeV)"
             ax.ylabel = "Events"
-            axislegend(ax, position=:rt)
+            axislegend(ax, position=:rt, labelsize=4)
         end
 
         # Plot muon antineutrino disappearance by quartile
@@ -1047,13 +1469,70 @@ function get_plot(physics, assets)
 
             ax_bar.xlabel = "Energy (GeV)"
             ax_bar.ylabel = "Events"
-            axislegend(ax_bar, position=:rt)
+            axislegend(ax_bar, position=:rt, labelsize=4)
         end
         
-        # Plot electron neutrino appearance
-        ax_nue = Axis(f[3, 1:2], title="νμ → νe Appearance")
+        # NEW: Plot total muon neutrino disappearance (all quartiles combined)
+        ax_numu_total = Axis(f[1, 5], title="νμ Total (All Quartiles)")
         
-        # Plot electron neutrino appearance - 3 separate segments
+        # Sum observed data across all quartiles
+        observed_total_numu = sum([assets.numu_data.quartiles[i]["observed"] for i in 1:4])
+        
+        # Sum predicted data across all quartiles
+        predicted_total_numu = sum([numu_predictions["numu"][i] for i in 1:4])
+        predicted_total_numu_errors = sqrt.(max.(predicted_total_numu, 0))
+        
+        # Get total MC histogram (from assets.numu_data.total)
+        mc_total_numu = assets.numu_data.total["Oscillated_Total_pred"]
+        
+        energy_centers = (assets.numu_data.energy_edges[1:end-1] .+ 
+                        assets.numu_data.energy_edges[2:end]) ./ 2
+        
+        # Plot total components
+        scatter!(ax_numu_total, energy_centers, observed_total_numu, color=:black, 
+                label="Observed Total", markersize=8)
+        stairs!(ax_numu_total, energy_centers, mc_total_numu, color=:gray, 
+                linewidth=4, label="MC Total")
+        errorbars!(ax_numu_total, energy_centers, predicted_total_numu, 
+                predicted_total_numu_errors, color=:red, linewidth=3)
+        lines!(ax_numu_total, energy_centers, predicted_total_numu, color=:red, 
+            linewidth=3, label="Calculated Total")
+        
+        ax_numu_total.xlabel = "Energy (GeV)"
+        ax_numu_total.ylabel = "Events"
+        axislegend(ax_numu_total, position=:rt, labelsize=4)
+        
+        # NEW: Plot total muon antineutrino disappearance (all quartiles combined)
+        ax_numubar_total = Axis(f[2, 5], title="ν̄μ Total (All Quartiles)")
+        
+        # Sum observed data across all quartiles
+        observed_total_numubar = sum([assets.numubar_data.quartiles[i]["observed"] for i in 1:4])
+        
+        # Sum predicted data across all quartiles
+        predicted_total_numubar = sum([numu_predictions["numubar"][i] for i in 1:4])
+        predicted_total_numubar_errors = sqrt.(max.(predicted_total_numubar, 0))
+        
+        # Get total MC histogram (from assets.numubar_data.total)
+        mc_total_numubar = assets.numubar_data.total["Oscillated_Total_pred"]
+        
+        energy_centers = (assets.numubar_data.energy_edges[1:end-1] .+ 
+                        assets.numubar_data.energy_edges[2:end]) ./ 2
+        
+        # Plot total components
+        scatter!(ax_numubar_total, energy_centers, observed_total_numubar, color=:black, 
+                label="Observed Total", markersize=8)
+        stairs!(ax_numubar_total, energy_centers, mc_total_numubar, color=:gray, 
+                linewidth=4, label="MC Total")
+        errorbars!(ax_numubar_total, energy_centers, predicted_total_numubar, 
+                predicted_total_numubar_errors, color=:red, linewidth=3)
+        lines!(ax_numubar_total, energy_centers, predicted_total_numubar, color=:red, 
+            linewidth=3, label="Calculated Total")
+        
+        ax_numubar_total.xlabel = "Energy (GeV)"
+        ax_numubar_total.ylabel = "Events"
+        axislegend(ax_numubar_total, position=:rt, labelsize=4)
+        
+        # Plot electron neutrino appearance
         for seg in 1:3
             ax_nue = Axis(f[3, seg], title="νμ → νe Segment $seg")
             
@@ -1084,7 +1563,7 @@ function get_plot(physics, assets)
 
             ax_nue.xlabel = "Energy (GeV)"
             ax_nue.ylabel = "Events"
-            axislegend(ax_nue, position=:rt,labelsize=4)
+            axislegend(ax_nue, position=:rt, labelsize=4)
         end
         
         # Plot antineutrino appearance - 3 separate segments  
@@ -1118,9 +1597,8 @@ function get_plot(physics, assets)
 
             ax_nuebar.xlabel = "Energy (GeV)"
             ax_nuebar.ylabel = "Events"
-            axislegend(ax_nuebar, position=:rt,labelsize=4)
+            axislegend(ax_nuebar, position=:rt, labelsize=4)
         end
-        
         
         return f
     end
