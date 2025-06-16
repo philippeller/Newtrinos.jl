@@ -109,113 +109,180 @@ function get_assets(physics; datadir = @__DIR__)
 end
 
 function load_nue_data(data_file, mc_file, energy_edges)
-    """Load electron neutrino data with 3 segments"""
+    """Load electron neutrino data with 3 segments - robust version"""
     
-    # Find the correct key first
-    println("Available keys in data_file:")
-    data_keys = collect(keys(data_file))
-    println(data_keys)
+    println("=== LOADING NUE DATA ===")
     
-    # Look for neutrino data key
-    nue_key = nothing
-    for key in data_keys
-        key_str = string(key)
-        if occursin("nue", lowercase(key_str))
-            nue_key = key
-            println("Found nue key: ", key)
-            break
-        end
+    # Get neutrino data histogram
+    if !haskey(data_file, "neutrino_mode_nue")
+        error("Key 'neutrino_mode_nue' not found in data file. Available keys: $(keys(data_file))")
     end
     
-    if nue_key === nothing
-        # If no "nue" key found, try the first available key for debugging
-        nue_key = data_keys[1]
-        println("No 'nue' key found, using first key: ", nue_key)
-    end
+    data_hist = data_file["neutrino_mode_nue"]
     
-    # Read observed data histogram
-    data_hist = data_file[nue_key]
-    println("Type of data_hist: ", typeof(data_hist))
-    println("Keys in data_hist: ", keys(data_hist))
-    
-    # Extract data values - AVOID using .fN completely
-    if haskey(data_hist, :fArray)
+    # Extract observed data using robust method
+    if haskey(data_hist, :fSumw2)
+        data_values = data_hist[:fSumw2]
+        println("Using :fSumw2 for neutrino data")
+    elseif haskey(data_hist, :fN)
+        data_values = data_hist[:fN]
+        println("Using :fN for neutrino data")
+    elseif haskey(data_hist, :fArray)
         data_values = data_hist[:fArray]
-        println("Using symbol key :fArray")
-    elseif haskey(data_hist, "fArray")
-        data_values = data_hist["fArray"]
-        println("Using string key \"fArray\"")
+        println("Using :fArray for neutrino data")
     else
-        # Look for any array-like field
-        for key in keys(data_hist)
-            val = data_hist[key]
-            if isa(val, Vector) && length(val) > 20  # Assuming we need at least 21 elements
-                data_values = val
-                println("Using array field: ", key)
-                break
-            end
-        end
-        if !@isdefined(data_values)
-            error("Cannot find histogram data array. Available keys: $(keys(data_hist))")
-        end
+        error("Cannot find data in neutrino histogram. Available keys: $(keys(data_hist))")
     end
     
-    println("Length of data_values: ", length(data_values))
-    println("First few values: ", data_values[1:min(10, length(data_values))])
+    # Extract segments (matching Python logic)
+    observed1 = data_values[2:9]      # 8 elements
+    observed2 = data_values[11:18]    # 8 elements  
+    observed3 = vcat(data_values[19:21], zeros(5))  # 8 elements: 3 data + 5 zeros
     
-    # Extract segments (make sure we have enough data)
-    if length(data_values) >= 21
-        observed1 = data_values[2:9]
-        observed2 = data_values[11:18]  
-        observed3 = vcat(data_values[19:21], zeros(5))
-    else
-        error("Not enough data values. Expected at least 21, got $(length(data_values))")
-    end
+    # Load Monte Carlo components for FHC (Forward Horn Current)
+    mc_components = Dict{String, Vector{Float64}}()  # Changed from Vector{Vector{Float64}} to Vector{Float64}
     
-    # Load Monte Carlo components
-    mc_components = Dict{String, Vector{Vector{Float64}}}()
-    
-    println("\nProcessing MC file...")
-    mc_keys = collect(keys(mc_file))
-    println("Available MC keys: ", mc_keys)
-    
-    for key in mc_keys
-        key_str = string(key)
-        if occursin("prediction", lowercase(key_str)) && occursin("nue", lowercase(key_str))
-            println("Processing MC key: ", key)
-            component_name = replace(key_str, r"_\d+$" => "")
-            mc_hist = mc_file[key]
+    if haskey(mc_file, "prediction_components_nue_fhc")
+        mc_dir = mc_file["prediction_components_nue_fhc"]
+        println("Found MC directory: prediction_components_nue_fhc")
+        
+        for component_name in keys(mc_dir)
+            println("Processing neutrino MC component: ", component_name)
+            component_hist = mc_dir[component_name]
             
-            # Extract MC values the same way - NO .fN access
-            if haskey(mc_hist, :fArray)
-                mc_values = mc_hist[:fArray]
-            elseif haskey(mc_hist, "fArray")
-                mc_values = mc_hist["fArray"]
+            # Extract MC data - try multiple fields in order of preference
+            mc_values = nothing
+            
+            if haskey(component_hist, :fN) && length(component_hist[:fN]) > 0
+                mc_values = component_hist[:fN]
+                println("   ✅ Using :fN field, length: $(length(mc_values))")
+            elseif haskey(component_hist, :fSumw2) && length(component_hist[:fSumw2]) > 0
+                mc_values = component_hist[:fSumw2]
+                println("   ✅ Using :fSumw2 field, length: $(length(mc_values))")
+            elseif haskey(component_hist, "fN") && length(component_hist["fN"]) > 0
+                mc_values = component_hist["fN"]
+                println("   ✅ Using \"fN\" field, length: $(length(mc_values))")
+            elseif haskey(component_hist, "fSumw2") && length(component_hist["fSumw2"]) > 0
+                mc_values = component_hist["fSumw2"]
+                println("   ✅ Using \"fSumw2\" field, length: $(length(mc_values))")
+            elseif haskey(component_hist, :fArray) && length(component_hist[:fArray]) > 0
+                mc_values = component_hist[:fArray]
+                println("   ✅ Using :fArray field, length: $(length(mc_values))")
             else
-                # Look for any vector field
-                mc_values = nothing
-                for mc_key in keys(mc_hist)
-                    val = mc_hist[mc_key]
-                    if isa(val, Vector) && length(val) > 20
-                        mc_values = val
-                        break
-                    end
-                end
-                if mc_values === nothing
-                    println("Warning: Cannot find MC data for key $key")
-                    continue
-                end
+                println("   ❌ No suitable data field found for neutrino component ", component_name)
+                continue
             end
             
             if length(mc_values) >= 21
-                mc_components[component_name * "1"] = mc_values[1:8]
-                mc_components[component_name * "2"] = mc_values[9:16]
-                mc_components[component_name * "3"] = vcat(mc_values[17:21], zeros(3))
+                clean_name = string(component_name)
+                
+                # Create segments matching Python indexing
+                mc_components[clean_name * "1"] = mc_values[1:8]
+                mc_components[clean_name * "2"] = mc_values[9:16]
+                mc_components[clean_name * "3"] = vcat(mc_values[17:21], zeros(3))  # 8 elements: 5 data + 3 zeros
+                
+                println("   ✅ Created: $(clean_name)1, $(clean_name)2, $(clean_name)3")
             else
-                println("Warning: MC values too short for key $key")
+                println("   ❌ MC values too short: $(length(mc_values)) (expected >= 21)")
             end
         end
+    else
+        println("Warning: 'prediction_components_nue_fhc' not found in MC file")
+        println("Available MC keys: ", keys(mc_file))
     end
+    
+    println("Created NUE MC components: $(keys(mc_components))")
+    
+    return (
+        observed = (segment1 = observed1, segment2 = observed2, segment3 = observed3),
+        mc_components = mc_components,
+        energy_edges = energy_edges
+    )
+end
+function load_nuebar_data(data_file, mc_file, energy_edges)
+    """Load antineutrino data with 3 segments - robust version"""
+    
+    println("=== LOADING NUEBAR DATA ===")
+    
+    # Get antineutrino data histogram
+    if !haskey(data_file, "antineutrino_mode_nue")
+        error("Key 'antineutrino_mode_nue' not found in data file. Available keys: $(keys(data_file))")
+    end
+    
+    data_hist = data_file["antineutrino_mode_nue"]
+    
+    # Extract observed data using robust method (same as nue)
+    if haskey(data_hist, :fSumw2)
+        data_values = data_hist[:fSumw2]
+        println("Using :fSumw2 for antineutrino data")
+    elseif haskey(data_hist, :fN)
+        data_values = data_hist[:fN]
+        println("Using :fN for antineutrino data")
+    elseif haskey(data_hist, :fArray)
+        data_values = data_hist[:fArray]
+        println("Using :fArray for antineutrino data")
+    else
+        error("Cannot find data in antineutrino histogram. Available keys: $(keys(data_hist))")
+    end
+    
+    # Extract segments (matching Python logic exactly)
+    observed1 = data_values[2:9]      # 8 elements
+    observed2 = data_values[11:18]    # 8 elements  
+    observed3 = vcat(data_values[19:21], zeros(5))  # 8 elements: 3 data + 5 zeros
+    
+    # Load Monte Carlo components for RHC (Reverse Horn Current)
+    mc_components = Dict{String, Vector{Float64}}()  # Changed from Vector{Vector{Float64}} to Vector{Float64}
+    
+    if haskey(mc_file, "prediction_components_nue_rhc")
+        mc_dir = mc_file["prediction_components_nue_rhc"]
+        println("Found MC directory: prediction_components_nue_rhc")
+        
+        for component_name in keys(mc_dir)
+            println("Processing antineutrino MC component: ", component_name)
+            component_hist = mc_dir[component_name]
+            
+            # Extract MC data - try multiple fields in order of preference
+            mc_values = nothing
+            
+            if haskey(component_hist, :fN) && length(component_hist[:fN]) > 0
+                mc_values = component_hist[:fN]
+                println("   ✅ Using :fN field, length: $(length(mc_values))")
+            elseif haskey(component_hist, :fSumw2) && length(component_hist[:fSumw2]) > 0
+                mc_values = component_hist[:fSumw2]
+                println("   ✅ Using :fSumw2 field, length: $(length(mc_values))")
+            elseif haskey(component_hist, "fN") && length(component_hist["fN"]) > 0
+                mc_values = component_hist["fN"]
+                println("   ✅ Using \"fN\" field, length: $(length(mc_values))")
+            elseif haskey(component_hist, "fSumw2") && length(component_hist["fSumw2"]) > 0
+                mc_values = component_hist["fSumw2"]
+                println("   ✅ Using \"fSumw2\" field, length: $(length(mc_values))")
+            elseif haskey(component_hist, :fArray) && length(component_hist[:fArray]) > 0
+                mc_values = component_hist[:fArray]
+                println("   ✅ Using :fArray field, length: $(length(mc_values))")
+            else
+                println("   ❌ No suitable data field found for antineutrino component ", component_name)
+                continue
+            end
+            
+            if length(mc_values) >= 21
+                clean_name = string(component_name)
+                
+                # Create segments matching Python indexing
+                mc_components[clean_name * "1"] = mc_values[1:8]
+                mc_components[clean_name * "2"] = mc_values[9:16]
+                mc_components[clean_name * "3"] = vcat(mc_values[17:21], zeros(3))  # 8 elements: 5 data + 3 zeros
+
+                println("   ✅ Created: $(clean_name)1, $(clean_name)2, $(clean_name)3")
+            else
+                println("   ❌ MC values too short: $(length(mc_values)) (expected >= 21)")
+            end
+        end
+    else
+        println("Warning: 'prediction_components_nue_rhc' not found in MC file")
+        println("Available MC keys: ", keys(mc_file))
+    end
+    
+    println("Created NUEBAR MC components: $(keys(mc_components))")
     
     return (
         observed = (segment1 = observed1, segment2 = observed2, segment3 = observed3),
@@ -224,39 +291,6 @@ function load_nue_data(data_file, mc_file, energy_edges)
     )
 end
 
-function load_nuebar_data(data_file, mc_file, energy_edges)
-    """Load electron antineutrino data with 3 segments"""
-    
-    # Read observed data from ROOT histogram
-    data_hist = data_file["antineutrino_mode_nue;1"]  # Note the ;1 from Python code
-    data_values = data_hist.fN > 0 ? data_hist.fArray : data_hist.fArray[1:data_hist.fN]
-    
-    observed1 = data_values[2:9]
-    observed2 = data_values[11:18]
-    observed3 = vcat(data_values[19:21], zeros(5))
-    
-    # Load Monte Carlo components
-    mc_components = Dict{String, Vector{Vector{Float64}}}()
-    
-    # Get all keys from MC file for nue RHC predictions
-    for key in keys(mc_file)
-        if startswith(string(key), "prediction_components_nue_rhc")
-            component_name = replace(string(key), r"_\d+$" => "")
-            mc_hist = mc_file[key]
-            mc_values = mc_hist.fN > 0 ? mc_hist.fArray : mc_hist.fArray[1:mc_hist.fN]
-            
-            mc_components[component_name * "1"] = mc_values[1:8]
-            mc_components[component_name * "2"] = mc_values[9:16]
-            mc_components[component_name * "3"] = vcat(mc_values[17:21], zeros(3))
-        end
-    end
-    
-    return (
-        observed = (segment1 = observed1, segment2 = observed2, segment3 = observed3),
-        mc_components = mc_components,
-        energy_edges = energy_edges
-    )
-end
 function load_numu_data(data_file, mc_file)
     """Load muon neutrino data by quartiles"""
     
@@ -297,14 +331,6 @@ function load_numu_data(data_file, mc_file)
         println("   Constructed edges: ", energy_edges)
     end
     
-    # Final fallback if we still don't have energy edges
-    if energy_edges === nothing
-        println("❌ Could not extract energy edges, using default")
-        energy_edges = collect(range(0.0, 5.0, length=20))  # 19 bins based on exploration
-    end
-    
-    # From exploration: we have 19 bins and data arrays with 21 elements
-    # The data structure is likely: [underflow, bin1, bin2, ..., bin19, overflow]
     n_bins = length(energy_edges) - 1  # This should be 19
     data_length = 21  # Based on your debug output
     
@@ -382,10 +408,34 @@ function load_numu_data(data_file, mc_file)
             mc_dir = mc_file[quartile_mc_key]
             
             if isa(mc_dir, UnROOT.ROOTDirectory)
+              
                 # MC is a directory with components
                 for component_name in keys(mc_dir)
                     component_hist = mc_dir[component_name]
-                    
+               
+                if haskey(component_hist, :fSumw2)
+                    raw_mc_data = component_hist[:fSumw2]
+                    println("  fSumw2 raw length: $(length(raw_mc_data))")
+                    println("  fSumw2 raw sum: $(sum(raw_mc_data))")
+                    println("  fSumw2 raw data: $(raw_mc_data)")
+                     
+                elseif haskey(component_hist, "fSumw2")
+                    raw_mc_data = component_hist["fSumw2"]
+                    println("  fSumw2 (string) raw length: $(length(raw_mc_data))")
+                    println("  fSumw2 (string) raw sum: $(sum(raw_mc_data))")
+                    println("  fSumw2 (string) raw data: $(raw_mc_data)")
+                  
+                else
+                    println("  ❌ No fSumw2 found!")
+                    # Try other possible keys
+                    if haskey(component_hist, :fArray)
+                        println("  Trying fArray: $(component_hist[:fArray])")
+                    end
+                    if haskey(component_hist, :fN)
+                        println("  fN value: $(component_hist[:fN])")
+                    end
+                end
+
                     # Extract MC data using same logic as observed data
                     mc_data = nothing
                     if haskey(component_hist, :fSumw2)
@@ -412,7 +462,11 @@ function load_numu_data(data_file, mc_file)
                     end
                     
                     quartile_data[string(component_name)] = mc_data
-                    println("Quartile $(q), MC component $(component_name): length=$(length(mc_data))")
+                    println("  📊 Loaded $(component_name): length=$(length(mc_data)), sum=$(sum(mc_data))")
+                    if sum(mc_data) == 0.0 && length(mc_data) > 0
+                        println("    ⚠️  $(component_name) is all zeros! Raw data was: $(raw_mc_data[1:min(5,length(raw_mc_data))])")
+                    end
+                  
                 end
             else
                 # Single histogram case
@@ -494,6 +548,7 @@ function load_numu_data(data_file, mc_file)
                         raw_mc_data = component_hist[:fSumw2]
                         if length(raw_mc_data) == data_length
                             quartile_data_bar[string(component_name)] = raw_mc_data[data_start_idx:data_end_idx]
+                            println(component_name, " data length: ", length(raw_mc_data))
                         else
                             quartile_data_bar[string(component_name)] = raw_mc_data[1:min(n_bins, length(raw_mc_data))]
                         end
@@ -501,6 +556,7 @@ function load_numu_data(data_file, mc_file)
                         raw_mc_data = component_hist["fSumw2"]
                         if length(raw_mc_data) == data_length
                             quartile_data_bar[string(component_name)] = raw_mc_data[data_start_idx:data_end_idx]
+                            println(component_name, " data length: ", length(raw_mc_data))
                         else
                             quartile_data_bar[string(component_name)] = raw_mc_data[1:min(n_bins, length(raw_mc_data))]
                         end
@@ -526,7 +582,8 @@ function load_numu_data(data_file, mc_file)
         else
             println("Warning: Antineutrino MC key $(quartile_mc_key_bar) not found")
         end
-        
+        # After loading MC components for each quartile, add this:
+       
         push!(numubar_quartiles, quartile_data_bar)
         
         # Accumulate antineutrino totals
@@ -654,7 +711,7 @@ function rebin_energy_spectrum(input_data, edges, e_min=0.5, e_max=4.5, num_bins
     return new_counts
 end
 
-function fast_predictions_new(signal, backgrounds, norm_factor; condense_to_bin3=false)
+function fast_predictions_new(signal, backgrounds, norm_factor=1; condense_to_bin3=false)
     """
     Efficiently combine signal and background components with normalization.
     Option to condense all values into bin 3 for systematic uncertainties.
@@ -681,7 +738,9 @@ end
 
 function make_numu_predictions(params, physics, assets)
     """Calculate muon neutrino disappearance predictions for all quartiles"""
-    
+
+    # At the beginning, check what you're getting
+  
     L = [assets.L]
     density = [assets.density]
     
@@ -704,12 +763,25 @@ function make_numu_predictions(params, physics, assets)
     predictions["numubar"] = []
     
     for i in 1:4
-        # Neutrino quartile
+
         p_smeared = smearnorm(energy_grid, p_nu_survival, assets.numu_smearing[i], 4, 
                             assets.numu_e_scale, assets.numu_e_bias)
         
         # Rebin to detector energy bins
         quartile_data = assets.numu_data.quartiles[i]
+
+        
+        println("🔍 Quartile $i debug:")
+        println("  NoOscillations_Signal: ", quartile_data["NoOscillations_Signal"])
+        println("  NoOscillations_Total_beam_bkg: ", quartile_data["NoOscillations_Total_beam_bkg"])
+        println("  Cosmic_bkg: ", quartile_data["Cosmic_bkg"])
+        println("  Oscillated_Total_pred: ", quartile_data["Oscillated_Total_pred"])
+        
+        # Check if they're actually zeros or just not loaded
+        println("  Sum of NoOscillations_Signal: ", sum(quartile_data["NoOscillations_Signal"]))
+        println("  Sum of Cosmic_bkg: ", sum(quartile_data["Cosmic_bkg"]))
+            # Neutrino quartile
+
         p_rebinned = rebin_energy_spectrum(p_smeared, energy_grid, 0.5, 10.0, 
                                          length(quartile_data["observed"]))
         p_rebinned ./= sum(p_rebinned)  # Normalize
@@ -719,7 +791,8 @@ function make_numu_predictions(params, physics, assets)
                      quartile_data["NoOscillations_Total_beam_bkg"] .+
                      quartile_data["Cosmic_bkg"]) 
         push!(predictions["numu"], prediction)
-        
+        println("📊 NUMU Quartile $i prediction: ", prediction)
+        println("📊 NUMU Quartile $i NoOscillations_Total_beam_bkg: ", quartile_data["NoOscillations_Total_beam_bkg"])
         # Antineutrino quartile
         p_smeared_bar = smearnorm(energy_grid, p_nubar_survival, assets.numubar_smearing[i], 4,
                                 assets.numu_e_scale, assets.numu_e_bias)
@@ -733,6 +806,7 @@ function make_numu_predictions(params, physics, assets)
                          quartile_data_bar["NoOscillations_Total_beam_bkg"] .+
                          quartile_data_bar["Cosmic_bkg"]) 
         push!(predictions["numubar"], prediction_bar)
+        println("   📊 NUMUBAR Quartile $i prediction: ", prediction_bar)
     end
     
     return predictions
@@ -781,6 +855,9 @@ function make_nue_predictions(params, physics, assets)
     predictions = Dict{String, Dict{String, Vector{Float64}}}()
     predictions["nue"] = Dict{String, Vector{Float64}}()
     predictions["nuebar"] = Dict{String, Vector{Float64}}()
+        # Add this line before the error at line 730
+    println("Available NUE MC keys: ", keys(assets.nue_data.mc_components))
+    println("Looking for key: Wrong_sign_bkg1")
     
     for segment in 1:3
         # Neutrino segment
@@ -791,7 +868,7 @@ function make_nue_predictions(params, physics, assets)
         ]
         
         condense_mode = (segment == 3)
-        prediction_nu = fast_predictions_new(signal_nue, backgrounds_nu, params["nova_norm"],
+        prediction_nu = fast_predictions_new(signal_nue, backgrounds_nu,
                                            condense_to_bin3=condense_mode)
         
         predictions["nue"]["segment$(segment)"] = prediction_nu
@@ -803,7 +880,7 @@ function make_nue_predictions(params, physics, assets)
             assets.nuebar_data.mc_components["Cosmic_bkg$(segment)"]
         ]
         
-        prediction_nubar = fast_predictions_new(signal_nuebar, backgrounds_nubar, params["nova_norm"],
+        prediction_nubar = fast_predictions_new(signal_nuebar, backgrounds_nubar, 
                                               condense_to_bin3=condense_mode)
         
         predictions["nuebar"]["segment$(segment)"] = prediction_nubar
@@ -829,10 +906,10 @@ end
 
 
 
-function get_plot(physics, assets)
+function get_plot_old(physics, assets)
     """Create plotting function for NOvA data and predictions"""
     
-    function plot(params)
+    function plot_old(params)
         f = Figure(resolution=(1200, 800))
         
         # Get predictions
@@ -855,9 +932,26 @@ function get_plot(physics, assets)
             ax.ylabel = "Events"
             axislegend(ax)
         end
+
+         # Plot muon antineutrino disappearance by quartile
+        for i in 1:4
+            ax_bar = Axis(f[2, i], title="ν̄μ Quartile $(i)")
+
+            observed = assets.numubar_data.quartiles[i]["observed"]
+            predicted = numu_predictions["numubar"][i]
+            energy_centers = (assets.numubar_data.energy_edges[1:end-1] .+ 
+                            assets.numubar_data.energy_edges[2:end]) ./ 2
+
+            scatter!(ax_bar, energy_centers, observed, color=:black, label="Observed")
+            lines!(ax_bar, energy_centers, predicted, color=:red, label="Predicted")
+
+            ax_bar.xlabel = "Energy (GeV)"
+            ax_bar.ylabel = "Events"
+            axislegend(ax_bar)
+        end
         
         # Plot electron neutrino appearance
-        ax_nue = Axis(f[2, 1:2], title="νμ → νe Appearance")
+        ax_nue = Axis(f[3, 1:2], title="νμ → νe Appearance")
         
         # Combine all segments
         all_observed_nue = vcat(assets.nue_data.observed.segment1,
@@ -876,7 +970,7 @@ function get_plot(physics, assets)
         axislegend(ax_nue)
         
         # Plot antineutrino appearance
-        ax_nuebar = Axis(f[2, 3:4], title="ν̄μ → ν̄e Appearance")
+        ax_nuebar = Axis(f[3, 3:4], title="ν̄μ → ν̄e Appearance")
         
         all_observed_nuebar = vcat(assets.nuebar_data.observed.segment1,
                                   assets.nuebar_data.observed.segment2,
@@ -897,6 +991,144 @@ function get_plot(physics, assets)
     
     return plot
 end
+
+
+function get_plot(physics, assets)
+
+    function plot(params)
+        f = Figure(resolution=(1200, 1000))  # Made taller to accommodate more data
+        
+        # Get predictions
+        numu_predictions = make_numu_predictions(params, physics, assets)
+        nue_predictions = make_nue_predictions(params, physics, assets)
+        
+        # Plot muon neutrino disappearance by quartile
+        for i in 1:4
+            ax = Axis(f[1, i], title="νμ Quartile $(i)")
+            
+            observed = assets.numu_data.quartiles[i]["observed"]
+            predicted = numu_predictions["numu"][i]
+            predicted_errors = sqrt.(max.(predicted, 0))  # Poisson errors for predictions
+            energy_centers = (assets.numu_data.energy_edges[1:end-1] .+ 
+                            assets.numu_data.energy_edges[2:end]) ./ 2
+            
+            # Get MC histogram data directly
+            mc_histogram = assets.numu_data.quartiles[i]["Oscillated_Total_pred"]
+            
+            # Plot ALL THREE components
+            scatter!(ax, energy_centers, observed, color=:black, label="Observed Data", markersize=6)
+            stairs!(ax, energy_centers, mc_histogram, color=:gray, linewidth=3, label="MC Histogram")
+            errorbars!(ax, energy_centers, predicted, predicted_errors, color=:red, linewidth=2)
+            lines!(ax, energy_centers, predicted, color=:red, linewidth=2, label="Calculated Prediction")
+            
+            ax.xlabel = "Energy (GeV)"
+            ax.ylabel = "Events"
+            axislegend(ax, position=:rt)
+        end
+
+        # Plot muon antineutrino disappearance by quartile
+        for i in 1:4
+            ax_bar = Axis(f[2, i], title="ν̄μ Quartile $(i)")
+
+            observed = assets.numubar_data.quartiles[i]["observed"]
+            predicted = numu_predictions["numubar"][i]
+            predicted_errors = sqrt.(max.(predicted, 0))  # Poisson errors for predictions
+            energy_centers = (assets.numubar_data.energy_edges[1:end-1] .+ 
+                            assets.numubar_data.energy_edges[2:end]) ./ 2
+
+            # Get MC histogram data directly for numubar
+            mc_histogram = assets.numubar_data.quartiles[i]["Oscillated_Total_pred"]
+
+            # Plot ALL THREE components
+            scatter!(ax_bar, energy_centers, observed, color=:black, label="Observed Data", markersize=6)
+            stairs!(ax_bar, energy_centers, mc_histogram, color=:gray, linewidth=3, label="MC Histogram")
+            errorbars!(ax_bar, energy_centers, predicted, predicted_errors, color=:red, linewidth=2)
+            lines!(ax_bar, energy_centers, predicted, color=:red, linewidth=2, label="Calculated Prediction")
+
+            ax_bar.xlabel = "Energy (GeV)"
+            ax_bar.ylabel = "Events"
+            axislegend(ax_bar, position=:rt)
+        end
+        
+        # Plot electron neutrino appearance
+        ax_nue = Axis(f[3, 1:2], title="νμ → νe Appearance")
+        
+        # Plot electron neutrino appearance - 3 separate segments
+        for seg in 1:3
+            ax_nue = Axis(f[3, seg], title="νμ → νe Segment $seg")
+            
+            # Get data for this segment
+            if seg == 1
+                observed_nue = assets.nue_data.observed.segment1
+                predicted_nue = nue_predictions["nue"]["segment1"]
+                mc_nue = assets.nue_data.mc_components["Total_pred1"]
+            elseif seg == 2
+                observed_nue = assets.nue_data.observed.segment2
+                predicted_nue = nue_predictions["nue"]["segment2"]
+                mc_nue = assets.nue_data.mc_components["Total_pred2"]
+            else # seg == 3
+                observed_nue = assets.nue_data.observed.segment3
+                predicted_nue = nue_predictions["nue"]["segment3"]
+                mc_nue = assets.nue_data.mc_components["Total_pred3"]
+            end
+            
+            predicted_nue_errors = sqrt.(max.(predicted_nue, 0))  # Poisson errors for predictions
+            energy_centers = (assets.nue_data.energy_edges[1:end-1] .+ assets.nue_data.energy_edges[2:end]) ./ 2
+        
+            energy_centers_m = energy_centers .- 0.25  # Adjust for histogram centering
+            # Plot ALL THREE components for this segment
+            scatter!(ax_nue, energy_centers, observed_nue, color=:black, label="Observed Data", markersize=6)
+            stairs!(ax_nue, energy_centers_m, mc_nue, color=:gray, linewidth=3, label="MC Histogram")
+            errorbars!(ax_nue, energy_centers, predicted_nue, predicted_nue_errors, color=:blue, linewidth=2)
+            lines!(ax_nue, energy_centers, predicted_nue, color=:blue, linewidth=2, label="Calculated Prediction")
+
+            ax_nue.xlabel = "Energy (GeV)"
+            ax_nue.ylabel = "Events"
+            axislegend(ax_nue, position=:rt,labelsize=4)
+        end
+        
+        # Plot antineutrino appearance - 3 separate segments  
+        for seg in 1:3
+            ax_nuebar = Axis(f[4, seg], title="ν̄μ → ν̄e Segment $seg")
+            
+            # Get data for this segment
+            if seg == 1
+                observed_nuebar = assets.nuebar_data.observed.segment1
+                predicted_nuebar = nue_predictions["nuebar"]["segment1"]
+                mc_nuebar = assets.nuebar_data.mc_components["Total_pred1"]
+            elseif seg == 2
+                observed_nuebar = assets.nuebar_data.observed.segment2
+                predicted_nuebar = nue_predictions["nuebar"]["segment2"]
+                mc_nuebar = assets.nuebar_data.mc_components["Total_pred2"]
+            else # seg == 3
+                observed_nuebar = assets.nuebar_data.observed.segment3
+                predicted_nuebar = nue_predictions["nuebar"]["segment3"]
+                mc_nuebar = assets.nuebar_data.mc_components["Total_pred3"]
+            end
+            
+            predicted_nuebar_errors = sqrt.(max.(predicted_nuebar, 0))  # Poisson errors for predictions
+            energy_centers = (assets.nuebar_data.energy_edges[1:end-1] .+ assets.nuebar_data.energy_edges[2:end]) ./ 2
+            energy_centers_m = energy_centers .- 0.25  # Adjust for histogram centering
+
+            # Plot ALL THREE components for this segment
+            scatter!(ax_nuebar, energy_centers, observed_nuebar, color=:black, label="Observed Data", markersize=6)
+            stairs!(ax_nuebar, energy_centers_m, mc_nuebar, color=:gray, linewidth=3, label="MC Histogram")
+            errorbars!(ax_nuebar, energy_centers, predicted_nuebar, predicted_nuebar_errors, color=:green, linewidth=2)
+            lines!(ax_nuebar, energy_centers, predicted_nuebar, color=:green, linewidth=2, label="Calculated Prediction")
+
+            ax_nuebar.xlabel = "Energy (GeV)"
+            ax_nuebar.ylabel = "Events"
+            axislegend(ax_nuebar, position=:rt,labelsize=4)
+        end
+        
+        
+        return f
+    end
+
+ return plot
+
+end    
+
 
 end  # module Nova
 
