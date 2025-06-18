@@ -225,12 +225,12 @@ function get_priors(cfg::Darkdim_Lambda)
     pop!(priors, :Δm²₂₁)
     pop!(priors, :Δm²₃₁)
     priors[:Darkdim_radius] = LogUniform(ftype(1e-1),ftype(10))
-    priors[:ca1] = Uniform(ftype(1e-7), ftype(10))
-    priors[:ca2] = Uniform(ftype(1e-7), ftype(10))
-    priors[:ca3] = Uniform(ftype(1e-7), ftype(10))
-    priors[:λ₁] = Uniform(ftype(0), ftype(5))
-    priors[:λ₂] = Uniform(ftype(0), ftype(5))
-    priors[:λ₃] = Uniform(ftype(0), ftype(5))
+    priors[:ca1] = Uniform(ftype(1e-5), ftype(10))
+    priors[:ca2] = Uniform(ftype(1e-5), ftype(10))
+    priors[:ca3] = Uniform(-ftype(10), -ftype(1e-5))
+    priors[:λ₁] = Uniform(ftype(0), ftype(10))
+    priors[:λ₂] = Uniform(ftype(0), ftype(10))
+    priors[:λ₃] = Uniform(ftype(0), ftype(10))
     priors = NamedTuple(priors)
     NamedTuple(priors)
 end
@@ -292,7 +292,7 @@ function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti
     tmp.vectors, tmp.values
 end   
 
-function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, interactionv::SI)
+function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, interaction::SI)
     H_mat = zeros(typeof(e), size(H_eff))
     if anti
         H_mat[1,1] -= A * layer.p_density * 2 * e * 1e9
@@ -459,7 +459,8 @@ end
 function get_osc_prob(cfg::OscillationConfig)
 
     function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false)
-        U, h = get_matrices(cfg.flavour)(params)
+        U, h_raw = get_matrices(cfg.flavour)(params)
+        h = h_raw .- minimum(h_raw)
         Uc = anti ? conj.(U) : U
     
         U, h, rest = select(Uc, h, cfg.states)
@@ -472,7 +473,8 @@ function get_osc_prob(cfg::OscillationConfig)
     end
 
     function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
-        U, h = get_matrices(cfg.flavour)(params)
+        U, h_raw = get_matrices(cfg.flavour)(params)
+        h = h_raw .- minimum(h_raw)
         Uc = anti ? conj.(U) : U
     
         U, h, rest = select(Uc, h, cfg.states)
