@@ -13,7 +13,7 @@ export Path
 export Decoherent, Damping, Basic
 export All, Cut
 export Vacuum, SI, NSI
-export ThreeFlavour, ThreeFlavourXYCP, Sterile, ADD
+export ThreeFlavour, Sterile, ADD
 export OscillationConfig
 export configure
 
@@ -67,9 +67,6 @@ abstract type FlavourModel end
 @kwdef struct ThreeFlavour <: FlavourModel 
     ordering::Symbol = :NO
 end
-@kwdef struct ThreeFlavourXYCP <: FlavourModel
-    three_flavour::ThreeFlavour = ThreeFlavour()
-end
 @kwdef struct Sterile <: FlavourModel
     three_flavour::ThreeFlavour = ThreeFlavour()
 end
@@ -77,6 +74,21 @@ end
     three_flavour::ThreeFlavour = ThreeFlavour()
     N_KK::Int = 5
 end
+@kwdef struct NND <: FlavourModel    
+    three_flavour::ThreeFlavour = ThreeFlavour()
+    N_KK::Int = 5
+end
+
+@kwdef struct UED <: FlavourModel
+    three_flavour::ThreeFlavour = ThreeFlavour()
+    N_KK::Int = 5
+end
+
+@kwdef struct UED_BLKT <: FlavourModel
+    three_flavour::ThreeFlavour = ThreeFlavour()
+    N_KK::Int = 5
+end
+
 
 @kwdef struct OscillationConfig{F<:FlavourModel, I<:InteractionModel, P<:PropagationModel, S<:StateSelector}
     flavour::F = ThreeFlavour()
@@ -145,24 +157,6 @@ function get_priors(cfg::ThreeFlavour)
     NamedTuple(priors)
 end
 
-function get_params(cfg::ThreeFlavourXYCP)
-    std = get_params(cfg.three_flavour)
-    params = OrderedDict{Symbol, Any}(pairs(std))
-    delete!(params, :δCP)
-    params[:δCPshell] = [1., 0.]
-    #params[:δCPy] = 0.
-    NamedTuple(params)
-end
-
-function get_priors(cfg::ThreeFlavourXYCP)
-    std = get_priors(cfg.three_flavour)
-    priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    delete!(priors, :δCP)
-    priors[:δCPshell] = MvNormal([1,1])
-    #priors[:δCPy] = Normal(0., 1.)
-    NamedTuple(priors)
-end
-
 function get_params(cfg::Sterile)
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
@@ -175,14 +169,14 @@ end
 
 function get_priors(cfg::Sterile)
     std = get_priors(cfg.three_flavour)
-    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors = OrderedDict(pairs(std))
     priors[:Δm²₄₁] = Uniform(0.1, 10.)
     priors[:θ₁₄] = Uniform(0., 1.)
     priors[:θ₂₄] = Uniform(0., 1.)
     priors[:θ₃₄] = Uniform(0., 1.)
     NamedTuple(priors)
 end
-    
+
 function get_params(cfg::ADD)
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
@@ -193,19 +187,72 @@ end
 
 function get_priors(cfg::ADD)
     std = get_priors(cfg.three_flavour)
+    priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
     priors[:ADD_radius] = LogUniform(ftype(1e-3),ftype(1))
     NamedTuple(priors)
 end
-
    
+function get_params(cfg::NND)  
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:m₀] = ftype(0.01)
+    params[:N] = ftype(1)
+    params[:r] = ftype(1)
+    NamedTuple(params)
+end
+
+function get_priors(cfg::NND) 
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict(pairs(std))
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
+    priors[:N] = LogUniform(ftype(1),ftype(100))
+    priors[:r] = LogUniform(ftype(0),ftype(1))
+    NamedTuple(priors)
+end
+
+function get_params(cfg::UED)
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:inv_R] = ftype(1.0) # compactifcation scale, 1/R
+    # params[:inv_R] = ftype(1000.0) 
+    return NamedTuple(params)
+end
+
+function get_priors(cfg::UED)
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:inv_R] = LogUniform(ftype(1e-2), ftype(10))
+    # priors[:inv_R] = LogUniform(ftype(100), ftype(10000))
+    return NamedTuple(priors)
+end
+
+function get_params(cfg::UED_BLKT)
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:inv_R] = ftype(1000.0) 
+    #params[:inv_R] = ftype(1.0)
+    params[:phi_01] = ftype(0.0) # BLKT-induced mixing angle between n=0 and n=1 towers (Default to zero, minimal UED)
+    return NamedTuple(params)
+end
+
+function get_priors(cfg::UED_BLKT)
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:inv_R] = LogUniform(ftype(100), ftype(10000))
+    #priors[:inv_R] = LogUniform(ftype(1e-2), ftype(10))
+    priors[:phi_01] = Uniform(ftype(-2.5), ftype(2.5))
+    return NamedTuple(priors)
+end
+
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
+    #T = ftype
+
     U1 = SMatrix{3,3}(one(T), zero(T), zero(T), zero(T), cos(params.θ₂₃), -sin(params.θ₂₃), zero(T), sin(params.θ₂₃), cos(params.θ₂₃))
-    T = typeof(params.θ₁₃)
-    U2 = SMatrix{3,3}(cos(params.θ₁₃), zero(T), -sin(params.θ₁₃)*cis(params.δCP), zero(T), one(T), zero(T), sin(params.θ₁₃)*cis(-params.δCP), zero(T), cos(params.θ₁₃))
-    T = typeof(params.θ₁₂)
+    U2 = SMatrix{3,3}(cos(params.θ₁₃), zero(T), -sin(params.θ₁₃)*exp(1im*params.δCP), zero(T), one(T), zero(T), sin(params.θ₁₃)*exp(-1im*params.δCP), zero(T), cos(params.θ₁₃))
     U3 = SMatrix{3,3}(cos(params.θ₁₂), -sin(params.θ₁₂), zero(T), sin(params.θ₁₂), cos(params.θ₁₂), zero(T), zero(T), zero(T), one(T))
     U = U1 * U2 * U3
 end
@@ -410,13 +457,13 @@ function propagate(U, h, E, L, propagation::Decoherent)
     res = stack(broadcast((e, l) -> kernel(e, l), E, L'))
 end
 
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Vacuum, anti::Bool)
+function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{<:Layer}, propagation::PropagationModel, interaction::Vacuum, anti::Bool)
     L = [sum([segment.length for segment in path]) for path in paths]
     propagate(U, h, E, L, propagation)
 end
 
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool)
-    H_eff = U * Diagonal(h) * adjoint(U)
+function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{<:Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool)
+    H_eff = U * Diagonal{Complex{eltype(h)}}(h) * adjoint(U)
     p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction), E))
     permutedims(p, (1, 2, 4, 3))
 end
@@ -436,7 +483,7 @@ function get_osc_prob(cfg::OscillationConfig)
         return permutedims(p, (3, 4, 1, 2))
     end
 
-    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{<:Layer}, params::NamedTuple; anti=false)
         U, h = get_matrices(cfg.flavour)(params)
         Uc = anti ? conj.(U) : U
     
@@ -456,33 +503,15 @@ end
 function get_matrices(cfg::ThreeFlavour)
     function matrices(params::NamedTuple)
         U = get_PMNS(params)
-        h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
-        return U, h
+        H = SVector(zero(typeof(params.θ₂₃)),params.Δm²₂₁,params.Δm²₃₁)
+        return U, H
     end
 end
 
-function get_matrices(cfg::ThreeFlavourXYCP)
-    function matrices(params::NamedTuple)
-
-        # norm = sqrt(params.δCPy^2 + params.δCPx^2)
-        # if norm == 0.
-        #     δCP = 0.
-        #     #@show params.δCPy, params.δCPx
-        # else
-        #     δCP = atan(params.δCPy/norm, params.δCPx/norm)
-        # end
-        δCP = params.δCPshell[1]
-        #δCP = angle(params.δCPx + 1im * params.δCPy)
-        #@show δCP
-        U = get_PMNS(merge(params, (;δCP,)))
-        h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
-        return U, h
-    end
-end
 
 function get_matrices(cfg::Sterile)
     function matrices(params::NamedTuple)
-        h = [0. ,params.Δm²₂₁, params.Δm²₃₁, params.Δm²₄₁]
+        h = [0 ,params.Δm²₂₁, params.Δm²₃₁, params.Δm²₄₁]
      
         R14 = [cos(params.θ₁₄) 0 0 sin(params.θ₁₄); 0 1 0 0; 0 0 1 0; -sin(params.θ₁₄) 0 0 cos(params.θ₁₄)]
         R24 = [1 0 0 0; 0 cos(params.θ₂₄) 0 sin(params.θ₂₄); 0 0 1 0; 0 -sin(params.θ₂₄) 0 cos(params.θ₂₄)]
@@ -546,6 +575,147 @@ function get_matrices(cfg::ADD)
     end
 end
 
+
+
+
+function get_matrices(cfg::NND)
+
+    function get_Nnaturalness(params)
+
+        N = round(Int,(params["NN_N"]))
+        
+        r= params["r"]
+        matrix = zeros(N, N)
+    
+        for i in 1:N
+            for j in 1:N
+                if i == j
+                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)  
+                else
+                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
+                end
+            
+            end
+        end
+        eigvalues, Usector =eigen(matrix)
+        #println(eigvalues)
+        m1, m2, m3 = get_abs_masses(params)
+        #println(m1)
+        #println(m2)
+        #println(m3)
+        osc = OscillationParameters(3*N);
+        setΔm²!(osc, 2=>1, m2^2-m1^2);
+        setΔm²!(osc, 3=>1, m3^2-m1^2);
+        for i in 2:N
+        m_s1sq = (N*eigvalues[i]) * m1^2
+        m_s2sq = (N*eigvalues[i]) * m2^2
+        m_s3sq = (N*eigvalues[i]) * m3^2
+        setΔm²!(osc, 3*i-2=>1, m_s1sq-m1^2);
+        setΔm²!(osc, 3*i-1=>1, m_s2sq-m1^2);
+        setΔm²!(osc, 3*i=>1, m_s3sq-m1^2);
+        end
+    #println(osc)
+        H = Hamiltonian(osc)
+
+        U, _ = get_SM(params)
+
+    #display(Usector)
+    #display(U)
+        FinalUmatrix = kron(Usector, U)
+
+
+
+        #display(FinalUmatrix)
+        return FinalUmatrix, H
+    
+    end
+end
+
+function get_matrices(cfg::UED)
+    function matrices(params::NamedTuple)
+        
+        # stnd 3x3 PMNS matrix and mass-squared differences
+        PMNS, h_sm = get_matrices(cfg.three_flavour)(params)
+
+        # The tot num. of states = 3 falav.s * (1 stnd mode + N_KK modes)
+        N_states = 3 * (1 + cfg.N_KK)
+
+        # Initialize the full Ham. ev's (h) and mixing matrix (U)
+        h = similar(h_sm, N_states)
+        U = similar(PMNS, N_states, N_states)
+        fill!(U, 0.0) # zero mtrx
+
+        # minimal UED: the mixing matrix is block-diag., composed of repeating PMNS blocks.
+        # The mass-sqrd for each KK level `n` is shifted by (n * inv_R)^2.
+        for n in 0:cfg.N_KK
+            
+            # strt and end indices for this block
+            idx_start = 3 * n + 1
+            idx_end = 3 * (n + 1)
+            
+            # Place the 3x3 PMNS matrix on the diag.. of the large U matrix
+            U[idx_start:idx_end, idx_start:idx_end] = PMNS
+
+            # mass-sqrd shift for the n-th KK tower
+            mass_shift = (n * params.inv_R)^2
+
+            # The evS for this KK level are the stnd ones + the shift
+            h[idx_start:idx_end] = h_sm .+ mass_shift
+        end
+
+        return U, h
+    end
+    return matrices
+end
+
+function get_matrices(cfg::UED_BLKT)
+    
+    # minimal UED matrices
+    minimal_ued_cfg = UED(three_flavour=cfg.three_flavour, N_KK=cfg.N_KK)
+    minimal_ued_matrices = get_matrices(minimal_ued_cfg)
+
+    function matrices(params::NamedTuple)
+        
+        # get the block-diag. mixing matrix (U_ued) and evs (h_ued) from mini UED
+        U_ued, h_ued = minimal_ued_matrices(params)
+
+        # intrduce BLKT effect as a new rotation that mixes the n=0 and n=1 states.
+        # this rot. acts on the first 6 states (3 -> n=0, 3 -> n=1).
+        
+        # tot num of states
+        N_states = 3 * (1 + cfg.N_KK)
+
+        # rot mtx that is I everywhere except for the 0-1 block
+        
+        R_01 = similar(U_ued)
+        fill!(R_01, 0.0)
+        for i in 1:N_states
+            R_01[i, i] = 1.0
+        end
+
+        c = cos(params.phi_01)
+        s = sin(params.phi_01)
+
+        # Apply the rot. to the 3x3 blocks
+        
+        # Top-l blk (0,0) -> c * I
+        R_01[1:3, 1:3] .= c
+        # Top-r blk (0,1) -> s * I
+        R_01[1:3, 4:6] .= s
+        # Bottom-l blk (1,0) -> -s * I
+        R_01[4:6, 1:3] .= -s
+        # Bottom-r blk (1,1) -> c * I
+        R_01[4:6, 4:6] .= c
+
+        # final mixng mtx is the prod. of the minimal UED mixing and the new rot
+        # the ev's h_ued are unchanged, but the composit. of the mass states are
+        
+        U_final = U_ued * R_01
+
+        return U_final, h_ued
+    end
+    return matrices
+end
 
 
 # module Darkdim
