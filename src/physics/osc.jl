@@ -5,6 +5,7 @@ using StatsBase
 using ArraysOfArrays, StructArrays
 using DataStructures
 using Distributions
+using Interpolations
 using ..Newtrinos
 
 export ftype
@@ -74,6 +75,16 @@ end
     three_flavour::ThreeFlavour = ThreeFlavour()
 end
 @kwdef struct ADD <: FlavourModel 
+    three_flavour::ThreeFlavour = ThreeFlavour()
+    N_KK::Int = 5
+end
+
+@kwdef struct Darkdim_Lambda <: FlavourModel
+    three_flavour::ThreeFlavour = ThreeFlavour()
+    N_KK::Int = 5
+end
+
+@kwdef struct Darkdim_Masses <: FlavourModel
     three_flavour::ThreeFlavour = ThreeFlavour()
     N_KK::Int = 5
 end
@@ -199,7 +210,60 @@ function get_priors(cfg::ADD)
     NamedTuple(priors)
 end
 
-   
+function get_params(cfg::Darkdim_Lambda)
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    pop!(params, :Δm²₂₁)
+    pop!(params, :Δm²₃₁)
+    params[:Darkdim_radius] = 0.1
+    params[:ca1] = ftype(1e-5)
+    params[:ca2] = ftype(1e-5)
+    params[:ca3] = ftype(1e-5)
+    params[:λ₁] = ftype(1.)
+    params[:λ₂] = ftype(1.)
+    params[:λ₃] = ftype(1.)
+    NamedTuple(params)
+end
+
+function get_priors(cfg::Darkdim_Lambda)
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    pop!(priors, :Δm²₂₁)
+    pop!(priors, :Δm²₃₁)
+    priors[:Darkdim_radius] = LogUniform(ftype(1e-1),ftype(10))
+    priors[:ca1] = Uniform(ftype(1e-5), ftype(10))
+    priors[:ca2] = Uniform(ftype(1e-5), ftype(10))
+    priors[:ca3] = Uniform(-ftype(10), -ftype(1e-5))
+    priors[:λ₁] = Uniform(ftype(0), ftype(10))
+    priors[:λ₂] = Uniform(ftype(0), ftype(10))
+    priors[:λ₃] = Uniform(ftype(0), ftype(10))
+    priors = NamedTuple(priors)
+    NamedTuple(priors)
+end
+
+function get_params(cfg::Darkdim_Masses)
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:m₀] = ftype(0.01)
+    params[:Darkdim_radius] = 0.1
+    params[:λ₁] = ftype(1.)
+    params[:λ₂] = ftype(1.)
+    params[:λ₃] = ftype(1.)
+    NamedTuple(params)
+end
+
+function get_priors(cfg::Darkdim_Masses)
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
+    priors[:Darkdim_radius] = LogUniform(ftype(1e-1),ftype(10))
+    priors[:λ₁] = Uniform(ftype(0), ftype(10))
+    priors[:λ₂] = Uniform(ftype(0), ftype(10))
+    priors[:λ₃] = Uniform(ftype(0), ftype(10))
+    priors = NamedTuple(priors)
+    NamedTuple(priors)
+end
+
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
     U1 = SMatrix{3,3}(one(T), zero(T), zero(T), zero(T), cos(params.θ₂₃), -sin(params.θ₂₃), zero(T), sin(params.θ₂₃), cos(params.θ₂₃))
@@ -257,20 +321,20 @@ function compute_matter_matrices(H_eff::AbstractMatrix{<:Number}, e, layer, anti
     tmp.vectors, tmp.values
 end   
 
-function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, interactionv::SI)
-    H = MMatrix{size(H_eff)...}(H_eff)
+function compute_matter_matrices(H_eff::SMatrix, e, layer, anti, interaction::SI)
+    H_mat = zeros(typeof(e), size(H_eff))
     if anti
-        H[1,1] -= A * layer.p_density * 2 * e * 1e9
+        H_mat[1,1] -= A * layer.p_density * 2 * e * 1e9
         for i in 1:3
-            H[i,i] += A * layer.n_density * e * 1e9
+            H_mat[i,i] += A * layer.n_density * e * 1e9
         end
     else
-        H[1,1] += A * layer.p_density * 2 * e * 1e9
+        H_mat[1,1] += A * layer.p_density * 2 * e * 1e9
         for i in 1:3
-            H[i,i] -= A * layer.n_density * e * 1e9
+            H_mat[i,i] -= A * layer.n_density * e * 1e9
         end
     end
-    H = Hermitian(SMatrix(H))
+    H = Hermitian(H_eff + H_mat)
     tmp = eigen(H)
     #tmp = fast_eigen(H)
     tmp.vectors, tmp.values
@@ -456,7 +520,9 @@ end
 function get_matrices(cfg::ThreeFlavour)
     function matrices(params::NamedTuple)
         U = get_PMNS(params)
-        h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
+        T = promote_type(typeof(params.Δm²₂₁), typeof(params.Δm²₃₁))
+        h = @SVector [zero(T), params.Δm²₂₁, params.Δm²₃₁]
+        #h = SVector{3, typeof(params.Δm²₃₁)}([0.,params.Δm²₂₁,params.Δm²₃₁])
         return U, h
     end
 end
@@ -648,147 +714,165 @@ end
 
 # end
 
-# module Darkdim_L
-#     using Distributions
-#     using DataStructures
-#     using ..osc
-#     using LinearAlgebra
+function get_matrices(cfg::Darkdim_Lambda)
+    function matrices(params::NamedTuple)
+        MP = 2.435e18 # GeV
+        M5 = 1e6 # GeV
+        vev = 174e9 # eV
+        lambda_list = [params.λ₁, params.λ₂, params.λ₃]
+        m1_MD, m2_MD, m3_MD = (vev * M5 / MP) .* lambda_list
+  
+  
+        m1 = m1_MD * (sqrt(2 * π * params.ca1 / (exp(2 * π * params.ca1) - 1)))
+        m2 = m2_MD * (sqrt(2 * π * params.ca2 / (exp(2 * π * params.ca2) - 1)))
+        m3 = m3_MD * (sqrt(2 * π * params.ca3 / (exp(2 * π * params.ca3) - 1)))
+      
+        PMNS = get_PMNS(params)    
+      
+        #MD is the Dirac mass matrix that appears in the Lagrangian. Note the difference with ADD through the multiplication by c.
+      
+        # Compute MDc00
+        MDc00 = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
+  
+        # Initialize aM1 matrix
+        aM1 = similar(PMNS, 3*(cfg.N_KK+1), 3*(cfg.N_KK+1))
+        aM2 = similar(PMNS, 3*(cfg.N_KK+1), 3*(cfg.N_KK+1))
+        # init buffers
+        for i in 1:3*(cfg.N_KK+1)
+            for j in 1:3*(cfg.N_KK+1)
+                aM1[i,j] = 0.
+                aM2[i,j] = 0.
+            end
+        end
+      
+        # Fill in the aM1 matrix for the first term
+        for i in 1:3
+            for j in 1:3
+                aM1[i, j] = params.Darkdim_radius * MDc00[i, j] * umev
+            end
+        end
+  
+        # Update aM1 matrix for the second term
+        for n in 1:cfg.N_KK
+            MDcoff = PMNS * Diagonal([
+                m1_MD * sqrt(n^2 / (n^2 + params.ca1^2)),
+                m2_MD * sqrt(n^2 / (n^2 + params.ca2^2)),
+                m3_MD * sqrt(n^2 / (n^2 + params.ca3^2))
+            ]) * adjoint(PMNS)
+            for i in 1:3
+                for j in 1:3
+                    aM1[3 * n + i, j] = sqrt(2) * params.Darkdim_radius * MDcoff[i, j] * umev
+                end
+            end
+        end
+  
+        # Fill in the aM2 matrix
+        for n in 1:cfg.N_KK
+            aMD2 = PMNS * Diagonal([
+                sqrt(n^2 + params.ca1^2),
+                sqrt(n^2 + params.ca2^2),
+                sqrt(n^2 + params.ca3^2)
+            ]) * adjoint(PMNS)
+            for i in 1:3
+                for j in 1:3
+                    aM2[3 * n + i, 3 * n + j] = aMD2[i, j]
+                end
+            end
+        end
+  
+        aM = copy(aM1) + copy(aM2)
+        aaMM = Hermitian(conj(transpose(aM)) * aM)
+  
+        h, U = eigen(aaMM)
+        h = h / (params.Darkdim_radius^2 * umev^2) 
+        return U, h
+    end
+end
 
-#     function get_matrices(params)
+function get_matrices(cfg::Darkdim_Masses)
+
+    function get_mass(ca)
+        x = 2 * π * ca
+        b = x == 0. ? 1. : sqrt(x / (expm1(x)))
+    end
     
-#         N_KK = 5
-#         MP = 2.435e18 # GeV
-#         M5 = 1e6 # GeV
-#         vev = 174e9 # eV
-#         lambda_list = [params.λ₁, params.λ₂, params.λ₃]
-#         m1_MD, m2_MD, m3_MD = (vev * M5 / MP) .* lambda_list
+    cas = LinRange(10, -10, 300)
+    masses = get_mass.(cas)
+    get_ca = LinearInterpolation(masses, cas; extrapolation_bc=Line())
     
-    
-#         m1 = m1_MD * (sqrt(2 * π * params.ca1 / (exp(2 * π * params.ca1) - 1)))
-#         m2 = m2_MD * (sqrt(2 * π * params.ca2 / (exp(2 * π * params.ca2) - 1)))
-#         m3 = m3_MD * (sqrt(2 * π * params.ca3 / (exp(2 * π * params.ca3) - 1)))
+    function matrices(params::NamedTuple)
+        MP = 2.435e18 # GeV
+        M5 = 1e6 # GeV
+        vev = 174e9 # eV
+        lambda_list = [params.λ₁, params.λ₂, params.λ₃]
+        m1_MD, m2_MD, m3_MD = (vev * M5 / MP) .* lambda_list
+
+        m1, m2, m3 = get_abs_masses(params)
         
-#         # um to eV
-#         umev = 5.067730716156395
-#         PMNS = get_PMNS(params)    
+        ca1 = get_ca(m1 / m1_MD)
+        ca2 = get_ca(m2 / m2_MD)
+        ca3 = get_ca(m3 / m3_MD)
         
-#         #MD is the Dirac mass matrix that appears in the Lagrangian. Note the difference with ADD through the multiplication by c.
-        
-#         # Compute MDc00
-#         MDc00 = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
-    
-#         # Initialize aM1 matrix
-#         aM1 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-#         aM2 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-#         # init buffers
-#         for i in 1:3*(N_KK+1)
-#             for j in 1:3*(N_KK+1)
-#                 aM1[i,j] = 0.
-#                 aM2[i,j] = 0.
-#             end
-#         end
-        
-#         # Fill in the aM1 matrix for the first term
-#         for i in 1:3
-#             for j in 1:3
-#                 aM1[i, j] = params.Darkdim_radius * MDc00[i, j] * umev
-#             end
-#         end
-    
-#         # Update aM1 matrix for the second term
-#         for n in 1:N_KK
-#             MDcoff = PMNS * Diagonal([
-#                 m1_MD * sqrt(n^2 / (n^2 + params.ca1^2)),
-#                 m2_MD * sqrt(n^2 / (n^2 + params.ca2^2)),
-#                 m3_MD * sqrt(n^2 / (n^2 + params.ca3^2))
-#             ]) * adjoint(PMNS)
-#             for i in 1:3
-#                 for j in 1:3
-#                     aM1[3 * n + i, j] = sqrt(2) * params.Darkdim_radius * MDcoff[i, j] * umev
-#                 end
-#             end
-#         end
-    
-#         # Fill in the aM2 matrix
-#         for n in 1:N_KK
-#             aMD2 = PMNS * Diagonal([
-#                 sqrt(n^2 + params.ca1^2),
-#                 sqrt(n^2 + params.ca2^2),
-#                 sqrt(n^2 + params.ca3^2)
-#             ]) * adjoint(PMNS)
-#             for i in 1:3
-#                 for j in 1:3
-#                     aM2[3 * n + i, 3 * n + j] = aMD2[i, j]
-#                 end
-#             end
-#         end
-    
-#         aM = copy(aM1) + copy(aM2)
-#         aaMM = Hermitian(conj(transpose(aM)) * aM)
-    
-#         h, U = eigen(aaMM)
-#         h = h / (params.Darkdim_radius^2 * umev^2) 
-#         return U, h
-#     end 
-    
-#     osc_prob = make_osc_prob_function(get_matrices)
-
-#     params = OrderedDict(pairs(standard.params))
-#     pop!(params, :Δm²₂₁)
-#     pop!(params, :Δm²₃₁)
-    
-#     # params[:Darkdim_radius] = ftype(1.9/5.067730716156395)
-#     # params[:ca1] = ftype(0.43)
-#     # params[:ca2] = ftype(1.)
-#     # params[:ca3] = ftype(0.41)
-#     # params[:λ₁] = ftype(0.42)
-#     # params[:λ₂] = ftype(2.4)
-#     # params[:λ₃] = ftype(1.7)
-    
-#     #params[:θ₁₂] = ftype(0.5289)
-#     #params[:θ₁₃] = ftype(0.15080)
-#     #params[:θ₂₃] = ftype(0.93079)
-#     #params[:δCP] = ftype(0.683)
-    
-#     # Machado P1:
-#     # params[:Darkdim_radius] = ftype(1.9/5.067730716156395)
-#     # params[:ca1] = ftype(4.24)
-#     # params[:ca2] = ftype(1.19)
-#     # params[:ca3] = ftype(-0.037)
-#     # params[:λ₁] = ftype(0.42)
-#     # params[:λ₂] = ftype(2.0)
-#     # params[:λ₃] = ftype(0.66)
-    
-#     # my P1
-#     params[:Darkdim_radius] = 2.50529
-#     params[:ca1] = 3.99996
-#     params[:ca2] = 1.98377
-#     params[:ca3] = -9.46609
-#     params[:δCP] = 3.25601
-#     params[:θ₁₂] = 0.608085
-#     params[:θ₁₃] = 0.143864
-#     params[:θ₂₃] = 0.670785
-#     params[:λ₁] = 0.221826
-#     params[:λ₂] = 0.000558143
-#     params[:λ₃] = 0.0902954
-#     params = NamedTuple(params)
-
-
-#     priors = OrderedDict{Symbol, Distribution}(pairs(standard.priors))
-#     pop!(priors, :Δm²₂₁)
-#     pop!(priors, :Δm²₃₁)
-#     priors[:Darkdim_radius] = LogUniform(ftype(4),ftype(6))
-    
-#     priors[:ca1] = Uniform(ftype(1e-7), ftype(10)) #LogUniform(ftype(1e-5), ftype(100))
-#     priors[:ca2] = Uniform(ftype(1e-7), ftype(10))#LogUniform(ftype(1e-5), ftype(100))
-#     priors[:ca3] = Uniform(-ftype(10), -ftype(1e-7))#LogUniform(ftype(1e-5), ftype(100))
-    
-#     priors[:λ₁] = Uniform(ftype(0), ftype(5))
-#     priors[:λ₂] = Uniform(ftype(0), ftype(5))
-#     priors[:λ₃] = Uniform(ftype(0), ftype(5))
-#     priors = NamedTuple(priors)
-
-# end
-
+        PMNS = get_PMNS(params)    
+      
+        #MD is the Dirac mass matrix that appears in the Lagrangian. Note the difference with ADD through the multiplication by c.
+      
+        # Compute MDc00
+        MDc00 = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
+  
+        # Initialize aM1 matrix
+        aM1 = similar(PMNS, 3*(cfg.N_KK+1), 3*(cfg.N_KK+1))
+        aM2 = similar(PMNS, 3*(cfg.N_KK+1), 3*(cfg.N_KK+1))
+        # init buffers
+        for i in 1:3*(cfg.N_KK+1)
+            for j in 1:3*(cfg.N_KK+1)
+                aM1[i,j] = 0.
+                aM2[i,j] = 0.
+            end
+        end
+      
+        # Fill in the aM1 matrix for the first term
+        for i in 1:3
+            for j in 1:3
+                aM1[i, j] = params.Darkdim_radius * MDc00[i, j] * umev
+            end
+        end
+  
+        # Update aM1 matrix for the second term
+        for n in 1:cfg.N_KK
+            MDcoff = PMNS * Diagonal([
+                m1_MD * sqrt(n^2 / (n^2 + ca1^2)),
+                m2_MD * sqrt(n^2 / (n^2 + ca2^2)),
+                m3_MD * sqrt(n^2 / (n^2 + ca3^2))
+            ]) * adjoint(PMNS)
+            for i in 1:3
+                for j in 1:3
+                    aM1[3 * n + i, j] = sqrt(2) * params.Darkdim_radius * MDcoff[i, j] * umev
+                end
+            end
+        end
+  
+        # Fill in the aM2 matrix
+        for n in 1:cfg.N_KK
+            aMD2 = PMNS * Diagonal([
+                sqrt(n^2 + ca1^2),
+                sqrt(n^2 + ca2^2),
+                sqrt(n^2 + ca3^2)
+            ]) * adjoint(PMNS)
+            for i in 1:3
+                for j in 1:3
+                    aM2[3 * n + i, 3 * n + j] = aMD2[i, j]
+                end
+            end
+        end
+  
+        aM = copy(aM1) + copy(aM2)
+        aaMM = Hermitian(conj(transpose(aM)) * aM)
+  
+        h, U = eigen(aaMM)
+        h = h / (params.Darkdim_radius^2 * umev^2) 
+        return U, h
+    end
+end
 
 end
