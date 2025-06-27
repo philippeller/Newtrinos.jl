@@ -89,11 +89,6 @@ likelihood = Newtrinos.generate_likelihood(experiments);
 result = Newtrinos.scan(likelihood, modified_priors, vars_to_scan, p)
 
 # %%
-#likelihood = Newtrinos.generate_likelihood(experiments);
-#result = Newtrinos.scan(likelihood, Newtrinos.get_priors(experiments), (θ₁₃=31, Δm²₃₁=31), p)
-#result = Newtrinos.profile(likelihood,  Newtrinos.get_priors(experiments), (r=31, m₀=31), p; gradient_map=false)
-
-# %%
 JLD2.@save "scan_minos_rN_NND.jld2" result
 
 # %%

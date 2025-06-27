@@ -19,19 +19,14 @@ import ..Newtrinos
     plot::Function
 end
 
-# Helper function to safely extract data from ROOT histograms
+# extract data from ROOT histograms
+
 function extract_histogram_data(hist)
     """Safely extract bin contents from ROOT histogram"""
-    if hasfield(typeof(hist), :fArray)
+    
         if hasfield(typeof(hist), :fN) && hist.fN > 0
             return hist.fArray[1:hist.fN]
-        else
-            return hist.fArray
         end
-    else
-        # Alternative access method for different ROOT histogram types
-        return hist.weights
-    end
 end
 
 function extract_histogram_edges(hist)
@@ -73,7 +68,8 @@ function get_assets(physics; datadir = @__DIR__)
     mc_file = ROOTFile(joinpath(datadir, "NOvA_2020_data_release_predictions_with_systs_all_hists.root"))
     
     # Energy binning for electron neutrino analysis
-    energy_edges = range(0.5, 4.5, length=9)
+    energy_edges = range(1, 4, length=7)
+   
     
     # Load electron neutrino data
     nue_data = load_nue_data(data_file, mc_file, energy_edges)
@@ -81,15 +77,6 @@ function get_assets(physics; datadir = @__DIR__)
     
     # Load muon neutrino data by quartiles
     numu_data, numubar_data = load_numu_data(data_file, mc_file)
-
-   
-
-     observed_nested = (
-         nue_data = nue_data.observed,
-         nuebar_data = nuebar_data.observed, 
-         numu_data = numu_data.observed,
-         numubar_data = numubar_data.observed    
-      )
 
      
     # Flatten observed data to match forward model structure
@@ -149,19 +136,17 @@ function get_assets(physics; datadir = @__DIR__)
         numubar_smearing = [0.085, 0.089, 0.097, 0.102],
         # Energy scale and bias parameters
         numu_e_scale = 1.05,
-        numu_e_bias = 0.0,
+        numu_e_bias = 0,
         nue_e_scale = 0.65,
-        nue_e_bias = 0.02,
+        nue_e_bias = 0.5,#0.02,
         observed = observed
     )
     
-    # Files are automatically closed by UnROOT when going out of scope
     return assets
 end
 
 function load_nue_data(data_file, mc_file, energy_edges)
-    """Load electron neutrino data with 3 segments - robust version"""
-    
+  
     println("=== LOADING NUE DATA ===")
     
     # Get neutrino data histogram
@@ -180,14 +165,14 @@ function load_nue_data(data_file, mc_file, energy_edges)
         error("Cannot find data in neutrino histogram. Available keys: $(keys(data_hist))")
     end
     
-    # Extract segments (matching Python logic)
-    observed1 = data_values[2:9]      # 8 elements
-    observed2 = data_values[11:18]    # 8 elements  
-    observed3 = vcat(data_values[19:21], zeros(5))  # 8 elements: 3 data + 5 zeros
-    
-    # Load Monte Carlo components for FHC 
-    mc_components = Dict{String, Vector{Float64}}()  
-    
+    # Extract segments (6 elements)
+    observed1 = data_values[4:9]     
+    observed2 = data_values[13:18]  
+    observed3 = vcat(data_values[20:23], zeros(2))
+
+    # Load Monte Carlo components for FHC
+    mc_components = Dict{String, Vector{Float64}}()
+
     if haskey(mc_file, "prediction_components_nue_fhc")
         mc_dir = mc_file["prediction_components_nue_fhc"]
         println("Found MC directory: prediction_components_nue_fhc")
@@ -210,10 +195,10 @@ function load_nue_data(data_file, mc_file, energy_edges)
             if length(mc_values) >= 21
                 clean_name = string(component_name)
                 
-                mc_components[clean_name * "1"] = mc_values[1:8]
-                mc_components[clean_name * "2"] = mc_values[9:16]
-                mc_components[clean_name * "3"] = vcat(mc_values[17:21], zeros(3))  # 8 elements: 5 data + 3 zeros
-                
+                mc_components[clean_name * "1"] = mc_values[2:7]
+                mc_components[clean_name * "2"] = mc_values[10:15]
+                mc_components[clean_name * "3"] = mc_values[17:22]
+
                 println("Created: $(clean_name)1, $(clean_name)2, $(clean_name)3")
             else
                 println("MC values too short: $(length(mc_values)) (expected >= 21)")
@@ -252,11 +237,11 @@ function load_nuebar_data(data_file, mc_file, energy_edges)
     else
         error("Cannot find data in antineutrino histogram. Available keys: $(keys(data_hist))")
     end
-  
-    observed1 = data_values[2:9]      # 8 elements
-    observed2 = data_values[11:18]    # 8 elements  
-    observed3 = vcat(data_values[19:21], zeros(5))  # 8 elements: 3 data + 5 zeros
-    
+   # Extract segments (6 elements)
+    observed1 = data_values[4:9]     
+    observed2 = data_values[13:18]  
+    observed3 = vcat(data_values[20:23], zeros(2))  
+
     # Load Monte Carlo components for RHC 
     mc_components = Dict{String, Vector{Float64}}()  
 
@@ -284,9 +269,9 @@ function load_nuebar_data(data_file, mc_file, energy_edges)
                 clean_name = string(component_name)
                 
                
-                mc_components[clean_name * "1"] = mc_values[1:8]
-                mc_components[clean_name * "2"] = mc_values[9:16]
-                mc_components[clean_name * "3"] = vcat(mc_values[17:21], zeros(3))  # 8 elements: 5 data + 3 zeros
+                mc_components[clean_name * "1"] = mc_values[2:7]
+                mc_components[clean_name * "2"] = mc_values[10:15]
+                mc_components[clean_name * "3"] = mc_values[17:22]
 
                 println("Created: $(clean_name)1, $(clean_name)2, $(clean_name)3")
             else
@@ -310,23 +295,23 @@ end
 
 
 function load_numu_data(data_file, mc_file)
-    """Load muon neutrino data by quartiles with proper ROOT histogram handling"""
-    
+  
     println("=== LOADING NUMU DATA ===")
   
     # Get energy binning from first quartile
     first_hist = data_file["neutrino_mode_numu_quartile1"]
     energy_edges = extract_energy_edges(first_hist)
-    n_bins = length(energy_edges) - 1
     
-    #println(" Energy binning: $(n_bins) bins from $(energy_edges[1]) to $(energy_edges[end]) GeV")
+
+    n_bins = length(energy_edges) - 1
+
     
     # Initialize storage
     expected_components = ["NoOscillations_Signal", "Oscillated_Signal", "NoOscillations_Total_beam_bkg", "Cosmic_bkg","Oscillated_Total_pred"]
-    numu_total = Dict(comp => zeros(Float64, n_bins) for comp in expected_components)
-    numubar_total = Dict(comp => zeros(Float64, n_bins) for comp in expected_components)
-    numu_observed_total = zeros(Float64, n_bins)  
-    numubar_observed_total = zeros(Float64, n_bins)  
+    expected_components_tot = ["observed","NoOscillations_Signal", "Oscillated_Signal", "NoOscillations_Total_beam_bkg", "Cosmic_bkg","Oscillated_Total_pred"]
+    numu_total = Dict(comp => zeros(Float64, n_bins) for comp in expected_components_tot)
+    numubar_total = Dict(comp => zeros(Float64, n_bins) for comp in expected_components_tot)
+  
 
     numu_quartiles = []
     numubar_quartiles = []
@@ -343,19 +328,19 @@ function load_numu_data(data_file, mc_file)
         push!(numubar_quartiles, antineutrino_data)
         
         # Accumulate totals
-        accumulate_totals!(numu_total, neutrino_data, expected_components, "neutrino", q)
-        accumulate_totals!(numubar_total, antineutrino_data, expected_components, "antineutrino", q)
-    
+        accumulate_totals!(numu_total, neutrino_data, expected_components_tot, "neutrino", q)
+        accumulate_totals!(numubar_total, antineutrino_data, expected_components_tot, "antineutrino", q)
+
     end
         
-    numu_observed_total = sum([q["observed"] for q in numu_quartiles])
-    numubar_observed_total = sum([q["observed"] for q in numubar_quartiles])
+    #numu_observed_total = sum([q["observed"] for q in numu_quartiles])
+    #numubar_observed_total = sum([q["observed"] for q in numubar_quartiles])
     
     # Return results
     numu_data = (
         quartiles = numu_quartiles,
         total = numu_total,
-        observed = numu_observed_total,  # Average observed data across quartiles
+        #observed = numu_observed_total, 
         energy_edges = energy_edges
 
     )
@@ -363,7 +348,7 @@ function load_numu_data(data_file, mc_file)
     numubar_data = (
         quartiles = numubar_quartiles,
         total = numubar_total,
-        observed = numubar_observed_total,  
+        #observed = numubar_observed_total,  
         energy_edges = energy_edges
     )
     
@@ -373,55 +358,14 @@ end
 
 function extract_energy_edges(histogram)
     """Extract energy bin edges from ROOT histogram"""
-    
     if haskey(histogram, :fXaxis_fXbins)
         return histogram[:fXaxis_fXbins]
     end
 end
 
-function extract_histogram_contents(histogram, hist_name)
-    """Extract bin contents from ROOT histogram - specifically targeting fN field"""
-    
-    # Try to extract fN field
-    if haskey(histogram, :fN)
-        data = histogram[:fN]
-        if isa(data, AbstractVector{<:Real}) && !isempty(data)
-            println("Found :fN field: length=$(length(data)), sum=$(sum(data))")
-            return Float64.(data), "fN"
-        else
-            println(" Found :fN but it's not a valid numeric vector: $(typeof(data))")
-        end
-    end
-end
-
-function extract_physics_bins(raw_data, n_bins, source_name)
-    """Extract physics bins from ROOT histogram data"""
-    
-    raw_length = length(raw_data)
-    
-    if raw_length == n_bins + 2
-        # Standard ROOT format: [underflow, bin1, bin2, ..., binN, overflow]
-        physics_data = raw_data[2:end-1]
-        println("    → Extracted $(length(physics_data)) physics bins (skipped under/overflow)")
-    elseif raw_length == n_bins
-        # Just physics bins
-        physics_data = raw_data
-        println("    → Using all $(length(physics_data)) bins as physics bins")
-    elseif raw_length > n_bins
-        # Take first n_bins (assuming no underflow bin)
-        physics_data = raw_data[1:n_bins]
-        println("    → Extracted first $(length(physics_data)) bins from $(raw_length) total")
-    else
-        # Too few bins - pad with zeros
-        physics_data = vcat(raw_data, zeros(n_bins - raw_length))
-        println("   Only $(raw_length) bins available, padded to $(n_bins)")
-    end
-    
-    return physics_data
-end
 
 function load_quartile_data(data_file, mc_file, quartile, mode, n_bins)
-    """Load observed and MC data for a single quartile"""
+    """Load observed and MC data for single quartile"""
     
     mode_prefix = mode == "neutrino" ? "neutrino_mode" : "antineutrino_mode"
     beam_mode = mode == "neutrino" ? "fhc" : "rhc"
@@ -446,7 +390,6 @@ function load_quartile_data(data_file, mc_file, quartile, mode, n_bins)
     # Load MC components
     mc_key = "prediction_components_numu_$(beam_mode)_Quartile$(quartile)"
     
-    
     if haskey(mc_file, mc_key)
         mc_dir = mc_file[mc_key]
         
@@ -458,16 +401,12 @@ function load_quartile_data(data_file, mc_file, quartile, mode, n_bins)
                 
                     if haskey(component_hist, :fN)
                         data_values = component_hist[:fN]
-                        mc_data = data_values[2:end-1]
+                        mc_data = data_values[2:end-1]  # Skip first and last bins
                         println("Direct MC extraction for $(component_name): length=$(length(mc_data)), sum=$(sum(mc_data))")
-                        # Add this debug code in your load_quartile_data function:
-                        println("Quartile $quartile, Component: NoOscillations_Total_beam_bkg, Sum: $(sum(mc_data))")
                     end
-                    
-            
-        
-                 quartile_data[string(component_name)] = mc_data
-            
+
+                    quartile_data[string(component_name)] = mc_data
+
             end
         end
     
@@ -487,20 +426,17 @@ end
 
 
 
-function accumulate_totals!(totals_dict, quartile_data, expected_components, mode, quartile)
+function accumulate_totals!(totals_dict, quartile_data, expected_components_tot, mode, quartile)
     """Accumulate quartile data into totals"""
-    
-    for component in expected_components
+
+    for component in expected_components_tot
         if haskey(quartile_data, component)
             data_vec = quartile_data[component]
             if length(data_vec) == length(totals_dict[component])
                 totals_dict[component] .+= data_vec
-                component_sum = sum(data_vec)
-                if component_sum > 0
-                    println(" Added $(component) to $(mode) total: +$(component_sum)")
-                end
             end
        end
+        println("Accumulated $(component) for $(mode) in quartile $(quartile): $(sum(totals_dict[component]))")
     end   
 end
 
@@ -550,51 +486,80 @@ function calculate_energy_edges(energy_centers)
     return edges
 end
 
-function rebin_energy_spectrum(input_data, edges, e_min=0.5, e_max=4.5, num_bins=8)
+function rebin_to_custom(input_data, input_edges, custom_edges; input_spacing="log")
     """
-    Rebin spectrum from irregular energy bins to regular bins.
-    Handles partial bin overlaps properly.
+    Rebin spectrum from input bins (logarithmic or uniform) to custom non-uniform bins.
+    Handles partial bin overlaps by proportionally redistributing counts.
+    
+    Parameters:
+    -----------
+    input_data : array-like
+        Counts in each input bin
+    input_edges : array-like  
+        Energy bin edges for the input binning (length = length(input_data) + 1)
+    custom_edges : array-like
+        Energy bin edges for the desired custom binning
+    input_spacing : string, optional
+        Either "log" for logarithmic spacing or "uniform" for uniform spacing
+        Default is "log" to maintain backward compatibility
+    
+    Returns:
+    --------
+    Array
+        Rebinned counts in the custom bins (length = length(custom_edges) - 1)
     """
-    # Handle masked arrays or missing data
+    
+    # Validate input_spacing parameter
+    if !(input_spacing in ["log", "uniform"])
+        error("input_spacing must be either 'log' or 'uniform', got: $input_spacing")
+    end
+    
+    # Handle missing data and convert to arrays
     data = replace(input_data, missing => 0.0, NaN => 0.0)
+    input_edge_values = collect(input_edges)
+    custom_edge_values = collect(custom_edges)
     
-    # Convert edges to array if needed
-    edge_values = isa(edges, AbstractArray) ? edges : collect(edges)
+    # Check dimensions
+    if length(input_edge_values) != length(data) + 1
+        error("input_edges should have length = length(input_data) + 1. Got $(length(input_edge_values)) edges for $(length(data)) data points")
+    end
     
-    # Create new equally spaced bin edges
-    new_edges = range(e_min, e_max, length=num_bins + 1)
-    new_counts = zeros(num_bins)
+    # Initialize output array
+    num_custom_bins = length(custom_edge_values) - 1
+    custom_counts = zeros(num_custom_bins)
     
     # For each input bin
-    for i in 1:(length(edge_values)-1)
-        old_e_low = edge_values[i]
-        old_e_high = edge_values[i+1]
-        old_width = old_e_high - old_e_low
+    for i in 1:length(data)
+        input_e_low = input_edge_values[i]
+        input_e_high = input_edge_values[i+1]
+        input_width = input_e_high - input_e_low
         
-        # Skip bins outside range
-        if old_e_high < e_min || old_e_low > e_max
+        # Skip empty bins
+        if data[i] == 0.0
             continue
         end
         
-        # For each new bin
-        for j in 1:num_bins
-            new_e_low = new_edges[j]
-            new_e_high = new_edges[j+1]
+        # For each custom bin
+        for j in 1:num_custom_bins
+            custom_e_low = custom_edge_values[j]
+            custom_e_high = custom_edge_values[j+1]
             
-            # Calculate overlap
-            overlap_low = max(old_e_low, new_e_low)
-            overlap_high = min(old_e_high, new_e_high)
+            # Calculate overlap between input bin and custom bin
+            overlap_low = max(input_e_low, custom_e_low)
+            overlap_high = min(input_e_high, custom_e_high)
             
+            # If there's overlap, redistribute proportionally
             if overlap_high > overlap_low
-                overlap = overlap_high - overlap_low
-                fraction = overlap / old_width
-                new_counts[j] += data[i] * fraction
+                overlap_width = overlap_high - overlap_low
+                fraction = overlap_width / input_width
+                custom_counts[j] += data[i] * fraction
             end
         end
     end
     
-    return new_counts
+    return custom_counts
 end
+
 
 function fast_predictions_new(signal, backgrounds, norm_factor=1; condense_to_bin3=false)
     """
@@ -624,14 +589,14 @@ end
 function make_numu_predictions(params, physics, assets)
     """Calculate muon neutrino disappearance predictions for all quartiles"""
 
-    # At the beginning, check what you're getting
-  
     L = [assets.L]
     density = [assets.density]
     
     # Energy grid for oscillation calculation
-    energy_grid = exp.(range(log(0.1), log(10.0), length=100))
-    
+    energy_grid = exp.(range(log(assets.numu_data.energy_edges[2]/2), log(10.0), length=100))
+
+    energy_edges_log = calculate_energy_edges(energy_grid)
+
     # Calculate oscillation probabilities for neutrinos
     p_nu = physics.osc.osc_prob(energy_grid * assets.numu_e_scale .+ assets.numu_e_bias, 
                                L, params; anti=false)
@@ -640,6 +605,7 @@ function make_numu_predictions(params, physics, assets)
     # Calculate for antineutrinos
     p_nubar = physics.osc.osc_prob(energy_grid * assets.numu_e_scale .+ assets.numu_e_bias, 
                                   L, params; anti=true)
+   
     p_nubar_survival = p_nubar[:, 1, 2, 2]  # ν̄μ → ν̄μ survival probability
     
     # Apply smearing and make predictions for each quartile
@@ -654,13 +620,10 @@ function make_numu_predictions(params, physics, assets)
         
         # Rebin to detector energy bins
         quartile_data = assets.numu_data.quartiles[i]
-        
-            # Neutrino quartile
 
-        p_rebinned = rebin_energy_spectrum(p_smeared, energy_grid, 0.5, 10.0, 
-                                         length(quartile_data["observed"]))
-        p_rebinned ./= sum(p_rebinned)  # Normalize
-        
+        p_rebinned = rebin_to_custom(p_smeared, energy_edges_log, assets.numu_data.energy_edges; input_spacing="log")
+        p_rebinned ./= 4
+
         # Calculate prediction
         prediction = (quartile_data["NoOscillations_Signal"] .* p_rebinned .+
                      quartile_data["NoOscillations_Total_beam_bkg"] .+
@@ -671,10 +634,9 @@ function make_numu_predictions(params, physics, assets)
                                 assets.numu_e_scale, assets.numu_e_bias)
         
         quartile_data_bar = assets.numubar_data.quartiles[i]
-        p_rebinned_bar = rebin_energy_spectrum(p_smeared_bar, energy_grid, 0.5, 10.0,
-                                             length(quartile_data_bar["observed"]))
-        p_rebinned_bar ./= sum(p_rebinned_bar)
-        
+        p_rebinned_bar = rebin_to_custom(p_smeared_bar, energy_edges_log, assets.numubar_data.energy_edges; input_spacing="log")
+        p_rebinned_bar ./= 4
+
         prediction_bar = (quartile_data_bar["NoOscillations_Signal"] .* p_rebinned_bar .+
                          quartile_data_bar["NoOscillations_Total_beam_bkg"] .+
                          quartile_data_bar["Cosmic_bkg"]) 
@@ -693,44 +655,58 @@ function make_nue_predictions(params, physics, assets)
     
     # Energy grid for oscillation calculation
     energy_grid = range(0.5, 4.5, length=100)
-    energy_edges = calculate_energy_edges(energy_grid)
+    step_size = step(energy_grid)  # This gives you 4.0/99 ≈ 0.0404
+    energy_edges = range(0.5 - step_size/2, 4.5 + step_size/2, length=101)
     
     # Calculate νμ → νe oscillation probabilities
-    p_nu = physics.osc.osc_prob(energy_grid * assets.nue_e_scale .+ assets.nue_e_bias,
+    p_nue = physics.osc.osc_prob(energy_grid * assets.nue_e_scale .+ assets.nue_e_bias,
                                L, params; anti=false)
-    p_nu_appearance = p_nu[:, 1, 2, 1]  # νμ → νe probability
-    
-    p_nubar = physics.osc.osc_prob(energy_grid * assets.nue_e_scale .+ assets.nue_e_bias,
+    p_nue_appearance = p_nue[:, 1, 2, 1] 
+    p_nue_appearance./=sum(p_nue_appearance) # Normalize to total probability
+
+
+    p_nuebar = physics.osc.osc_prob(energy_grid * assets.nue_e_scale .+ assets.nue_e_bias,
                                   L, params; anti=true)
-    p_nubar_appearance = p_nubar[:, 1, 2, 1]  # ν̄μ → ν̄e probability
-    
+    p_nuebar_appearance = p_nuebar[:, 1, 2, 1]  # ν̄μ → ν̄e probability
+   
+    p_nuebar_appearance ./= sum(p_nuebar_appearance)  # Normalize to total probability
+
+
     # Apply smearing
-    p_nu_smeared = smearnorm(energy_grid, p_nu_appearance, 1.0, 5, 
+    p_nue_smeared = smearnorm(energy_grid, p_nue_appearance, 1.0, 5,
                            assets.nue_e_scale, assets.nue_e_bias)
-    p_nubar_smeared = smearnorm(energy_grid, p_nubar_appearance, 1.0, 5,
+                 
+    p_nuebar_smeared = smearnorm(energy_grid, p_nuebar_appearance, 1.0, 5,
                               assets.nue_e_scale, assets.nue_e_bias)
+  
+
+    signal_nue = rebin_to_custom(p_nue_smeared, energy_edges, assets.numu_data.energy_edges; input_spacing="uniform")
+    #signal_nue ./= sum(signal_nue)
+    signal_nue .*= assets.numu_data.total["NoOscillations_Signal"]
     
-    # Calculate signal from muon neutrino flux
-    numu_total_bins = length(assets.numu_data.total["NoOscillations_Signal"])
-    signal_nu = rebin_energy_spectrum(p_nu_smeared, energy_edges, 0.5, 4.5, numu_total_bins)
-    signal_nu ./= sum(signal_nu)
-    signal_nu .*= assets.numu_data.total["NoOscillations_Signal"]
-    
-    signal_nubar = rebin_energy_spectrum(p_nubar_smeared, energy_edges, 0.5, 4.5, numu_total_bins)
-    signal_nubar ./= sum(signal_nubar)
-    signal_nubar .*= assets.numubar_data.total["NoOscillations_Signal"]
-    
+    signal_nuebar = rebin_to_custom(p_nuebar_smeared, energy_edges, assets.numubar_data.energy_edges; input_spacing="uniform")
+    #signal_nuebar ./= sum(signal_nuebar)
+    signal_nuebar .*= assets.numubar_data.total["NoOscillations_Signal"]
+   
     # Rebin to electron neutrino analysis bins
-    signal_nue = rebin_energy_spectrum(signal_nu, assets.numu_data.energy_edges, 0.5, 4.5, 8)
-    signal_nuebar = rebin_energy_spectrum(signal_nubar, assets.numubar_data.energy_edges, 0.5, 4.5, 8)
+    signal_nue = rebin_to_custom(signal_nue,  assets.numu_data.energy_edges,assets.nue_data.energy_edges)
+    signal_nuebar = rebin_to_custom(signal_nuebar,assets.numubar_data.energy_edges ,assets.nuebar_data.energy_edges)
     
     # Make predictions for each segment
     predictions = Dict{String, Dict{String, Vector{Float64}}}()
     predictions["nue"] = Dict{String, Vector{Float64}}()
     predictions["nuebar"] = Dict{String, Vector{Float64}}()
-        # Add this line before the error at line 730
-   # println("Available NUE MC keys: ", keys(assets.nue_data.mc_components))
-    #println("Looking for key: Wrong_sign_bkg1")
+
+    nue_observed_sum = assets.nue_data.observed.segment1 + assets.nue_data.observed.segment2 + assets.nue_data.observed.segment3
+    nuebar_observed_sum = assets.nuebar_data.observed.segment1 + assets.nuebar_data.observed.segment2 + assets.nuebar_data.observed.segment3
+    k1 = sum(assets.nue_data.observed.segment1) / sum(nue_observed_sum)
+    k2 = sum(assets.nue_data.observed.segment2) / sum(nue_observed_sum)
+    k3 = sum(assets.nue_data.observed.segment3) / sum(nue_observed_sum)
+    k=[k1, k2, k3]
+    k1bar = sum(assets.nuebar_data.observed.segment1) / sum(nuebar_observed_sum)
+    k2bar = sum(assets.nuebar_data.observed.segment2) / sum(nuebar_observed_sum)
+    k3bar = sum(assets.nuebar_data.observed.segment3) / sum(nuebar_observed_sum)
+    kbar=[k1bar, k2bar, k3bar]
     
     for segment in 1:3
         # Neutrino segment
@@ -741,10 +717,12 @@ function make_nue_predictions(params, physics, assets)
         ]
         
         condense_mode = (segment == 3)
+       
+        signal_nue = signal_nue #* k[segment]
         prediction_nu = fast_predictions_new(signal_nue, backgrounds_nu,
                                            condense_to_bin3=condense_mode)
         
-        predictions["nue"]["segment$(segment)"] = prediction_nu
+        predictions["nue"]["segment$(segment)"] = prediction_nu*k[segment]
         
         # Antineutrino segment
         backgrounds_nubar = [
@@ -752,11 +730,12 @@ function make_nue_predictions(params, physics, assets)
             assets.nuebar_data.mc_components["Beam_nue_bkg$(segment)"],
             assets.nuebar_data.mc_components["Cosmic_bkg$(segment)"]
         ]
-        
-        prediction_nubar = fast_predictions_new(signal_nuebar, backgrounds_nubar, 
+
+        signal_nuebar = signal_nuebar #* kbar[segment]
+        prediction_nubar = fast_predictions_new(signal_nuebar, backgrounds_nubar,
                                               condense_to_bin3=condense_mode)
-        
-        predictions["nuebar"]["segment$(segment)"] = prediction_nubar
+
+        predictions["nuebar"]["segment$(segment)"] = prediction_nubar*kbar[segment]
     end
     
     return predictions
@@ -870,9 +849,7 @@ function get_plot(physics, assets)
       
         ax_numu_total = Axis(f[1, 5], title="νμ Total (All Quartiles)")
         
-        # Sum observed data across all quartiles
-        observed_total_numu = assets.numu_data.observed
-     
+        observed_total_numu = assets.numu_data.total["observed"]
         # Sum predicted data across all quartiles
         predicted_total_numu = sum([numu_predictions["numu"][i] for i in 1:4])
         
@@ -900,12 +877,11 @@ function get_plot(physics, assets)
         
       
         ax_numubar_total = Axis(f[2, 5], title="ν̄μ Total (All Quartiles)")
-        
-        
-        observed_total_numubar = assets.numubar_data.observed
 
+
+        observed_total_numubar = assets.numubar_data.total["observed"]
         # Sum predicted data across all quartiles
-        predicted_total_numubar = sum([numu_predictions["numubar"][i] for i in 1:4])
+        predicted_total_numubar =sum([numu_predictions["numubar"][i] for i in 1:4])
 
         predicted_total_numubar_errors = sqrt.(max.(predicted_total_numubar, 0))
         
@@ -942,21 +918,21 @@ function get_plot(physics, assets)
                 observed_nue = assets.nue_data.observed.segment2
                 predicted_nue = nue_predictions["nue"]["segment2"]
                 mc_nue = assets.nue_data.mc_components["Total_pred2"]
-            else # seg == 3
+            else  seg == 3
                 observed_nue = assets.nue_data.observed.segment3
                 predicted_nue = nue_predictions["nue"]["segment3"]
                 mc_nue = assets.nue_data.mc_components["Total_pred3"]
             end
             
-            predicted_nue_errors = sqrt.(max.(predicted_nue, 0))  # Poisson errors for predictions
+            predicted_nue_errors = sqrt.(max.(predicted_nue, 0)) 
             energy_centers = (assets.nue_data.energy_edges[1:end-1] .+ assets.nue_data.energy_edges[2:end]) ./ 2
-        
-            energy_centers_m = energy_centers .+ 0.25  
+            energy_centers_h=energy_centers .- 0.25  
+            energy_centers_m = energy_centers #.+ 0.5  
 
-            scatter!(ax_nue, energy_centers, observed_nue, color=:black, label="Observed Data", markersize=6)
-            stairs!(ax_nue, energy_centers_m, mc_nue, color=:gray, linewidth=3, label="MC Histogram")
-            errorbars!(ax_nue, energy_centers, predicted_nue, predicted_nue_errors, color=:blue, linewidth=2)
-            lines!(ax_nue, energy_centers, predicted_nue, color=:blue, linewidth=2, label="Calculated Prediction")
+            scatter!(ax_nue, energy_centers_m, observed_nue, color=:black, label="Observed Data", markersize=6)
+            stairs!(ax_nue, energy_centers_h, mc_nue, color=:gray, linewidth=3, label="MC Histogram")
+            errorbars!(ax_nue, energy_centers_m, predicted_nue, predicted_nue_errors, color=:blue, linewidth=2)
+            lines!(ax_nue, energy_centers_m, predicted_nue, color=:blue, linewidth=2, label="Calculated Prediction")
 
             ax_nue.xlabel = "Energy (GeV)"
             ax_nue.ylabel = "Events"
@@ -976,7 +952,7 @@ function get_plot(physics, assets)
                 observed_nuebar = assets.nuebar_data.observed.segment2
                 predicted_nuebar = nue_predictions["nuebar"]["segment2"]
                 mc_nuebar = assets.nuebar_data.mc_components["Total_pred2"]
-            else # seg == 3
+            else  seg == 3
                 observed_nuebar = assets.nuebar_data.observed.segment3
                 predicted_nuebar = nue_predictions["nuebar"]["segment3"]
                 mc_nuebar = assets.nuebar_data.mc_components["Total_pred3"]
@@ -984,12 +960,14 @@ function get_plot(physics, assets)
             
             predicted_nuebar_errors = sqrt.(max.(predicted_nuebar, 0))  # Poisson errors for predictions
             energy_centers = (assets.nuebar_data.energy_edges[1:end-1] .+ assets.nuebar_data.energy_edges[2:end]) ./ 2
-            energy_centers_m = energy_centers .+ 0.25  
+            energy_centers_h=energy_centers .- 0.25  
+            energy_centers_m = energy_centers #.+ 0.5  
+        
             
-            scatter!(ax_nuebar, energy_centers, observed_nuebar, color=:black, label="Observed Data", markersize=6)
-            stairs!(ax_nuebar, energy_centers_m, mc_nuebar, color=:gray, linewidth=3, label="MC Histogram")
-            errorbars!(ax_nuebar, energy_centers, predicted_nuebar, predicted_nuebar_errors, color=:green, linewidth=2)
-            lines!(ax_nuebar, energy_centers, predicted_nuebar, color=:green, linewidth=2, label="Calculated Prediction")
+            scatter!(ax_nuebar, energy_centers_m, observed_nuebar, color=:black, label="Observed Data", markersize=6)
+            stairs!(ax_nuebar, energy_centers_h, mc_nuebar, color=:gray, linewidth=3, label="MC Histogram")
+            errorbars!(ax_nuebar, energy_centers_m, predicted_nuebar, predicted_nuebar_errors, color=:green, linewidth=2)
+            lines!(ax_nuebar, energy_centers_m, predicted_nuebar, color=:green, linewidth=2, label="Calculated Prediction")
 
             ax_nuebar.xlabel = "Energy (GeV)"
             ax_nuebar.ylabel = "Events"
