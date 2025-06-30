@@ -708,64 +708,80 @@ end
 
 function get_matrices(cfg::NNM)
 
-    function get_Nnaturalness(params::NamedTuple)
-
-        N = round(Int,(params[:N]))
+   function get_Nnaturalness(params::NamedTuple)
         
-        r= params[:r]
-
-        matrix = zeros(N, N)
-    
-        Threads.@threads for i in 1:N
-            for j in 1:N
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]                               
+        
+        # Determine the most general type from all potentially dual parameters
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        )
+        
+        matrix = zeros(T, N_int, N_int)
+        
+     
+        for i in 1:N_int  
+            for j in 1:N_int 
+                sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+                sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
+                
                 if i == j
-                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)  
+                    matrix[i, j] = sqrt_i * sqrt_j * (one(T) + one(T)/T(N_dual))
                 else
-                matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
+                    matrix[i, j] = sqrt_i * sqrt_j
                 end
-            
             end
         end
-        eigvalues, Usector =eigen(matrix)
-        #println(eigvalues)
+        
+        eigvalues, Usector = eigen(matrix)
         m1, m2, m3 = get_abs_masses(params)
-        #println(m1)
-        #println(m2)
-        #println(m3)
-     
-        mass_squared = zeros(3*N)
-        delta_mass = zeros(3*N)
         
-        mass_squared[1] = m1^2
-        mass_squared[2] = m2^2  
-        mass_squared[3] = m3^2
+        # Convert masses to the correct type 
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
         
-        for i in 2:N
-            mass_squared[3*i-2]  = (N*eigvalues[i])^2 * m1^2
-            mass_squared[3*i-1] = (N*eigvalues[i])^2 * m2^2
-            mass_squared[3*i]= (N*eigvalues[i])^2 * m3^2
+        # Create arrays with the promoted type that can handle Dual numbers
+        mass_squared = Vector{T}(undef, 3*N_int) 
+        delta_mass = Vector{T}(undef, 3*N_int)
         
-            delta_mass[1]= 0
-            delta_mass[2] = params.Δm²₂₁
-            delta_mass[3] = params.Δm²₃₁
-            delta_mass[3*i-2]  = mass_squared[3*i-2]- m1^2
-            delta_mass[3*i-1] =  mass_squared[3*i-1]- m1^2
-            delta_mass[3*i] =  mass_squared[3*i]- m1^2
+        # Initialize first three elements 
+        mass_squared[1] = m1_T^2
+        mass_squared[2] = m2_T^2  
+        mass_squared[3] = m3_T^2
+        
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+        
+       
+        for i in 2:N_int  
+            eig_val_T = T(eigvalues[i])
+            N_dual_T = T(N_dual)
+
+            mass_squared[3*i-2] = (N_dual_T * eig_val_T)^2 * m1_T^2
+            mass_squared[3*i-1] = (N_dual_T * eig_val_T)^2 * m2_T^2
+            mass_squared[3*i] = (N_dual_T * eig_val_T)^2 * m3_T^2
+
+            delta_mass[3*i-2] = mass_squared[3*i-2] - m1_T^2
+            delta_mass[3*i-1] = mass_squared[3*i-1] - m1_T^2
+            delta_mass[3*i] = mass_squared[3*i] - m1_T^2
         end
         
-        #println(mass_squared)
-        h =delta_mass
+        h = delta_mass
         U = get_PMNS(params)
-        #display(h)
-        #display(Usector)
-        #display(U)
         FinalUmatrix = kron(Usector, U)
-
-
-
-        #display(FinalUmatrix)
+        
         return FinalUmatrix, h
-    
     end
 end
 # module Darkdim
