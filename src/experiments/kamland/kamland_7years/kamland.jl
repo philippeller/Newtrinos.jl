@@ -196,8 +196,7 @@ end
 
 function get_plot(physics, assets)
     function plot(params, data=assets.observed)
-        # Define parameter values to compare (adjust these based on your physics)
-        # For KamLAND, these might be different oscillation parameters
+       
         param_values = [5, 10, 20, 50]  # N parameter values
         param_name = "N"  # Parameter name
         colors = [:red, :blue, :green, :orange]  # Different colors for each parameter value

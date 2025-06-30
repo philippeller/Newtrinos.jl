@@ -789,9 +789,9 @@ function get_forward_model(physics, assets)
 end
 
 
-function get_plot(physics, assets)
+function get_plot_old(physics, assets)
 
-    function plot(params)
+    function plot_old(params)
         f = Figure(resolution=(1400, 1200)) 
         
         # Get predictions
@@ -981,5 +981,141 @@ function get_plot(physics, assets)
 
 end    
 
+function get_plot(physics, assets)
+    function plot(params, data=assets.numu_data.quartiles[1]["observed"])
+
+        param_values = [5, 10, 20, 50]  # N parameter values
+        param_name = "N"  # Parameter name
+        colors = [:red, :blue, :green, :orange]  # Different colors for each parameter value
+        
+        # Calculate all means and variances first
+        all_means = []
+        all_variances = []
+        
+        for val in param_values
+            # Merge parameter - adjust the parameter name as needed
+            p_val = merge(params, (Symbol(param_name) => Float64(val),))
+            
+            # Get the forward model result (vector of Poisson distributions)
+            forward_result = get_forward_model(physics, assets)(p_val)
+            
+            # Extract only numu quartile 1 predictions
+            # Structure: 6 nue/nuebar segments + 4 numu quartiles + 4 numubar quartiles
+            # So numu quartile 1 starts at index 7 (6 + 1)
+            numu_q1_start = 6 * 6 + 1  # After 6 nue/nuebar segments of 6 elements each = 37
+            numu_q1_length = length(assets.numu_data.total["observed"])  # Should be 19
+            numu_q1_end = numu_q1_start + numu_q1_length - 1 
+            # Extract numu quartile 1 portion
+            numu_q1_result = forward_result[numu_q1_start:numu_q1_end]
+            
+            # Extract means and variances from Poisson distributions
+            # For Poisson(λ), both mean and variance equal λ
+            m = [Distributions.mean(dist) for dist in numu_q1_result]
+            v = [Distributions.var(dist) for dist in numu_q1_result]
+            
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+        
+        # Calculate bin centers from energy edges
+        energy_centers = (assets.numu_data.energy_edges[1:end-1] .+ assets.numu_data.energy_edges[2:end]) ./ 2
+        
+        # Generate individual plots for each parameter value
+        for (i, val) in enumerate(param_values)
+            m = all_means[i]
+            v = all_variances[i]
+            
+            f = Figure()
+            ax = Axis(f[1,1])
+            
+            scatter!(ax, energy_centers, data, color=:black, label="Observed")
+            scatter!(ax, energy_centers, m, color=:red, label="Expected", marker=:cross)
+            barplot!(ax, energy_centers, m .+ sqrt.(v), width=diff(assets.numu_data.energy_edges), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+            
+            ax.ylabel = "Counts"
+            ax.title = "Nova($param_name = $val)"
+            axislegend(ax, framevisible = false)
+            
+            ax2 = Axis(f[2,1])
+            scatter!(ax2, energy_centers, data ./ m, color=:black, label="Observed")
+            hlines!(ax2, 1, label="Expected")
+            barplot!(ax2, energy_centers, 1 .+ sqrt.(v) ./ m, width=diff(assets.numu_data.energy_edges), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+            ylims!(ax2, 0.3, 1.7)
+            
+            ax.xticksvisible = false
+            ax.xticklabelsvisible = false
+            
+            rowsize!(f.layout, 1, Relative(3/4))
+            rowgap!(f.layout, 1, 0)
+            
+            ax2.xlabel = "Eₚ (GeV)"
+            ax2.ylabel = "Counts/Expected"
+
+            xlims!(ax, minimum(assets.numu_data.energy_edges), maximum(assets.numu_data.energy_edges))
+            xlims!(ax2, minimum(assets.numu_data.energy_edges), maximum(assets.numu_data.energy_edges))
+
+            ylims!(ax, 0, 30)
+
+            display(f)
+            save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_$val.png", f)
+        end
+        
+        # Generate comparison plot with all parameter values
+        f_comp = Figure()
+        ax_comp = Axis(f_comp[1,1])
+        
+        # Plot observed data
+        scatter!(ax_comp, energy_centers, data, color=:black, label="Observed")
+        
+        # Plot all expected values
+        for (i, val) in enumerate(param_values)
+            m = all_means[i]
+            v = all_variances[i]
+            lines!(ax_comp, energy_centers, m, color=colors[i], label="Expected $param_name=$val")
+            # Add uncertainty bands
+            barplot!(ax_comp, energy_centers, m .+ sqrt.(v), width=diff(assets.numu_data.energy_edges),
+                    gap=0, fillto= m .- sqrt.(v), alpha=0.2, color=colors[i])
+        end
+        
+        ax_comp.ylabel = "Counts"
+        ax_comp.xlabel = "Eₚ (GeV)"
+        ax_comp.title = "NOVA - Comparison of All $param_name Values"
+        axislegend(ax_comp, framevisible = false, position = :rt)
+
+        xlims!(ax_comp, minimum(assets.numu_data.energy_edges), maximum(assets.numu_data.energy_edges))
+        ylims!(ax_comp, 0, 30)  # Adjusted for NOVA count range
+
+        display(f_comp)
+        save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_comp.png", f_comp)
+
+        # Generate ratio comparison plot
+        f_ratio = Figure()
+        ax_ratio = Axis(f_ratio[1,1])
+        
+        # Plot ratios for all parameter values
+        for (i, val) in enumerate(param_values)
+            m = all_means[i]
+            v = all_variances[i]
+            lines!(ax_ratio, energy_centers, data ./ m, color=colors[i], label="Data/Expected $param_name=$val")
+            # Add uncertainty bands for ratios
+            barplot!(ax_ratio, energy_centers, 1 .+ sqrt.(v) ./ m, width=diff(assets.numu_data.energy_edges), 
+                    gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.2, color=colors[i])
+        end
+
+        hlines!(ax_ratio, 1, color=:black, label="Unity")
+
+        ax_ratio.ylabel = "Data/Expected"
+        ax_ratio.xlabel = "Eₚ (GeV)"
+        ax_ratio.title = "Nova - Ratio Comparison of All $param_name Values"
+        axislegend(ax_ratio, framevisible = false, position = :rt)
+
+        xlims!(ax_ratio, minimum(assets.numu_data.energy_edges), maximum(assets.numu_data.energy_edges))
+        ylims!(ax_ratio, -2, 3.3)  # Kept the wider range from original NOVA code
+
+        display(f_ratio)
+        save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_ratio.png", f_ratio)
+    end
+    return plot
+end
 
 end  # module Nova

@@ -565,10 +565,10 @@ end
 
 
 
-function get_matrices(cfg::NND)
+function get_matrices_old(cfg::NND)
 
       
-    function get_Nnaturalness(params::NamedTuple)
+    function get_Nnaturalness_old(params::NamedTuple)
 
         N = round(Int,(params[:N]))
         
@@ -628,24 +628,35 @@ function get_matrices(cfg::NND)
     end
 end
 
-
-function get_matrices_new(cfg::NND)
-    function get_Nnaturalness_new(params::NamedTuple)
+function get_matrices(cfg::NND)
+    function get_Nnaturalness(params::NamedTuple)
         
-        N_int = round(Int, ForwardDiff.value(params[:N]))  # For structure  
-        N_dual = params[:N]                                # For mathematics
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]                               
         
-        # Use N_int for all structural operations
-        matrix = zeros(typeof(params[:r]), N_int, N_int)
+        # Determine the most general type from all potentially dual parameters
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        )
         
-        Threads.@threads for i in 1:N_int  
+        matrix = zeros(T, N_int, N_int)
+        
+     
+        for i in 1:N_int  
             for j in 1:N_int 
-                sqrt_i = sqrt(2*(i-1) + params[:r])
-                sqrt_j = sqrt(2*(j-1) + params[:r])
+                sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+                sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
                 
                 if i == j
-                   
-                    matrix[i, j] = sqrt_i * sqrt_j + (1.0/N_dual) * sqrt_i * sqrt_j
+                    matrix[i, j] = sqrt_i * sqrt_j * (one(T) + one(T)/T(N_dual))
                 else
                     matrix[i, j] = sqrt_i * sqrt_j
                 end
@@ -655,26 +666,36 @@ function get_matrices_new(cfg::NND)
         eigvalues, Usector = eigen(matrix)
         m1, m2, m3 = get_abs_masses(params)
         
-        test_value = typeof(params[:r])
-        mass_squared = similar([test_value], 3*N_int) 
-        delta_mass = similar([test_value], 3*N_int)
+        # Convert masses to the correct type 
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
         
-        mass_squared[1] = m1^2
-        mass_squared[2] = m2^2  
-        mass_squared[3] = m3^2
+        # Create arrays with the promoted type that can handle Dual numbers
+        mass_squared = Vector{T}(undef, 3*N_int) 
+        delta_mass = Vector{T}(undef, 3*N_int)
         
-        for i in 2:N_int  
+        # Initialize first three elements 
+        mass_squared[1] = m1_T^2
+        mass_squared[2] = m2_T^2  
+        mass_squared[3] = m3_T^2
+        
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+        
        
-            mass_squared[3*i-2] = (N_dual * eigvalues[i]) * m1^2
-            mass_squared[3*i-1] = (N_dual * eigvalues[i]) * m2^2
-            mass_squared[3*i] = (N_dual * eigvalues[i]) * m3^2
+        for i in 2:N_int  
+            eig_val_T = T(eigvalues[i])
+            N_dual_T = T(N_dual)
+            
+            mass_squared[3*i-2] = N_dual_T * eig_val_T * m1_T^2
+            mass_squared[3*i-1] = N_dual_T * eig_val_T * m2_T^2
+            mass_squared[3*i] = N_dual_T * eig_val_T * m3_T^2
         
-            delta_mass[1] = zero(typeof(test_value))
-            delta_mass[2] = params.Δm²₂₁
-            delta_mass[3] = params.Δm²₃₁
-            delta_mass[3*i-2] = mass_squared[3*i-2] - m1^2
-            delta_mass[3*i-1] = mass_squared[3*i-1] - m1^2
-            delta_mass[3*i] = mass_squared[3*i] - m1^2
+            delta_mass[3*i-2] = mass_squared[3*i-2] - m1_T^2
+            delta_mass[3*i-1] = mass_squared[3*i-1] - m1_T^2
+            delta_mass[3*i] = mass_squared[3*i] - m1_T^2
         end
         
         h = delta_mass
