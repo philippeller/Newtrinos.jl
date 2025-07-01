@@ -282,6 +282,7 @@ function get_plot(physics, assets)
         rowgap!(fig.layout, 0)
         fig
     end
+
 end
 
 end
