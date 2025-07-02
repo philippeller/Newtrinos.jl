@@ -325,6 +325,8 @@ function get_fwd_model(experiments::NamedTuple)
     distprod ∘ ffanout(fwd_models)
 end
 
+# new functns
+
 function generate_asimov_data(experiments::NamedTuple)
     base_params = get_params(experiments)
     model = get_fwd_model(experiments)

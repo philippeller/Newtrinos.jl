@@ -345,7 +345,7 @@ end
 
 function get_plot(physics, assets)
     function plot(params; data_to_plot::Vector, title_suffix::String = "")
-
+#
         E_vis = assets.E_bins_visible
         E_nu  = assets.visible_to_neutrino_interp.(E_vis)
         

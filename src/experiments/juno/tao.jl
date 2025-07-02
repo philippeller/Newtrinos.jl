@@ -236,7 +236,7 @@ end
 
 function get_plot(physics, assets)
     function plot_spectra(params; data_to_plot::Vector, title_suffix::String="")
-        
+#        
         E_vis = assets.E_bins_visible
         bin_width_mev = step(E_vis)
         
