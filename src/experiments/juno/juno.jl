@@ -12,6 +12,7 @@ import ValueShapes
 import ..Newtrinos
 
 @kwdef struct JUNO <: Newtrinos.Experiment
+    livetime_years::Float64
     physics::NamedTuple
     params::NamedTuple
     priors::NamedTuple
@@ -20,90 +21,69 @@ import ..Newtrinos
     plot::Function
 end
 
-function configure(physics)
+function configure(physics; livetime_years = 6.0)
     physics = (;physics.osc)
-    assets = get_assets(physics)
+    assets = get_assets(physics, livetime_years)
     return JUNO(
+        livetime_years = livetime_years,
         physics = physics,
         params = get_params(),
         priors = get_priors(),
         assets = assets,
         forward_model = get_forward_model(physics, assets),
-        plot = get_plot(physics, assets)
+        plot = get_plot(physics, assets),
     )
 end
 
 function get_params()
     params = (       
-        flux_scale = 1.0,   
-        energy_scale = 1.0,      
-        detection_epsilon = 1.0,
+        junotao_flux_scale = 1.0,   
+        junotao_energy_scale = 1.0,      
+        juno_detection_epsilon = 1.0,
         
-        res_a = 0.0261,
-        res_b = 0.0082 ,
-        res_c = 0.0123,
+        juno_res_a = 0.0261,
+        juno_res_b = 0.0082 ,
+        juno_res_c = 0.0123,
     
-        shape_eps   = 0.0,
-        geo_shape_eps = 0.0,
+        junotao_shape_eps   = 0.0,
+        juno_geo_shape_eps = 0.0,
         
-        geo_rate_norm = 1.0,
-        accidental_norm = 1.0,
-        world_reactor_norm = 1.0,
-        lihe_norm = 1.0,
-        co_norm = 1.0,
-        atmnc_norm = 1.0,
-        fast_neutron_norm = 1.0,
+        juno_geo_rate_norm = 1.0,
+        juno_accidental_norm = 1.0,
+        juno_world_reactor_norm = 1.0,
+        juno_lihe_norm = 1.0,
+        juno_co_norm = 1.0,
+        juno_atmnc_norm = 1.0,
+        juno_fast_neutron_norm = 1.0,
         )
 end
 
-fixed_params =  (δCP = 0.0,
-        θ₂₃ = 0.8556288707523761,
-    
-        #flux_scale = 1.0,   
-        #energy_scale = 1.0,      
-        #detection_epsilon = 1.0,
-
-        #res_a = 0.0261,
-        #res_b = 0.0082,
-        #res_c = 0.0123,
-    
-        #shape_eps=0,
-        #geo_shape_eps=0,
-        #geo_rate_norm = 1.0,
-        #accidental_norm = 1.0,
-        #world_reactor_norm = 1.0,
-        #lihe_norm = 1.0,
-        #co_norm = 1.0,
-        #atmnc_norm = 1.0,
-        #fast_neutron_norm = 1.0,
-    )
-
 function get_priors()
     priors = (
-        flux_scale = Normal(1.0, 0.02), 
-        energy_scale = Normal(1.0, 0.005),
-        detection_epsilon = Normal(1.0, 0.01),
+        junotao_flux_scale = Truncated(Normal(1.0, 0.02), 0.0, Inf), 
+        junotao_energy_scale = Truncated(Normal(1.0, 0.005), 0.0, Inf),
+        juno_detection_epsilon = Truncated(Normal(1.0, 0.01), 0.0, Inf),
 
-        res_a = Normal(0.0261, 0.0002),
-        res_b = Normal(0.0082, 0.0001),
-        res_c = Normal(0.0123, 0.0004),
+        juno_res_a = Truncated(Normal(0.0261, 0.0002), 0.0, Inf),
+        juno_res_b = Truncated(Normal(0.0082, 0.0001), 0.0, Inf),
+        juno_res_c = Truncated(Normal(0.0123, 0.0004), 0.0, Inf),
         
-        shape_eps = Normal(0,1),
-        geo_shape_eps = Normal(0,1),
+        junotao_shape_eps = Normal(0,1),
+        juno_geo_shape_eps = Normal(0,1),
         
-        geo_rate_norm = Normal(1.0, 0.30),
-        accidental_norm = Normal(1.0, 0.01),     
-        world_reactor_norm = Normal(1.0, 0.02),  
-        lihe_norm = Normal(1.0, 0.20),      
-        co_norm = Normal(1.0, 0.50),         
-        atmnc_norm = Normal(1.0, 0.50),   
-        fast_neutron_norm = Normal(1.0, 1.0), 
+        juno_geo_rate_norm = Truncated(Normal(1.0, 0.30), 0.0, Inf),
+        juno_accidental_norm = Truncated(Normal(1.0, 0.01), 0.0, Inf),     
+        juno_world_reactor_norm = Truncated(Normal(1.0, 0.02), 0.0, Inf),  
+        juno_lihe_norm = Truncated(Normal(1.0, 0.20), 0.0, Inf),      
+        juno_co_norm = Truncated(Normal(1.0, 0.50), 0.0, Inf),         
+        juno_atmnc_norm = Truncated(Normal(1.0, 0.50), 0.0, Inf),   
+        juno_fast_neutron_norm = Truncated(Normal(1.0, 1.0), 0.0, Inf), 
           )
 end
 
 
 
-function get_assets(physics, datadir = @__DIR__)
+function get_assets(physics, livetime_years, datadir = @__DIR__)
     @info "Loading juno data"
 
     L_JUNO = 52.5   
@@ -114,8 +94,7 @@ function get_assets(physics, datadir = @__DIR__)
     resolution_c = 0.0123 
 
     nominal_livetime = 6.0
-    analysis_livetime = 6.0
-    LIVETIME_DAYS = analysis_livetime * 365
+    LIVETIME_DAYS = livetime_years * 365
 
     Delta_E = 20e-3   # 20 keV bins
  
@@ -130,13 +109,6 @@ function get_assets(physics, datadir = @__DIR__)
         error("Could not find `ordering` in flavour config: $flav")
     end
     ord_str = uppercase(string(ord_sym))
-
-    observed_fname = joinpath(datadir, "juno_$(ord_str)_observed.csv")
-    df_observed = CSV.read(observed_fname, DataFrame;
-                           header=true,
-                           types=Dict("E_vis_MeV" => Float64,
-                                      "Counts"   => Float64))
-    observed = convert(Vector{Float64}, df_observed.Counts)  
     
     df_no_osc = CSV.read(joinpath(datadir,"spectrum_noosc.csv"), DataFrame, header=["E [MeV]", "Events"])
     df_shape = CSV.read(joinpath(datadir,"shape_uncertainty_TAO.csv"), DataFrame)
@@ -145,36 +117,29 @@ function get_assets(physics, datadir = @__DIR__)
     df_backgrounds = CSV.read(joinpath(datadir,"geoneutrino_background.csv"), DataFrame, header=["E_visible_MeV", "events_per_day_per_20keV"])
 
     df_acc = CSV.read(joinpath(datadir, "bg_accidentals.csv"), DataFrame, header=["E_vis_MeV", "rate_density"])
-    df_acc.total_events_nominal = df_acc.rate_density .* LIVETIME_DAYS
-    sort!(df_acc, :E_vis_MeV)   
-    accidental_bkg_interp = LinearInterpolation(df_acc.E_vis_MeV, df_acc.total_events_nominal; extrapolation_bc = 0.0)
-    
+    sort!(df_acc, :E_vis_MeV)
+    accidental_bkg_rate_interp = LinearInterpolation(df_acc.E_vis_MeV, df_acc.rate_density; extrapolation_bc = 0.0)
+
     df_wr = CSV.read(joinpath(datadir, "bg_world_reactors.csv"), DataFrame, header=["E_vis_MeV", "rate_density"])
-    df_wr.total_events_nominal = df_wr.rate_density .* LIVETIME_DAYS
     sort!(df_wr, :E_vis_MeV)   
-    world_reactor_bkg_interp = LinearInterpolation(df_wr.E_vis_MeV, df_wr.total_events_nominal; extrapolation_bc = 0.0)
+    world_reactor_bkg_rate_interp = LinearInterpolation(df_wr.E_vis_MeV, df_wr.rate_density; extrapolation_bc = 0.0)
 
     df_lihe = CSV.read(joinpath(datadir, "bg_LiHe.csv"), DataFrame, header=["E_vis_MeV", "rate_density"])
-    df_lihe.total_events_nominal = df_lihe.rate_density .* LIVETIME_DAYS
     sort!(df_lihe, :E_vis_MeV)
-    lihe_bkg_interp = LinearInterpolation(df_lihe.E_vis_MeV, df_lihe.total_events_nominal; extrapolation_bc=0.0)
+    lihe_bkg_rate_interp = LinearInterpolation(df_lihe.E_vis_MeV, df_lihe.rate_density; extrapolation_bc=0.0)
 
     df_co = CSV.read(joinpath(datadir, "bg_CO.csv"), DataFrame, header=["E_vis_MeV", "rate_density"])
-    df_co.total_events_nominal = df_co.rate_density .* LIVETIME_DAYS
     sort!(df_co, :E_vis_MeV)
-    co_bkg_interp = LinearInterpolation(df_co.E_vis_MeV, df_co.total_events_nominal; extrapolation_bc=0.0)
+    co_bkg_rate_interp = LinearInterpolation(df_co.E_vis_MeV, df_co.rate_density; extrapolation_bc=0.0)
 
     df_atmnc = CSV.read(joinpath(datadir, "bg_atm_NC.csv"), DataFrame, header=["E_vis_MeV", "rate_density"])
-    df_atmnc.total_events_nominal = df_atmnc.rate_density .* LIVETIME_DAYS
     sort!(df_atmnc, :E_vis_MeV)
-    atmnc_bkg_interp = LinearInterpolation(df_atmnc.E_vis_MeV, df_atmnc.total_events_nominal; extrapolation_bc=0.0)
+    atmnc_bkg_rate_interp = LinearInterpolation(df_atmnc.E_vis_MeV, df_atmnc.rate_density; extrapolation_bc=0.0)
 
     df_fn = CSV.read(joinpath(datadir, "bg_fast_neutrons.csv"), DataFrame, header=["E_vis_MeV", "rate_density"])
-    df_fn.total_events_nominal = df_fn.rate_density .* LIVETIME_DAYS
     sort!(df_fn, :E_vis_MeV)
-    fast_neutron_bkg_interp = LinearInterpolation(df_fn.E_vis_MeV, df_fn.total_events_nominal; extrapolation_bc=0.0)
+    fast_neutron_bkg_rate_interp = LinearInterpolation(df_fn.E_vis_MeV, df_fn.rate_density; extrapolation_bc=0.0)
 
-    
     df_shape.rel_unc .= df_shape.rel_unc ./ 100.0
     
     df_shape2 = combine(DataFrames.groupby(df_shape, :energy_MeV),
@@ -186,7 +151,7 @@ function get_assets(physics, datadir = @__DIR__)
     
     shape_unc_interp = LinearInterpolation(E_shape, Δshape; extrapolation_bc = 0.0)
 
-    df_no_osc.Events = df_no_osc.Events .* (analysis_livetime / nominal_livetime) .* (20.0 / 1000.0)  # adjst no_osc events for livetime and bin width (20 keV)
+    df_no_osc.Events = df_no_osc.Events .* (livetime_years / nominal_livetime) .* (20.0 / 1000.0)  # adjst no_osc events for livetime and bin width (20 keV)
         
     df_no_osc_sorted = combine(DataFrames.groupby(df_no_osc, "E [MeV]"), :Events => sum => :Events)
     sort!(df_no_osc_sorted, "E [MeV]") 
@@ -212,17 +177,17 @@ function get_assets(physics, datadir = @__DIR__)
     
     unique_indices = unique(i -> E_arr_visible_from_raw_sorted[i], 1:length(E_arr_visible_from_raw_sorted))
     E_arr_visible_final_unique = E_arr_visible_from_raw_sorted[unique_indices]
-    E_arr_neutrino_for_inverse_final_unique = E_arr_neutrino_for_inverse_sorted[unique_indices]
-    
+    E_arr_neutrino_for_inverse_final_unique = E_arr_neutrino_for_inverse_sorted[unique_indices]   
     
     visible_to_neutrino_interp = LinearInterpolation(E_arr_visible_final_unique, E_arr_neutrino_for_inverse_final_unique, extrapolation_bc=Interpolations.Flat()) 
-    
+
     df_backgrounds_sorted = combine(DataFrames.groupby(df_backgrounds, "E_visible_MeV"), :events_per_day_per_20keV => sum => :events_per_day_per_20keV)
     sort!(df_backgrounds_sorted, "E_visible_MeV")
     E_visible_MeV_bkg = df_backgrounds_sorted.E_visible_MeV
-    background_arr_bkg = df_backgrounds_sorted.events_per_day_per_20keV .* analysis_livetime .* 365
+
+    background_rate_bkg = df_backgrounds_sorted.events_per_day_per_20keV
     
-    background_interp = LinearInterpolation(E_visible_MeV_bkg, background_arr_bkg, extrapolation_bc=0)
+    background_rate_interp = LinearInterpolation(E_visible_MeV_bkg, background_rate_bkg, extrapolation_bc=0)
     
     reactors = DataFrame(
         Reactor = ["Taishan", "Taishan", "Yangjiang", "Yangjiang", "Yangjiang", "Yangjiang", "Yangjiang", "Yangjiang", "Daya Bay"],
@@ -266,17 +231,17 @@ function get_assets(physics, datadir = @__DIR__)
         visible_to_neutrino_interp,
         no_osc_interp,
         shape_unc_interp,
-        background_interp,
+        background_rate_interp,
         reactors,
         GEO_SHAPE_UNC_FRACTION,
         E_bins_visible,
-        accidental_bkg_interp,
-        world_reactor_bkg_interp,
-        lihe_bkg_interp,
-        co_bkg_interp,
-        atmnc_bkg_interp,
-        fast_neutron_bkg_interp,
-        observed,
+        accidental_bkg_rate_interp,
+        world_reactor_bkg_rate_interp,
+        lihe_bkg_rate_interp,
+        co_bkg_rate_interp,
+        atmnc_bkg_rate_interp,
+        fast_neutron_bkg_rate_interp,
+        LIVETIME_DAYS
         )    
     
 end
@@ -318,7 +283,7 @@ end
 
 function get_expected(params, physics, assets)
     
-    E_vis_corr = assets.E_bins_visible .* params.energy_scale
+    E_vis_corr = assets.E_bins_visible .* params.junotao_energy_scale
     E_nu = assets.visible_to_neutrino_interp.(E_vis_corr)
 
     L_km = assets.reactors.Baseline_m ./ 1e3
@@ -332,11 +297,11 @@ function get_expected(params, physics, assets)
     spectrum_before_reactor_shape_and_smearing = unosc_counts_at_E_nu .* prob_weighted_flat
 
     Δshape_values_signal = assets.shape_unc_interp.(E_vis_corr)
-    spectrum_with_reactor_shape_sys = spectrum_before_reactor_shape_and_smearing .* (1.0 .+ params.shape_eps .* Δshape_values_signal)
+    spectrum_with_reactor_shape_sys = spectrum_before_reactor_shape_and_smearing .* (1.0 .+ params.junotao_shape_eps .* Δshape_values_signal)
 
-    current_res_a = params.res_a
-    current_res_b = params.res_b
-    current_res_c = params.res_c
+    current_res_a = params.juno_res_a
+    current_res_b = params.juno_res_b
+    current_res_c = params.juno_res_c
     
     sigma_res_val = @. sqrt(current_res_a^2 * abs(E_vis_corr) + current_res_b^2 * E_vis_corr^2 + current_res_c^2)
     sigma_res_val = max.(sigma_res_val, 1e-9)
@@ -344,21 +309,21 @@ function get_expected(params, physics, assets)
     smeared_signal_spectrum = smear(E_vis_corr, spectrum_with_reactor_shape_sys, sigma_res_val, width=200) # width = 15 befofe wd?
     
     signal_counts = smeared_signal_spectrum
-    signal_counts .*= params.flux_scale * params.detection_epsilon
+    signal_counts .*= params.junotao_flux_scale * params.juno_detection_epsilon
 
     final_signal_counts = max.(signal_counts, 0.0)
-    
-    nominal_geo_counts = assets.background_interp.(E_vis_corr)
-    geo_counts_scaled_rate = nominal_geo_counts .* params.geo_rate_norm
 
-    final_geo_counts = geo_counts_scaled_rate .* (1.0 .+ params.geo_shape_eps .* assets.GEO_SHAPE_UNC_FRACTION) 
+    nominal_geo_counts_rate = assets.background_rate_interp.(E_vis_corr)
+    geo_counts_scaled_rate = nominal_geo_counts_rate .* params.juno_geo_rate_norm .* assets.LIVETIME_DAYS
+
+    final_geo_counts = geo_counts_scaled_rate .* (1.0 .+ params.juno_geo_shape_eps .* assets.GEO_SHAPE_UNC_FRACTION) 
     
-    final_world_reactor_counts = assets.world_reactor_bkg_interp.(E_vis_corr) .* params.world_reactor_norm
-    final_accidental_counts = assets.accidental_bkg_interp.(E_vis_corr) .* params.accidental_norm
-    final_lihe_counts = assets.lihe_bkg_interp.(E_vis_corr) .* params.lihe_norm
-    final_co_counts = assets.co_bkg_interp.(E_vis_corr) .* params.co_norm
-    final_atmnc_counts = assets.atmnc_bkg_interp.(E_vis_corr) .* params.atmnc_norm
-    final_fast_neutron_counts = assets.fast_neutron_bkg_interp.(E_vis_corr) .* params.fast_neutron_norm    
+    final_world_reactor_counts = assets.world_reactor_bkg_rate_interp.(E_vis_corr) .* params.juno_world_reactor_norm .* assets.LIVETIME_DAYS
+    final_accidental_counts = assets.accidental_bkg_rate_interp.(E_vis_corr) .* params.juno_accidental_norm .* assets.LIVETIME_DAYS
+    final_lihe_counts = assets.lihe_bkg_rate_interp.(E_vis_corr) .* params.juno_lihe_norm .* assets.LIVETIME_DAYS
+    final_co_counts = assets.co_bkg_rate_interp.(E_vis_corr) .* params.juno_co_norm .* assets.LIVETIME_DAYS
+    final_atmnc_counts = assets.atmnc_bkg_rate_interp.(E_vis_corr) .* params.juno_atmnc_norm .* assets.LIVETIME_DAYS
+    final_fast_neutron_counts = assets.fast_neutron_bkg_rate_interp.(E_vis_corr) .* params.juno_fast_neutron_norm .* assets.LIVETIME_DAYS    
     
     other_background_counts = final_world_reactor_counts .+ final_accidental_counts .+ final_lihe_counts .+ final_co_counts .+ final_atmnc_counts .+ final_fast_neutron_counts
     
@@ -371,15 +336,15 @@ end
 
 function get_forward_model(physics, assets)
     function forward_model(params)
-        full_params = merge(params, fixed_params)
-        exp_events = get_expected(full_params, physics, assets)
+        exp_events = get_expected(params, physics, assets)
+        exp_events = round.(Int, exp_events)   # Do in analysis scrpt?
         distprod(Poisson.(exp_events))
     end
 end
 
 
 function get_plot(physics, assets)
-    function plot(params; title_suffix::String = "")
+    function plot(params; data_to_plot::Vector, title_suffix::String = "")
 
         E_vis = assets.E_bins_visible
         E_nu  = assets.visible_to_neutrino_interp.(E_vis)
@@ -388,19 +353,20 @@ function get_plot(physics, assets)
         P = physics.osc.osc_prob(E_nu ./ 1e3, L_km, params; anti=true)
         Pavg = vec(sum(P[:, :, 1, 1] .* assets.reactors.Flux_Factor', dims=2))
 
-        unosc_counts = assets.no_osc_interp.(E_nu) .* params.flux_scale .* params.detection_epsilon
+        unosc_counts = assets.no_osc_interp.(E_nu) .* params.junotao_flux_scale .* params.juno_detection_epsilon
         osc_unsmear = unosc_counts .* Pavg
         total_model = get_expected(params, physics, assets)
 
         bkg = Dict(
-            "Geo"      => assets.background_interp.(E_vis) .* params.geo_rate_norm,
-            "Accident" => assets.accidental_bkg_interp.(E_vis) .* params.accidental_norm,
-            "WorldR"   => assets.world_reactor_bkg_interp.(E_vis) .* params.world_reactor_norm,
-            "LiHe"     => assets.lihe_bkg_interp.(E_vis) .* params.lihe_norm,
-            "CO"       => assets.co_bkg_interp.(E_vis) .* params.co_norm,
-            "ATMNC"    => assets.atmnc_bkg_interp.(E_vis) .* params.atmnc_norm,
-            "FastN"    => assets.fast_neutron_bkg_interp.(E_vis) .* params.fast_neutron_norm
+            "Geo"      => assets.background_rate_interp.(E_vis) .* params.juno_geo_rate_norm .* assets.LIVETIME_DAYS,
+            "Accident" => assets.accidental_bkg_rate_interp.(E_vis) .* params.juno_accidental_norm .* assets.LIVETIME_DAYS,
+            "WorldR"   => assets.world_reactor_bkg_rate_interp.(E_vis) .* params.juno_world_reactor_norm .* assets.LIVETIME_DAYS,
+            "LiHe"     => assets.lihe_bkg_rate_interp.(E_vis) .* params.juno_lihe_norm .* assets.LIVETIME_DAYS,
+            "CO"       => assets.co_bkg_rate_interp.(E_vis) .* params.juno_co_norm .* assets.LIVETIME_DAYS,
+            "ATMNC"    => assets.atmnc_bkg_rate_interp.(E_vis) .* params.juno_atmnc_norm .* assets.LIVETIME_DAYS,
+            "FastN"    => assets.fast_neutron_bkg_rate_interp.(E_vis) .* params.juno_fast_neutron_norm .* assets.LIVETIME_DAYS,
         )
+        
         total_bkg = reduce(+, values(bkg))
         smeared_signal = total_model .- total_bkg
 
@@ -419,8 +385,9 @@ function get_plot(physics, assets)
             lines!(ax2, E_vis, arr, label=name, linestyle=:dot)
         end
         lines!(ax2, E_vis, total_model, label="Signal + all bkgs", color=:magenta, linewidth=3)
-      
-        scatter!(ax2, E_vis, assets.observed, color=:black, label="Observed Data", markersize=3)
+
+        scatter!(ax2, E_vis, data_to_plot, color=:black, label="Data being fit", markersize=3)
+        axislegend(ax2)
 
         ax3 = Axis(fig[2, 1], title="Unsmeared vs Smeared",
                    xlabel="E₍vis₎ [MeV]", ylabel="Counts/bin")
@@ -435,7 +402,8 @@ function get_plot(physics, assets)
 
         ax5 = Axis(fig[3, 1:2], title="Residuals",
                    xlabel="E₍vis₎ [MeV]", ylabel="(Data-Model)/√Model")
-        residuals = (assets.observed .- total_model) ./ sqrt.(total_model .+ 1e-9)
+
+        residuals = (data_to_plot .- total_model) ./ sqrt.(total_model .+ 1e-9)
         hlines!(ax5, 0.0, color=:red, linestyle=:dash)
         ylims!(ax5, -5, 5) 
 

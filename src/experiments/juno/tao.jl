@@ -12,6 +12,7 @@ using CairoMakie
 import ..Newtrinos
 
 @kwdef struct TAO <: Newtrinos.Experiment
+    livetime_years::Float64
     physics::NamedTuple
     params::NamedTuple
     priors::NamedTuple
@@ -20,10 +21,11 @@ import ..Newtrinos
     plot::Function
 end
 
-function configure(physics)
+function configure(physics; livetime_years = 6.0)
     physics = (;physics.osc)
-    assets = get_assets(physics)
+    assets = get_assets(physics, livetime_years)
     return TAO(
+        livetime_years = livetime_years,
         physics = physics,
         params = get_params(),
         priors = get_priors(),
@@ -35,10 +37,10 @@ end
 
 function get_params()
     params = (
-        # shared systematics with juno, nmaes match
-        flux_scale = 1.0,   
-        energy_scale = 1.0,
-        shape_eps = 0.0,
+        # shared systematics with juno, names match
+        junotao_flux_scale = 1.0,   
+        junotao_energy_scale = 1.0,
+        junotao_shape_eps = 0.0,
         
         # TAO only systematics
         tao_detection_epsilon = 1.0,
@@ -53,36 +55,31 @@ function get_params()
     )
 end
 
-fixed_params = (
-    δCP = 0.0,
-    θ₂₃ = 0.8556288707523761,
-)
-
 function get_priors()
     priors = (
-        flux_scale = Normal(1.0, 0.02), 
-        energy_scale = Normal(1.0, 0.005), 
-        shape_eps = Normal(0,1),
+        junotao_flux_scale = Truncated(Normal(1.0, 0.02), 0.0, Inf), 
+        junotao_energy_scale = Truncated(Normal(1.0, 0.005), 0.0, Inf), 
+        junotao_shape_eps = Normal(0,1),
 
-        tao_detection_epsilon = Normal(1.0, 0.005),
-        tao_res_a = Normal(0.015, 0.015 * 0.05),
-        tao_res_b = Normal(0.0, 0.001),
-        tao_res_c = Normal(0.0, 0.001),
+        tao_detection_epsilon = Truncated(Normal(1.0, 0.005), 0.0, Inf),
+        tao_res_a = Truncated(Normal(0.015, 0.015 * 0.05), 0.0, Inf),
+        tao_res_b = Truncated(Normal(0.0, 0.001), 0.0, Inf),
+        tao_res_c = Truncated(Normal(0.0, 0.001), 0.0, Inf),
         
-        tao_accidental_norm = Normal(1.0, 0.20),
-        tao_fast_neutron_norm = Normal(1.0, 0.30),
-        tao_lihe_norm = Normal(1.0, 0.30),
+        tao_accidental_norm = Truncated(Normal(1.0, 0.20), 0.0, Inf),
+        tao_fast_neutron_norm = Truncated(Normal(1.0, 0.30), 0.0, Inf),
+        tao_lihe_norm = Truncated(Normal(1.0, 0.30), 0.0, Inf),
     )
 end
 
-function get_assets(physics, datadir = @__DIR__)
+function get_assets(physics, livetime_years; datadir = @__DIR__)
     @info "Loading TAO data"
 
     DATA_LIVETIME_YEARS = 6.5 
     DAYS_IN_DATA = DATA_LIVETIME_YEARS * 365
     
     LIVETIME_YEARS = 6.0
-    LIVETIME_DAYS = LIVETIME_YEARS * 365
+    LIVETIME_DAYS = livetime_years * 365
     BASELINE_M = 30.0
 
     reactors = DataFrame(
@@ -98,14 +95,7 @@ function get_assets(physics, datadir = @__DIR__)
     else
         error("Couldnt find `ordering` in flavour config: $flav")
     end
-    ord_str = uppercase(string(ord_sym))
-
-    observed_fname = joinpath(datadir, "tao_$(ord_str)_observed.csv")
-    df_observed = CSV.read(observed_fname, DataFrame;
-                           header=true,
-                           types=Dict("E_vis_MeV" => Float64,
-                                      "Counts"   => Float64))
-    observed = convert(Vector{Float64}, df_observed.Counts)  
+    ord_str = uppercase(string(ord_sym)) 
 
     df_no_osc_juno = CSV.read(joinpath(datadir,"spectrum_noosc.csv"), DataFrame, header=["E [MeV]", "Events"])
     sort!(df_no_osc_juno, "E [MeV]")
@@ -171,13 +161,13 @@ function get_assets(physics, datadir = @__DIR__)
         lihe_bkg_interp,
         visible_to_neutrino_interp,
         shape_unc_interp,
-        LIVETIME_DAYS,
-        observed
+        LIVETIME_DAYS
     )
 
 end
 
 function smear(E_arr_smear_local, smear_arr_in, sigma_arr; width=10, E_scale=1.0, E_bias=0.0)
+    
     l = length(smear_arr_in)
     out = zeros(eltype(smear_arr_in), l)
 
@@ -207,20 +197,24 @@ end
 
 function get_expected(params, physics, assets)
     
-    E_vis_corr = assets.E_bins_visible .* params.energy_scale
+    E_vis_corr = collect(assets.E_bins_visible .* params.junotao_energy_scale)
     bin_width_mev = step(assets.E_bins_visible)
     
     E_nu = assets.visible_to_neutrino_interp.(E_vis_corr)
     L_km = assets.reactors.Baseline_m ./ 1e3
-    P_ee = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, :, 1, 1]
+    P_ee = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, 1, 1, 1]
     prob_weighted_flat = vec(sum(P_ee .* assets.reactors.Flux_Factor', dims=2))
     
     unosc_counts_density = assets.no_osc_interp.(E_nu)
     spectrum_before_smearing = (unosc_counts_density .* prob_weighted_flat) .* assets.LIVETIME_DAYS .* bin_width_mev
 
     sigma_res_val = @. sqrt(params.tao_res_a^2 * abs(E_vis_corr) + params.tao_res_b^2 * E_vis_corr^2 + params.tao_res_c^2)
-    smeared_signal = smear(collect(assets.E_bins_visible), spectrum_before_smearing, sigma_res_val, width=200)
-    final_signal_counts = smeared_signal .* params.flux_scale .* params.tao_detection_epsilon
+    smeared_signal = smear(E_vis_corr, spectrum_before_smearing, sigma_res_val, width=200)
+
+    Δshape_values = assets.shape_unc_interp.(E_vis_corr)
+    smeared_signal_with_shape = smeared_signal .* (1.0 .+ params.junotao_shape_eps .* Δshape_values)
+    
+    final_signal_counts = smeared_signal_with_shape .* params.junotao_flux_scale .* params.tao_detection_epsilon
 
     final_accidental_counts = (assets.accidental_bkg_interp.(E_vis_corr) .* params.tao_accidental_norm) .* assets.LIVETIME_DAYS
     final_fast_neutron_counts = (assets.fast_neutron_bkg_interp.(E_vis_corr) .* params.tao_fast_neutron_norm) .* assets.LIVETIME_DAYS
@@ -234,45 +228,45 @@ end
 
 function get_forward_model(physics, assets)
     function forward_model(params)
-        full_params = merge(params, fixed_params)
-        exp_events = get_expected(full_params, physics, assets)
-        return distprod(Poisson.(exp_events))
+        exp_events = get_expected(params, physics, assets)
+        exp_events = round.(Int, exp_events)
+        distprod(Poisson.(exp_events))
     end
-    return forward_model
 end
 
 function get_plot(physics, assets)
-    function plot_spectra(params; title_suffix::String="")
-
+    function plot_spectra(params; data_to_plot::Vector, title_suffix::String="")
+        
         E_vis = assets.E_bins_visible
         bin_width_mev = step(E_vis)
-     
-        E_vis_corr = E_vis .* params.energy_scale
+        
+        E_vis_corr = E_vis .* params.junotao_energy_scale
         E_nu = assets.visible_to_neutrino_interp.(E_vis_corr)
         L_km = assets.reactors.Baseline_m ./ 1e3
-        P_ee = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, :, 1, 1]
-        prob_weighted_flat = vec(sum(P_ee .* assets.reactors.Flux_Factor', dims=2))
+        prob_weighted_flat = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, 1, 1, 1]
         unosc_counts_density = assets.no_osc_interp.(E_nu)
         spectrum_before_smearing = (unosc_counts_density .* prob_weighted_flat) .* assets.LIVETIME_DAYS .* bin_width_mev
         sigma_res_val = @. sqrt(params.tao_res_a^2 * abs(E_vis_corr) + params.tao_res_b^2 * E_vis_corr^2 + params.tao_res_c^2)
         smeared_signal = smear(collect(E_vis), spectrum_before_smearing, sigma_res_val, width=200)
-        final_signal_counts = smeared_signal .* params.flux_scale .* params.tao_detection_epsilon
-
-        final_accidental_counts = (assets.accidental_bkg_interp.(E_vis .* params.energy_scale) .* params.tao_accidental_norm) .* assets.LIVETIME_DAYS
-        final_fast_neutron_counts = (assets.fast_neutron_bkg_interp.(E_vis .* params.energy_scale) .* params.tao_fast_neutron_norm) .* assets.LIVETIME_DAYS
-        final_lihe_counts = (assets.lihe_bkg_interp.(E_vis .* params.energy_scale) .* params.tao_lihe_norm) .* assets.LIVETIME_DAYS
+        
+        total_model = get_expected(params, physics, assets)
+        final_accidental_counts = (assets.accidental_bkg_interp.(E_vis_corr) .* params.tao_accidental_norm) .* assets.LIVETIME_DAYS
+        final_fast_neutron_counts = (assets.fast_neutron_bkg_interp.(E_vis_corr) .* params.tao_fast_neutron_norm) .* assets.LIVETIME_DAYS
+        final_lihe_counts = (assets.lihe_bkg_interp.(E_vis_corr) .* params.tao_lihe_norm) .* assets.LIVETIME_DAYS
         
         total_backgrounds = final_accidental_counts .+ final_fast_neutron_counts .+ final_lihe_counts
-        total_model = final_signal_counts .+ total_backgrounds
+        final_signal_counts = total_model .- total_backgrounds
 
         fig = Figure(size = (1200, 900), fontsize = 14)
-        ax_spec = Axis(fig[1, 1], title="TAO Stacked Spectrum", ylabel="Events / Bin")
+        ax_spec = Axis(fig[1, 1], title="TAO Stacked Spectrum$title_suffix", ylabel="Events / Bin")
         band!(ax_spec, E_vis, 0, final_lihe_counts, color=(:purple, 0.5), label="⁹Li/⁸He")
         band!(ax_spec, E_vis, final_lihe_counts, final_lihe_counts .+ final_fast_neutron_counts, color=(:green, 0.5), label="Fast Neutron")
         band!(ax_spec, E_vis, final_lihe_counts .+ final_fast_neutron_counts, total_backgrounds, color=(:orange, 0.5), label="Accidental")
         band!(ax_spec, E_vis, total_backgrounds, total_model, color=(:red, 0.5), label="ν Signal")
         lines!(ax_spec, E_vis, total_model, color=:black, label="Total Model")
-        scatter!(ax_spec, E_vis, assets.observed, color=:black, markersize=3, label="Asimov Data")
+        
+        scatter!(ax_spec, E_vis, data_to_plot, color=:black, markersize=3, label="Asimov Data")
+        
         axislegend(ax_spec, position=:rt, merge=true, unique=true)
         ylims!(ax_spec, low=0)
         
@@ -283,24 +277,19 @@ function get_plot(physics, assets)
         lines!(ax_paper, E_vis, final_signal_counts, color=:green, linewidth=2.5, label="ν Signal")
         axislegend(ax_paper, position=:rt, merge=true, unique=true)
         ylims!(ax_paper, low=0)
-        
+
         ax_res_ratio = Axis(fig[2, 1], title="Smearing Effect", xlabel=L"E_{vis} \text{ (MeV)}", ylabel="Smeared / Unsmeared")
         ratio_smearing = smeared_signal ./ (spectrum_before_smearing .+ 1e-9)
         lines!(ax_res_ratio, E_vis, ratio_smearing, label="Resolution Effect")
         hlines!(ax_res_ratio, [1.0], color=:black, linestyle=:dash)
         ylims!(ax_res_ratio, 0.95, 1.05)
-        
+
         ax_osc_dis = Axis(fig[2, 2], title="Disappearance Probability", xlabel=L"E_{\nu} \text{ (MeV)}", ylabel=L"1 - P(\bar{\nu}_e \rightarrow \bar{\nu}_e)", yscale=log10)
-        disappearance_prob = 1.0 .- prob_weighted_flat
-        lines!(ax_osc_dis, E_nu, disappearance_prob)
+        lines!(ax_osc_dis, E_nu, 1.0 .- prob_weighted_flat)
         ylims!(ax_osc_dis, 1e-6, 1e-2)
-        linkxaxes!(ax_spec, ax_paper, ax_res_ratio)
-        hidexdecorations!(ax_spec, grid = false)
-        hidexdecorations!(ax_paper, grid = false)
 
         return fig
     end
     return plot_spectra
 end
-
 end 
