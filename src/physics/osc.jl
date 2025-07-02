@@ -194,7 +194,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(50)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -205,7 +205,7 @@ function get_priors(cfg::NND)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(90))
+    priors[:N] = Uniform(ftype(1),ftype(100))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
@@ -228,7 +228,7 @@ function get_priors(cfg::NNM)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(90))
+    priors[:N] = Uniform(ftype(1),ftype(100))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
