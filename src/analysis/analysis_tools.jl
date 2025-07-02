@@ -66,6 +66,8 @@ function find_mle(likelihood, prior, params)
     # THIS ONE WORKS:
     res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
     #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), ))
+    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=10000)))
+
 
     # This one also works, and IS thread safe:
 
@@ -323,6 +325,44 @@ function get_fwd_model(experiments::NamedTuple)
     distprod ∘ ffanout(fwd_models)
 end
 
+# new functns
+
+function generate_asimov_data(experiments::NamedTuple)
+    base_params = get_params(experiments)
+    model = get_fwd_model(experiments)
+    return mean(model(base_params))
+end
+
+function generate_asimov_data(x::Newtrinos.Experiment)
+    base_params = get_params(x)
+    model = x.forward_model
+    return mean(model(base_params))
+end
+
+function generate_toy_data(experiments::NamedTuple)
+    base_params = get_params(experiments)
+    model = get_fwd_model(experiments)
+    return rand(model(base_params))
+end
+
+function generate_toy_data(x::Newtrinos.Experiment)
+    base_params = get_params(x)
+    model = x.forward_model
+    return rand(model(base_params))
+end
+
+function generate_likelihood(experiments::NamedTuple, data_to_fit::NamedTuple)
+    model = get_fwd_model(experiments)
+    return likelihoodof(model, data_to_fit)
+end
+
+function generate_likelihood(x::Newtrinos.Experiment, data::Vector)
+    temp_exp = (; exp = x)
+    temp_data = (; exp = data)
+    return generate_likelihood(temp_exp, temp_data)
+end
+
 function generate_likelihood(experiments::NamedTuple, observed=get_observed(experiments))
     likelihoodof(get_fwd_model(experiments), observed)
 end
+   
