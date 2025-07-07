@@ -345,11 +345,11 @@ function likelihood_ratio_test(ll_0, ll_1, df; alpha=0.05)
     Returns:
         p-value (scalar)
     """
-    println("ll_0: $ll_0")
-    println("ll_1: $ll_1")
-    
-    Λ = -2 * (minimum(ll_0) - minimum(ll_1))
-    
+    max_llh_1 = maximum(ll_0)
+    max_llh_2 = maximum(ll_1)
+
+    Λ = -2 * (max_llh_1 - max_llh_2)
+
     chi2_dist = Chisq(df)
     pvalue = 1 - cdf(chi2_dist, Λ)
     
