@@ -1,0 +1,140 @@
+beamExposure:
+  name: Beam exposure
+  value: 13.8
+  units: E22 POT
+  uncertainty: negligible
+  comment: |
+    SNS beam exposure for the first CEvNS detection on liquid argon in terms of protons on target. It represents 6.12 GWhr of integrated beam power.
+
+distanceToTarget:
+  name: Distance to target
+  value: 27.5
+  units: m
+  uncertainty: negligible
+  comment: |
+    This value was determined from a LIDAR scan of the neutrino alley target area carried out by the survey and alignment team of the SNS.
+
+fiducialMass:
+  name: Fiducial mass of CENNS-10
+  value: 24.4
+  units: kg
+  uncertainty: 0.61
+  comment: |
+    Fiducial (active) mass of the CENNS-10 detector.
+
+larQF:
+  name: LAr quenching factor
+  parameters: 
+   - name: a
+     value: 0.246
+     units: none
+     uncertainty: 0.006
+   - name: b
+     value: 0.00078
+     units: (keVnr)^-1
+     uncertainty: 0.00009  
+  comment: |
+    Form of QF = a + b*T(keVnr) where T is the recoil energy in units of keVnr. This value for the QF was determined based on a linear fit to all available data points from literature in the range 0-125 keVnr. Further described in arXiv:2003.10630. Correlated errors are included where reported in the literature.
+    
+neutrinosPerProton:
+  name: Neutrinos produced per SNS proton
+  value: 0.09
+  uncertainty: 0.009
+  units: nu/flavor/proton
+  comment: |
+    This is the number of decay-at-rest neutrinos produced per incident SNS beam proton per neutrino flavor.
+    The DAR neutrinos are emitted isotropically. The increase in this value from the CsI[Na] data release is due to the increased SNS proton energy.
+
+cevnsBestfitNormalization:
+  name: Best-fit Normalization constant of CEvNS PDF
+  value: 159
+  uncertainty_stat: 43
+  units: none
+  comment: |
+    Normalization on the best-fit number of CEvNS after 3D likelihood fit was performed on the data. Includes both statistical and systematic uncertainties.
+
+promptBeamRelatedNeutronBestfitNormalization:
+  name: Best-fit Normalization constant of prompt beam-related neutron PDF
+  value: 553
+  uncertainty: 34
+  units: none
+  comment: |
+    Normalization on the best-fit number of prompt beam-related neutrons after 3D likelihood fit was performed on the data.
+
+delayedBeamRelatedNeutronBestfitNormalization:
+  name: Best-fit Normalization constant of delayed beam-related neutron PDF
+  value: 10
+  uncertainty: 11
+  units: none
+  comment: |
+    Normalization on the best-fit number of delayed beam-related neutrons after 3D likelihood fit was performed on the data.
+
+ssBackgroundBestfitNormalization:
+  name: Best-fit Normalization constant of steady-state (SS) background PDF
+  value: 3131
+  uncertainty: 23
+  units: none
+  comment: |
+    Normalization on the best-fit number of SS-background after 3D likelihood fit was performed on the data.
+
+cevnsPredictionNormalization:
+  name: Prediction normalization constant of CEvNS PDF
+  value: 128
+  uncertainty: 17
+  units: none
+  comment: |
+    Normalization on the initial predicted number of CEvNS before 3D likelihood fit was performed on the data.
+
+promptBeamRelatedNeutronPredictionNormalization:
+  name: Prediction normalization constant of prompt beam-related neutron PDF
+  value: 497
+  uncertainty: 160
+  units: none
+  comment: |
+    Normalization on the initial predicted number of prompt beam-related neutron  before 3D likelihood fit was performed on the data.
+
+delayedBeamRelatedNeutronPredictionNormalization:
+  name: Prediction normalization constant of delayed beam-related neutron PDF
+  value: 33
+  uncertainty: 33
+  units: none
+  comment: |
+    Normalization on the initial predicted number of delayed beam-related neutron  before 3D likelihood fit was performed on the data.
+
+
+
+ssBackgroundPredictionNormalization:
+  name: Prediction normalization constant of steady-state (SS) background PDF
+  value: 3154
+  uncertainty: 25
+  units: none
+  comment: |
+    Normalization on the initial predicted number of SS-background before 3D likelihood fit was performed on the data.
+    
+
+acceptanceEfficiency:
+  name: Acceptance efficiency 
+  comment: |
+    see text file CENNS10AnlAEfficiency.txt. File is bin center in keVee, bin center in keVnr, efficiency.
+
+energyResolution:
+  name: Energy resolution
+  parameters:
+    - name: a
+      value: 0.58
+      units: (keVee)^(1/2)
+  comment:
+    Form of sigma/E = a/sqrt(E) where E is the reconstructed energy in units of keVee. CENNS-10 energy resolution.
+
+snsPOTTraceTiming:
+  name: SNS protons-on-target trace timing parameters
+  parameters:
+    - name: a
+      value: 440
+      uncertainty: 200
+      units: ns
+    - name: b
+      value: 150
+      uncertainty: negligible
+      units: ns
+  comment: Protons-on-target trace parameters from the SNS. The trace is well approximated by a gaussian of mean a and width b with associated errors on those parameters. This is convolved with the pi^+ and mu^+ neutrino decay lifetimes to estimate the CEvNS signal.
