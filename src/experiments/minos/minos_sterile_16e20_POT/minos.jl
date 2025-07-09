@@ -7,6 +7,7 @@ using BAT
 using DataStructures
 using CairoMakie
 using Logging
+using Printf
 import ..Newtrinos
 
 
@@ -125,9 +126,13 @@ function get_plot(physics, assets)
 
     function plot(params, d=assets.observed)
         f = Figure()
-    
+
         m = mean(get_forward_model(physics, assets)(params))
         v = var(get_forward_model(physics, assets)(params))
+        
+        # Calculate chi-square
+        chisq_total = 0.0
+        dof_total = 0
         
         for (i, ch) in enumerate([:CC, :NC])
         
@@ -135,6 +140,15 @@ function get_plot(physics, assets)
             energy_bins = assets.ch_data["FD"*String(ch)].bin_edges
             energy = 0.5 .* (energy_bins[1:end-1] .+ energy_bins[2:end])
             
+            # Chi-square calculation for this channel
+            # Using variance as uncertainty (Poisson-like assumption)
+            chisq_ch = sum((d[ch] .- m[ch]).^2 ./ max.(v[ch], 1e-10))  # Avoid division by zero
+            dof_ch = length(d[ch]) - length(params)
+
+            chisq_total += chisq_ch
+            dof_total += dof_ch
+            
+
             plot!(ax, energy, d[ch] ./ diff(energy_bins), color=:black, label="Observed")
             stephist!(ax, energy, weights=m[ch] ./ diff(energy_bins), bins=energy_bins, label="Expected")
             barplot!(ax, energy, (m[ch] .+ sqrt.(v[ch])) ./ diff(energy_bins), width=diff(energy_bins), gap=0, fillto= (m[ch] .- sqrt.(v[ch])) ./ diff(energy_bins), alpha=0.5, label="Standard Deviation")
@@ -167,15 +181,26 @@ function get_plot(physics, assets)
         ylims!(f.content[1], 0, 800)
         ylims!(f.content[4], 0, 600)
         
+        # Add chi-square text to the bottom right of the figure
+        dof_total=dof_total-length(params)
+        chisq_per_dof = chisq_total / dof_total
+        chisq_text = @sprintf("χ² = %.2f\nNDF = %d\nχ²/NDF = %.2f", chisq_total, dof_total, chisq_per_dof)
+
+        # Add text annotation to the bottom right corner
+        text!(f.content[4], 0.97, 0.06, text=chisq_text, 
+            align=(:right, :bottom), 
+            space=:relative,
+            fontsize=12,
+            color=:black)
+        
         f
     end
-end
 
 end
 
 
-function get_plot( physics, assets)
-    function plot(params, d=assets.observed)
+function get_plot_new( physics, assets)
+    function plot_new(params, d=assets.observed)
         N_values = [5, 10, 20, 50]
         colors = [:red, :blue, :green, :orange]  # Different colors for each N
         
@@ -363,3 +388,5 @@ function get_plot( physics, assets)
         return f_combined  # Return the final combined plot
     end
 end
+
+end  # module minos

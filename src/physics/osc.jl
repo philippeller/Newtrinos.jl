@@ -194,7 +194,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(50)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -204,8 +204,8 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
+    priors[:N] = Uniform(ftype(1),ftype(20))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
@@ -227,8 +227,8 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
+    priors[:N] = Uniform(ftype(1),ftype(20))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
@@ -565,75 +565,109 @@ end
 
 
 
-function get_matrices_old(cfg::NND)
+function get_matrices(cfg::NND)
 
-      
-    function get_Nnaturalness_old(params::NamedTuple)
 
-        N = round(Int,(params[:N]))
+    function get_Nnaturalness(params::NamedTuple)
+        N_int = round(Int, ForwardDiff.value(params[:N]))
+        N_dual = params[:N]
+
         
-        r= params[:r]
-
-        matrix = zeros(N, N)
-        Threads.@threads for i in 1:N
-            for j in 1:N
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        )
+        
+        # Pre-allocate
+        matrix = Matrix{T}(undef, N_int, N_int)
+        
+        # Pre-compute sqrt values to avoid redundant calculations
+        sqrt_vals = Vector{T}(undef, N_int)
+        r_val = T(params[:r])
+        
+        # Vectorized computation of sqrt values
+        @inbounds for i in 1:N_int
+            sqrt_vals[i] = sqrt(T(2*(i-1)) + r_val)
+        end
+        
+        diagonal_term = one(T) + one(T)/T(N_dual)
+        
+        @inbounds for i in 1:N_int
+            sqrt_i = sqrt_vals[i]
+            @inbounds for j in 1:N_int
                 if i == j
-                    matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r) + (1/N)*sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
+                    matrix[i, j] = sqrt_i * sqrt_vals[j] * diagonal_term
                 else
-                    matrix[i, j] = sqrt(2*(i-1)+r) * sqrt(2*(j-1)+r)
+                    matrix[i, j] = sqrt_i * sqrt_vals[j]
                 end
-
             end
         end
-        eigvalues, Usector =eigen(matrix)
-        #println(eigvalues)
+        
+        eigvalues, Usector = eigen(matrix)
         m1, m2, m3 = get_abs_masses(params)
-        #println(m1)
-        #println(m2)
-        #println(m3)
-     
-        mass_squared = zeros(3*N)
-        delta_mass = zeros(3*N)
         
-        mass_squared[1] = m1^2
-        mass_squared[2] = m2^2  
-        mass_squared[3] = m3^2
-        
-        for i in 2:N
-            mass_squared[3*i-2]  = (N*eigvalues[i]) * m1^2
-            mass_squared[3*i-1] = (N*eigvalues[i]) * m2^2
-            mass_squared[3*i]= (N*eigvalues[i]) * m3^2
-        
-            delta_mass[1]= 0
-            delta_mass[2] = params.Δm²₂₁
-            delta_mass[3] = params.Δm²₃₁
-            delta_mass[3*i-2]  = mass_squared[3*i-2]- m1^2
-            delta_mass[3*i-1] =  mass_squared[3*i-1]- m1^2
-            delta_mass[3*i] =  mass_squared[3*i]- m1^2
-        end
-        
-        #println(mass_squared)
-        h =delta_mass
-        U = get_PMNS(params)
-        #display(h)
-        #display(Usector)
-        #display(U)
-        FinalUmatrix = kron(Usector, U)
-
-
-
-        #display(FinalUmatrix)
-        return FinalUmatrix, h
+        # Convert masses to the correct type 
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        m1_squared = m1_T^2
+        m2_squared = m2_T^2
+        m3_squared = m3_T^2
     
+        total_size = 3 * N_int
+        mass_squared = Vector{T}(undef, total_size)
+        delta_mass = Vector{T}(undef, total_size)
+        
+        # Initialize first three elements efficiently
+        mass_squared[1] = m1_squared
+        mass_squared[2] = m2_squared
+        mass_squared[3] = m3_squared
+        
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+        
+        # Optimize the main computation loop
+        N_dual_T = T(N_dual)
+        
+      
+        @inbounds for i in 2:N_int
+            eig_val_scaled = N_dual_T * T(eigvalues[i])
+            
+            base_idx = 3 * i - 2
+        
+            mass_squared[base_idx] = eig_val_scaled * m1_squared
+            mass_squared[base_idx + 1] = eig_val_scaled * m2_squared
+            mass_squared[base_idx + 2] = eig_val_scaled * m3_squared
+            
+            delta_mass[base_idx] = mass_squared[base_idx] - m1_squared
+            delta_mass[base_idx + 1] = mass_squared[base_idx + 1] - m1_squared
+            delta_mass[base_idx + 2] = mass_squared[base_idx + 2] - m1_squared
+        
+        end
+            
+            
+        h = delta_mass
+        U = get_PMNS(params)
+        FinalUmatrix = kron(Usector, U)
+        
+        return FinalUmatrix, h
     end
 end
 
-function get_matrices(cfg::NND)
-    function get_Nnaturalness(params::NamedTuple)
-        
-        N_int = round(Int, ForwardDiff.value(params[:N])) 
-        N_dual = params[:N]                               
-        
+function get_matrices_old_ok(cfg::NND)
+    function get_Nnaturalness_old_ok(params::NamedTuple)
+
+        N_int = round(Int, ForwardDiff.value(params[:N]))
+        N_dual = params[:N]
+
         # Determine the most general type from all potentially dual parameters
         T = promote_type(
             typeof(params[:N]), 
@@ -650,7 +684,7 @@ function get_matrices(cfg::NND)
         matrix = zeros(T, N_int, N_int)
         
      
-        for i in 1:N_int  
+        Threads.@threads for i in 1:N_int  
             for j in 1:N_int 
                 sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
                 sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
@@ -729,7 +763,7 @@ function get_matrices(cfg::NNM)
         matrix = zeros(T, N_int, N_int)
         
      
-        for i in 1:N_int  
+        Threads.@threads for i in 1:N_int  
             for j in 1:N_int 
                 sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
                 sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
