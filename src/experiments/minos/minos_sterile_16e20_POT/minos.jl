@@ -122,9 +122,9 @@ function get_forward_model(physics, assets)
     end
 end
 
-function get_plot(physics, assets)
+function get_plot_old(physics, assets)
 
-    function plot(params, d=assets.observed)
+    function plot_old(params, d=assets.observed)
         f = Figure()
 
         m = mean(get_forward_model(physics, assets)(params))
@@ -199,9 +199,9 @@ function get_plot(physics, assets)
 end
 
 
-function get_plot_new( physics, assets)
-    function plot_new(params, d=assets.observed)
-        N_values = [5, 10, 20, 50]
+function get_plot( physics, assets)
+    function plot(params, d=assets.observed)
+        N_values = [5, 10, 20, 100]
         colors = [:red, :blue, :green, :orange]  # Different colors for each N
         
         # Calculate all means and variances first
@@ -259,7 +259,7 @@ function get_plot_new( physics, assets)
             ylims!(f.content[4], 0, 600)
             
             display(f)
-            save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_N_$N.png", f)
+            #save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_N_$N.png", f)
         end
         
         # Generate comparison plots with all N values for each channel
@@ -320,7 +320,7 @@ function get_plot_new( physics, assets)
             ylims!(ax_ratio, 0.7, 1.3)
             
             display(f_ratio)
-            save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_"*String(ch)*"_N_ratio.png", f_ratio)
+            save("/home/sofialon/Newtrinos.jl/profiled_plot/minos_data_"*String(ch)*"_N_ratio.png", f_ratio)
         end
         
         # Generate combined comparison plot (both CC and NC channels together)
@@ -383,7 +383,7 @@ function get_plot_new( physics, assets)
         end
         
         display(f_combined)
-        save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_combined_N_comp.png", f_combined)
+       # save("/home/sofialon/Newtrinos.jl/natural_plot/minos_data_combined_N_comp.png", f_combined)
         
         return f_combined  # Return the final combined plot
     end

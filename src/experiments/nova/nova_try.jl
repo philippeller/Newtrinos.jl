@@ -7,6 +7,7 @@ using BAT
 using DataStructures
 using CairoMakie
 using Logging
+using Printf
 using Statistics
 import ..Newtrinos
 
@@ -789,9 +790,8 @@ function get_forward_model(physics, assets)
 end
 
 
-function get_plot_old(physics, assets)
-
-    function plot_old(params)
+function get_plot(physics, assets)
+    function plot(params)
         f = Figure(resolution=(1400, 1200)) 
         
         # Get predictions
@@ -811,11 +811,23 @@ function get_plot_old(physics, assets)
             # Get MC histogram data directly
             mc_histogram = assets.numu_data.quartiles[i]["Oscillated_Total_pred"]
             
+            # Calculate chi-square
+            chi2 = sum((observed .- predicted).^2 ./ max.(predicted, 1))
+            dof = length(observed) - length(params)
+            
             # Plot ALL THREE components
             scatter!(ax, energy_centers, observed, color=:black, label="Observed Data", markersize=6)
             stairs!(ax, energy_centers, mc_histogram, color=:gray, linewidth=3, label="MC Histogram")
             errorbars!(ax, energy_centers, predicted, predicted_errors, color=:red, linewidth=2)
             lines!(ax, energy_centers, predicted, color=:red, linewidth=2, label="Calculated Prediction")
+            
+            # Add chi-square text
+            chi2_text = @sprintf("χ² = %.1f\nχ²/dof = %.2f", chi2, chi2/dof)
+            text!(ax, chi2_text, 
+                position = (maximum(energy_centers) * 0.98, maximum(observed) * 0.9),
+                align = (:right, :top),
+                fontsize = 10,
+                color = :black)
             
             ax.xlabel = "Energy (GeV)"
             ax.ylabel = "Events"
@@ -835,18 +847,29 @@ function get_plot_old(physics, assets)
             # Get MC histogram data directly for numubar
             mc_histogram = assets.numubar_data.quartiles[i]["Oscillated_Total_pred"]
 
-           
+            # Calculate chi-square
+            chi2 = sum((observed .- predicted).^2 ./ max.(predicted, 1))
+            dof = length(observed) - length(params)
+        
             scatter!(ax_bar, energy_centers, observed, color=:black, label="Observed Data", markersize=6)
             stairs!(ax_bar, energy_centers, mc_histogram, color=:gray, linewidth=3, label="MC Histogram")
             errorbars!(ax_bar, energy_centers, predicted, predicted_errors, color=:red, linewidth=2)
             lines!(ax_bar, energy_centers, predicted, color=:red, linewidth=2, label="Calculated Prediction")
+
+            # Add chi-square text
+            chi2_text = @sprintf("χ² = %.1f\nχ²/dof = %.2f", chi2, chi2/dof)
+            text!(ax_bar, chi2_text, 
+                position = (maximum(energy_centers) * 0.98, maximum(observed) * 0.9),
+                align = (:right, :top),
+                fontsize = 10,
+                color = :black)
 
             ax_bar.xlabel = "Energy (GeV)"
             ax_bar.ylabel = "Events"
             axislegend(ax_bar, position=:rt, labelsize=4)
         end
         
-      
+    
         ax_numu_total = Axis(f[1, 5], title="νμ Total (All Quartiles)")
         
         observed_total_numu = assets.numu_data.total["observed"]
@@ -857,9 +880,13 @@ function get_plot_old(physics, assets)
         
         # Get total MC histogram
         mc_total_numu = assets.numu_data.total["Oscillated_Total_pred"]
-   
+
         energy_centers = (assets.numu_data.energy_edges[1:end-1] .+ 
                         assets.numu_data.energy_edges[2:end]) ./ 2
+        
+        # Calculate chi-square for total
+        chi2_total = sum((observed_total_numu .- predicted_total_numu).^2 ./ max.(predicted_total_numu, 1))
+        dof_total = length(observed_total_numu) - length(params)
         
         # Plot total components
         scatter!(ax_numu_total, energy_centers, observed_total_numu, color=:black, 
@@ -871,25 +898,36 @@ function get_plot_old(physics, assets)
         lines!(ax_numu_total, energy_centers, predicted_total_numu, color=:red, 
             linewidth=3, label="Calculated Total")
         
+        # Add chi-square text
+        chi2_text = @sprintf("χ² = %.1f\nχ²/dof = %.2f", chi2_total, chi2_total/dof_total)
+        text!(ax_numu_total, chi2_text, 
+            position = (maximum(energy_centers) * 0.98, maximum(observed_total_numu) * 0.9),
+            align = (:right, :top),
+            fontsize = 10,
+            color = :black)
+        
         ax_numu_total.xlabel = "Energy (GeV)"
         ax_numu_total.ylabel = "Events"
         axislegend(ax_numu_total, position=:rt, labelsize=4)
         
-      
+    
         ax_numubar_total = Axis(f[2, 5], title="ν̄μ Total (All Quartiles)")
-
 
         observed_total_numubar = assets.numubar_data.total["observed"]
         # Sum predicted data across all quartiles
-        predicted_total_numubar =sum([numu_predictions["numubar"][i] for i in 1:4])
+        predicted_total_numubar = sum([numu_predictions["numubar"][i] for i in 1:4])
 
         predicted_total_numubar_errors = sqrt.(max.(predicted_total_numubar, 0))
         
         # Get total MC histogram
         mc_total_numubar = assets.numubar_data.total["Oscillated_Total_pred"]
-   
+
         energy_centers = (assets.numubar_data.energy_edges[1:end-1] .+ 
                         assets.numubar_data.energy_edges[2:end]) ./ 2
+        
+        # Calculate chi-square for total
+        chi2_total = sum((observed_total_numubar .- predicted_total_numubar).^2 ./ max.(predicted_total_numubar, 1))
+        dof_total = length(observed_total_numubar) - length(params)
         
         # Plot total components
         scatter!(ax_numubar_total, energy_centers, observed_total_numubar, color=:black, 
@@ -900,6 +938,14 @@ function get_plot_old(physics, assets)
                 predicted_total_numubar_errors, color=:red, linewidth=3)
         lines!(ax_numubar_total, energy_centers, predicted_total_numubar, color=:red, 
             linewidth=3, label="Calculated Total")
+        
+        # Add chi-square text
+        chi2_text = @sprintf("χ² = %.1f\nχ²/dof = %.2f", chi2_total, chi2_total/dof_total)
+        text!(ax_numubar_total, chi2_text, 
+            position = (maximum(energy_centers) * 0.98, maximum(observed_total_numubar) * 0.9),
+            align = (:right, :top),
+            fontsize = 10,
+            color = :black)
         
         ax_numubar_total.xlabel = "Energy (GeV)"
         ax_numubar_total.ylabel = "Events"
@@ -924,15 +970,27 @@ function get_plot_old(physics, assets)
                 mc_nue = assets.nue_data.mc_components["Total_pred3"]
             end
             
+            # Calculate chi-square
+            chi2 = sum((observed_nue .- predicted_nue).^2 ./ max.(predicted_nue, 1))
+            dof = length(observed_nue) - length(params)
+            
             predicted_nue_errors = sqrt.(max.(predicted_nue, 0)) 
             energy_centers = (assets.nue_data.energy_edges[1:end-1] .+ assets.nue_data.energy_edges[2:end]) ./ 2
-            energy_centers_h=energy_centers .- 0.25  
+            energy_centers_h = energy_centers .- 0.25  
             energy_centers_m = energy_centers #.+ 0.5  
 
             scatter!(ax_nue, energy_centers_m, observed_nue, color=:black, label="Observed Data", markersize=6)
             stairs!(ax_nue, energy_centers_h, mc_nue, color=:gray, linewidth=3, label="MC Histogram")
             errorbars!(ax_nue, energy_centers_m, predicted_nue, predicted_nue_errors, color=:blue, linewidth=2)
             lines!(ax_nue, energy_centers_m, predicted_nue, color=:blue, linewidth=2, label="Calculated Prediction")
+
+            # Add chi-square text
+            chi2_text = @sprintf("χ² = %.1f\nχ²/dof = %.2f", chi2, chi2/dof)
+            text!(ax_nue, chi2_text, 
+                position = (maximum(energy_centers) * 0.98, maximum(observed_nue) * 0.9),
+                align = (:right, :top),
+                fontsize = 10,
+                color = :black)
 
             ax_nue.xlabel = "Energy (GeV)"
             ax_nue.ylabel = "Events"
@@ -958,9 +1016,13 @@ function get_plot_old(physics, assets)
                 mc_nuebar = assets.nuebar_data.mc_components["Total_pred3"]
             end
             
+            # Calculate chi-square
+            chi2 = sum((observed_nuebar .- predicted_nuebar).^2 ./ max.(predicted_nuebar, 1))
+            dof = length(observed_nuebar) - length(params)
+            
             predicted_nuebar_errors = sqrt.(max.(predicted_nuebar, 0))  # Poisson errors for predictions
             energy_centers = (assets.nuebar_data.energy_edges[1:end-1] .+ assets.nuebar_data.energy_edges[2:end]) ./ 2
-            energy_centers_h=energy_centers .- 0.25  
+            energy_centers_h = energy_centers .- 0.25  
             energy_centers_m = energy_centers #.+ 0.5  
         
             
@@ -968,6 +1030,14 @@ function get_plot_old(physics, assets)
             stairs!(ax_nuebar, energy_centers_h, mc_nuebar, color=:gray, linewidth=3, label="MC Histogram")
             errorbars!(ax_nuebar, energy_centers_m, predicted_nuebar, predicted_nuebar_errors, color=:green, linewidth=2)
             lines!(ax_nuebar, energy_centers_m, predicted_nuebar, color=:green, linewidth=2, label="Calculated Prediction")
+
+            # Add chi-square text
+            chi2_text = @sprintf("χ² = %.1f\nχ²/dof = %.2f", chi2, chi2/dof)
+            text!(ax_nuebar, chi2_text, 
+                position = (maximum(energy_centers) * 0.98, maximum(observed_nuebar) * 0.9),
+                align = (:right, :top),
+                fontsize = 10,
+                color = :black)
 
             ax_nuebar.xlabel = "Energy (GeV)"
             ax_nuebar.ylabel = "Events"
@@ -981,8 +1051,8 @@ function get_plot_old(physics, assets)
 
 end    
 
-function get_plot(physics, assets)
-    function plot(params, data=assets.numu_data.quartiles[1]["observed"])
+function get_plot_new(physics, assets)
+    function plot_new(params, data=assets.numu_data.quartiles[1]["observed"])
 
         param_values = [5, 10, 20, 50]  # N parameter values
         param_name = "N"  # Parameter name
@@ -1057,7 +1127,7 @@ function get_plot(physics, assets)
             ylims!(ax, 0, 30)
 
             display(f)
-            save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_$val.png", f)
+            #save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_$val.png", f)
         end
         
         # Generate comparison plot with all parameter values
@@ -1086,7 +1156,7 @@ function get_plot(physics, assets)
         ylims!(ax_comp, 0, 30)  # Adjusted for NOVA count range
 
         display(f_comp)
-        save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_comp.png", f_comp)
+        #save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_comp.png", f_comp)
 
         # Generate ratio comparison plot
         f_ratio = Figure()
@@ -1113,7 +1183,7 @@ function get_plot(physics, assets)
         ylims!(ax_ratio, -2, 3.3)  # Kept the wider range from original NOVA code
 
         display(f_ratio)
-        save("/home/sofialon/Newtrinos.jl/natural plot/nova/nova_data_N_NND_$(param_name)_ratio.png", f_ratio)
+        save("/home/sofialon/Newtrinos.jl/profled plot/nova/nova_data_NNM_$(param_name)_ratio.png", f_ratio)
     end
     return plot
 end

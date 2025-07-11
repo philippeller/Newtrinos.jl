@@ -10,6 +10,7 @@ using DataStructures
 using BAT
 using CairoMakie
 using Logging
+using Printf
 import ..Newtrinos
 
 @kwdef struct KamLAND <: Newtrinos.Experiment
@@ -148,16 +149,20 @@ function get_forward_model(physics, assets)
     end
 end
 
-function get_plot_old(physics, assets)
+function get_plot(physics, assets)
 
-    function plot_old(params, data=assets.observed)
-    
+    function plot(params, data=assets.observed)
+        
         m = mean(get_forward_model(physics, assets)(params))
         v = var(get_forward_model(physics, assets)(params))
         
         energy = assets.Ep
         energy_bins = assets.Ep_bins
-    
+
+        # Calculate chi-square
+        chi2 = sum((data .- m).^2 ./ v)
+        dof = length(data) - length(params)  # degrees of freedom
+        
         f = Figure()
         ax = Axis(f[1,1])
         
@@ -168,7 +173,6 @@ function get_plot_old(physics, assets)
         ax.ylabel="Counts"
         ax.title="KamLAND"
         axislegend(ax, framevisible = false)
-        
         
         ax2 = Axis(f[2,1])
         plot!(ax2, energy, data ./ m, color=:black, label="Observed")
@@ -190,14 +194,22 @@ function get_plot_old(physics, assets)
         
         ylims!(ax, 0, 300)
         
+        # Add chi-square text to bottom right of lower plot
+        chi2_text = @sprintf("χ² = %.2f\nNDF = %d\nχ²/NDF = %.2f", chi2, dof, chi2/dof)
+        text!(ax, chi2_text, 
+            position = (maximum(energy_bins) * 0.98, 4.05),
+            align = (:right, :bottom),
+            fontsize = 10,
+            color = :black)
+        
         f
     end
 end
 
-function get_plot(physics, assets)
-    function plot(params, data=assets.observed)
+function get_plot_new(physics, assets)
+    function plot_new(params, data=assets.observed)
        
-        param_values = [5, 10, 20, 50]  # N parameter values
+        param_values = [5, 10, 20, 100]  # N parameter values
         param_name = "N"  # Parameter name
         colors = [:red, :blue, :green, :orange]  # Different colors for each parameter value
         
@@ -308,7 +320,7 @@ function get_plot(physics, assets)
         ylims!(ax_ratio, 0.3, 1.7)  # Kept the wider range from original KamLAND code
         
         display(f_ratio)
-        #save("/home/sofialon/Newtrinos.jl/natural plot/kamland/kamland_data_NNM_$(param_name)_ratio.png", f_ratio)
+        save("/home/sofialon/Newtrinos.jl/profiled plot/kamland/kamland_data_NND_$(param_name)_ratio.png", f_ratio)
     end
     
 end
