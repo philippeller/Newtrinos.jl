@@ -137,8 +137,8 @@ end
 
 
 function response_matrix_per_er_bin(keVnr, params, assets)
-    keVee = qf(keVnr)
-    if keVee <= 0:
+    keVee = qf(keVnr, assets.qfa)
+    if keVee <= 0
         return 0.
     end
 
@@ -164,7 +164,7 @@ end
 
 
 
-function build_rate_matrix(er_centers, enu_centers, nupar, physics, params):
+function build_rate_matrix(er_centers, enu_centers, nupar, physics, params)
     """
     Vectorized version: computes a stack of rate matrices for each freepar set.
     - freepar_array: shape (n_samples, 4)
@@ -190,7 +190,7 @@ function get_expected(params, physics, assets)
     # This will hold the sum over isotopes for each parameter set
     dNdEr_all = zeros(n_er)
 
-    for nupar in assets.isotopes:    
+    for nupar in assets.isotopes
         # 1. Build the rate matrix for all parameter sets: (n_samples, n_er, n_enu)
         rate_matrix = build_rate_matrix(
             assets.er_centers * 1e-3,  # Convert to MeV

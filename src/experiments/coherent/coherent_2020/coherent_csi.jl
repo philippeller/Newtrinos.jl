@@ -22,8 +22,13 @@ import ..Newtrinos
 end
 
 function configure(physics)
-    physics = (;physics.sns_flux, physics.cevns_xsec)
     assets = get_assets(physics)
+    # Dynamically build params/priors for cevns_xsec using isotope list (with Rn_nom)
+    cevns_params, cevns_priors = Newtrinos.cevns_xsec.build_params_and_priors(assets.isotopes)
+    # Reconfigure cevns_xsec with correct params/priors
+    cevns_xsec = Newtrinos.cevns_xsec.configure(cevns_params, cevns_priors)
+    # Update physics NamedTuple with new cevns_xsec
+    physics = (;physics.sns_flux, cevns_xsec)
     return COHERENT_CSI(
         physics = physics,
         params = get_params(),
@@ -39,7 +44,11 @@ function get_params()
         coherent_csi_eff_a = 1.32045,
         coherent_csi_eff_b = 0.285979,
         coherent_csi_eff_c = 10.8646,
-        coherent_csi_eff_d = -0.333322,        
+        coherent_csi_eff_d = -0.333322,
+        coherent_csi_qfa_a = 0.0554628,  # QF polynomial coefficients
+        coherent_csi_qfa_b = 4.30681,
+        coherent_csi_qfa_c = -111.707,
+        coherent_csi_qfa_d = 840.384,      
         )
 end
 
@@ -50,6 +59,10 @@ function get_priors()
         coherent_csi_eff_b = Truncated(Normal(0.285979, 0.0006), 0, 1),
         coherent_csi_eff_c = Truncated(Normal(10.8646, 1.), 0, 1),
         coherent_csi_eff_d = Truncated(Normal(-0.333322, 0.03), 0, 1),
+        coherent_csi_qfa_a = Normal(0.0554628, 0.0059),
+        coherent_csi_qfa_b = Normal(4.30681, 0.79),
+        coherent_csi_qfa_c = Normal(-111.707, 26.15),
+        coherent_csi_qfa_d = Normal(840.384, 244.82),
         )
 end
 
@@ -58,13 +71,13 @@ function get_assets(physics, datadir = @__DIR__)
 
 
     er_edges = LinRange(3, 100, Int((100-3)/0.5)) # keV
-
-    isotopes = [[0.49,123.8e3,55,78,5.7242],[0.51,118.21e3,53,74,5.7242]] # List of isotopes with [fraction, Nuclear mass (GeV), Z, N=A-Z, R_n (fm)]
+    isotopes = [
+        (fraction=0.49, mass=123.8e3, Z=55, N=78, Rn_key=:Rn_Cs, Rn_nom=5.7242),  # Cs-133
+        (fraction=0.51, mass=118.21e3, Z=53, N=74, Rn_key=:Rn_I, Rn_nom=5.7242) # I-127
+    ] # List of isotopes with [fraction, Nuclear mass (GeV), Z, N=A-Z, Rn_key]
     Nt = 2 * (14.6/0.25981) * 6.023e+23
-    qfa = [0.0554628, 4.30681, -111.707, 840.384]  # QF polynomial coefficients
     light_yield = 13.35  # PE/keVee
     resolution = [0.0749, 9.56]  # a/Eee and b*Eee
-    #efficiency = [1.32045, 0.285979, 10.8646, -0.333322]  # Sigmoid + offset
     # Import Data
     brnPE = CSV.read(joinpath(datadir, "csi/brnPE.txt"), DataFrame, comment="#", header=false, delim=' ') # columns: PE, BRN PDF
     ninPE = CSV.read(joinpath(datadir, "csi/ninPE.txt"), DataFrame, comment="#", header=false, delim=' ') # columns: PE, NIN PDF
@@ -90,7 +103,6 @@ function get_assets(physics, datadir = @__DIR__)
         out_centers,
         isotopes,
         Nt,
-        qfa,
         light_yield,
         resolution,
         brnPE,
@@ -98,12 +110,15 @@ function get_assets(physics, datadir = @__DIR__)
         ssBkg,
         distance,
         exposure,
-        )
+    )
 end
 
-function qf(er_centers, qfa)
-    a, b, c, d = qfa
-    er_centers *= 1e-3 #Convert to MeV
+function qf(er_centers, params)
+    a = params.coherent_csi_qfa_a
+    b = params.coherent_csi_qfa_b
+    c = params.coherent_csi_qfa_c
+    d = params.coherent_csi_qfa_d
+    er_centers = er_centers * 1e-3 #Convert to MeV (no mutation)
     return @. (a * er_centers + b * er_centers ^ 2 + c * er_centers ^ 3 + d * er_centers ^ 4) * 1e3  # Convert to keVee
 end
 
@@ -138,7 +153,7 @@ end
 
 
 function response_matrix_per_er_bin(keVnr, params, assets)
-    keVee = qf(keVnr, assets.qfa)
+    keVee = qf(keVnr, params)
     if keVee <= 0
         return zeros(size(assets.out_centers))
     end
@@ -160,63 +175,44 @@ end
 function construct_response_matrix(params, assets)
     n_out = length(assets.out_centers)
     n_er = length(assets.er_centers)
-    A = stack([response_matrix_per_er_bin(keVnr, params, assets) for keVnr in assets.er_centers])
+    A = zeros(n_out, n_er)
+    for (j, keVnr) in enumerate(assets.er_centers)
+        col = response_matrix_per_er_bin(keVnr, params, assets)
+        if length(col) == n_out
+            A[:, j] = max.(col, 0)  # zero out negatives
+        else
+            A[:, j] .= 0  # fallback if something goes wrong
+        end
+    end
+    return A
 end
 
-function build_rate_matrix(er_centers, enu_centers, nupar, physics, params)
-    """
-    Vectorized version: computes a stack of rate matrices for each freepar set.
-    - freepar_array: shape (n_samples, 4)
-    - Returns: R: shape (n_samples, n_er, n_enu)
-    """
-    physics.cevns_xsec.diff_xsec_csi(er_centers, enu_centers, params, nupar)
+function build_rate_matrix(er_centers, enu_centers, nupar, physics, params, Rn_key)
+    physics.cevns_xsec.diff_xsec_csi(er_centers, enu_centers, params, nupar, Rn_key)
 end
 
 
 function get_expected(params, physics, assets)
-
     response_matrix = construct_response_matrix(params, assets)
-        
-    flux = physics.sns_flux.flux(assets.exposure, assets.distance, params)
-    
-    """
-    Step-by-step vectorized signal model for multiple free parameter sets.
-        - freepar_array: shape (n_samples, 4)
-        - Returns: predicted signals: shape (n_samples, n_final_bins)
-    """
-    # This will hold the sum over isotopes for each parameter set
+    flux = physics.sns_flux.flux(exposure=assets.exposure, distance=assets.distance, params=params)
     dNdEr_all = zeros(eltype(assets.er_centers), size(assets.er_centers))
-
-    for nupar in assets.isotopes
-        # 1. Build the rate matrix for all parameter sets: (n_samples, n_er, n_enu)
+    for iso in assets.isotopes
+        nupar = [iso.fraction, iso.mass, iso.Z, iso.N]
         rate_matrix = build_rate_matrix(
-            assets.er_centers * 1e-3,  # Convert to MeV
-            flux.E,         # Neutrino energy centers
+            assets.er_centers * 1e-3,  # convert to MeV
+            flux.E,         # Neutrino energy centers (MeV)
             nupar,
             physics,
             params,
+            iso.Rn_key,
         )
-        #@show size(rate_matrix)
-        # 2. Fold with flux for all parameter sets at once (vectorized)
-        # rate_matrix: (n_samples, n_er, n_enu), self.flux[:, 1]: (n_enu,)
-        #dNdEr = rate_matrix * flux.total_flux'  # (n_samples, n_er)
         dNdEr = sum(rate_matrix .* flux.total_flux', dims=2)
-        dNdEr = dropdims(dNdEr, dims=2)  # result has shape (4, 193)
-        
-        dNdEr_all .+= nupar[1] * dNdEr  # sum over isotopes
+        dNdEr = dropdims(dNdEr, dims=2)
+        dNdEr_all .+= iso.fraction * dNdEr
     end
-    
-    # 3. Integrate over recoil energy bins (multiply by bin width)
-    
-    int_rate = assets.Nt * dNdEr_all .* diff(assets.er_edges * 1e-3) # (n_samples, n_er)
-
-    # 4. Apply detector response matrix to get final predicted counts
-
-    
-    predicted_counts = response_matrix * int_rate # (n_samples, n_output_bins)
-
+    int_rate = assets.Nt * dNdEr_all .* diff(assets.er_edges * 1e-3)
+    predicted_counts = response_matrix * int_rate
     return predicted_counts
-
 end
 
 function get_forward_model(physics, assets)
