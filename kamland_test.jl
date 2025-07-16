@@ -1,21 +1,12 @@
-# %%
+
 using LinearAlgebra
 using Distributions
-#using Plots
 using LaTeXStrings
 using Printf
 using FileIO
 import JLD2
-
-# %%
 using DataFrames
 
-
-# %%
-#using StatsPlots
-
-
-# %%
 using Base.Threads
 println("Threads: ", nthreads())
 
