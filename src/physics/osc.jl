@@ -658,7 +658,7 @@ function get_matrices(cfg::NND)
         U = get_PMNS(params)
         FinalUmatrix = kron(Usector, U)
         
-        return FinalUmatrix, h
+        return FinalUmatrix, h, Usector
     end
 end
 
@@ -817,7 +817,66 @@ function get_matrices(cfg::NNM)
         
         return FinalUmatrix, h
     end
+
 end
+
+
+
+function get_neutrinomass(cfg::NND)
+    function NeutrinoMassNND(params::NamedTuple)
+
+        U= get_PMNS(params)
+
+        N = round(Int,params[:N])
+
+        func= get_matrices(cfg)
+        
+        final, h, V = func(params)
+
+        x_e = U[1,:]
+        x_1 = V[1,:]
+
+        masses_SM_sq = get_abs_masses(params).^2
+
+        delta_masses_NN = h
+        
+        m_nu_sq = 0.0 
+
+        for i in 1:3
+            squared_x_e = abs(x_e[i])^2
+
+            sum = 0.0
+
+            for j in 1:N
+
+            mass = masses_SM_sq[i]+delta_masses_NN[j]
+            integrand= squared_x_e * abs(x_1[j])^2 * mass
+            sum += integrand
+            end
+
+            m_nu_sq += sum
+
+        end
+
+     return m_nu_sq
+
+    end
+    return NeutrinoMassNND
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # module Darkdim
 #     using Distributions
 #     using DataStructures
