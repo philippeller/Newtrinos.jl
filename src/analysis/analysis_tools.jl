@@ -325,44 +325,71 @@ function get_fwd_model(experiments::NamedTuple)
     distprod ∘ ffanout(fwd_models)
 end
 
-# new functns
-
-function generate_asimov_data(experiments::NamedTuple)
-    base_params = get_params(experiments)
-    model = get_fwd_model(experiments)
-    return mean(model(base_params))
-end
-
-function generate_asimov_data(x::Newtrinos.Experiment)
-    base_params = get_params(x)
-    model = x.forward_model
-    return mean(model(base_params))
-end
-
-function generate_toy_data(experiments::NamedTuple)
-    base_params = get_params(experiments)
-    model = get_fwd_model(experiments)
-    return rand(model(base_params))
-end
-
-function generate_toy_data(x::Newtrinos.Experiment)
-    base_params = get_params(x)
-    model = x.forward_model
-    return rand(model(base_params))
-end
-
-function generate_likelihood(experiments::NamedTuple, data_to_fit::NamedTuple)
-    model = get_fwd_model(experiments)
-    return likelihoodof(model, data_to_fit)
-end
-
-function generate_likelihood(x::Newtrinos.Experiment, data::Vector)
-    temp_exp = (; exp = x)
-    temp_data = (; exp = data)
-    return generate_likelihood(temp_exp, temp_data)
-end
-
 function generate_likelihood(experiments::NamedTuple, observed=get_observed(experiments))
     likelihoodof(get_fwd_model(experiments), observed)
+end
+
+function generate_toy_data(experiment::Newtrinos.Experiment, params::NamedTuple)
+    
+    model = experiment.forward_model
+    dist_obj = model(params)
+    toy_data = rand(dist_obj)
+
+    return toy_data       
+    
+end
+
+function generate_toy_data(experiments::NamedTuple, params::NamedTuple )
+    
+    final_data = map(experiments) do experiment
+    
+        model = experiment.forward_model
+        dist_obj = model(params)
+        toy_data = rand(dist_obj)
+
+    end
+    
+    return final_data
+    
+end
+
+function generate_asimov_data(experiment::Newtrinos.Experiment, params::NamedTuple)
+
+    model = experiment.forward_model
+    dist_obj = model(params)
+    
+    asimov_data_flt = mean(dist_obj)
+    
+    if dist_obj isa Product && !isempty(dist_obj.v) && first(dist_obj.v) isa Distributions.Poisson
+        @info "Poisson-based model. Rounding Asimov data to nearest integer."
+        return round.(Int, asimov_data_flt)    
+    else  
+        @info "Not Poisson-based model. Returning std floating-point Asimov data."
+        return asimov_data_flt  
+    end
+    
+end
+
+function generate_asimov_data(experiments::NamedTuple, params::NamedTuple)
+    
+    final_data = map(experiments) do experiment
+    
+        model = experiment.forward_model
+        dist_obj = model(params)
+        
+        asimov_data_flt = mean(dist_obj)
+
+        if dist_obj isa Product && !isempty(dist_obj.v) && first(dist_obj.v) isa Distributions.Poisson
+            @info "Poisson-based model. Rounding Asimov data to nearest integer."
+            round.(Int, asimov_data_flt) 
+        else
+            @info "Not Poisson-based model. Returning std floating-point Asimov data."
+            asimov_data_flt   
+        end
+        
+    end
+    
+    return final_data
+    
 end
    
