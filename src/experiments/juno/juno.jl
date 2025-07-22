@@ -337,7 +337,6 @@ end
 function get_forward_model(physics, assets)
     function forward_model(params)
         exp_events = get_expected(params, physics, assets)
-        exp_events = round.(Int, exp_events)   # Do in analysis scrpt?
         distprod(Poisson.(exp_events))
     end
 end
