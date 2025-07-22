@@ -23,6 +23,6 @@ include("experiments/kamland/kamland_7years/kamland.jl")
 include("experiments/km3net/orca6_433kton/orca.jl")
 include("experiments/nova/nova_try.jl")
 include("experiments/juno/juno.jl")
-include("experiments/katrin/katrin.jl")
+include("experiments/katrin/katrin_NN.jl")
 
 end

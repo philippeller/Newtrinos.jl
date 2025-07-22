@@ -193,9 +193,9 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
-    params[:N] = ftype(20)
-    params[:r] = ftype(1)
+    params[:m₀] = ftype(0.5)
+    params[:N] = ftype(100)
+    params[:r] = ftype(0)
     
     NamedTuple(params)
 end
@@ -216,8 +216,8 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
-    params[:N] = ftype(20)
+    params[:m₀] = ftype(0.5)
+    params[:N] = ftype(100)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -662,83 +662,6 @@ function get_matrices(cfg::NND)
     end
 end
 
-function get_matrices_old_ok(cfg::NND)
-    function get_Nnaturalness_old_ok(params::NamedTuple)
-
-        N_int = round(Int, ForwardDiff.value(params[:N]))
-        N_dual = params[:N]
-
-        # Determine the most general type from all potentially dual parameters
-        T = promote_type(
-            typeof(params[:N]), 
-            typeof(params[:m₀]),
-            typeof(params[:r]), 
-            typeof(params[:Δm²₂₁]), 
-            typeof(params[:Δm²₃₁]),
-            typeof(params[:δCP]),
-            typeof(params[:θ₁₂]),
-            typeof(params[:θ₁₃]),
-            typeof(params[:θ₂₃])
-        )
-        
-        matrix = zeros(T, N_int, N_int)
-        
-     
-        Threads.@threads for i in 1:N_int  
-            for j in 1:N_int 
-                sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-                sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
-                
-                if i == j
-                    matrix[i, j] = sqrt_i * sqrt_j * (one(T) + one(T)/T(N_dual))
-                else
-                    matrix[i, j] = sqrt_i * sqrt_j
-                end
-            end
-        end
-        
-        eigvalues, Usector = eigen(matrix)
-        m1, m2, m3 = get_abs_masses(params)
-        
-        # Convert masses to the correct type 
-        m1_T = T(m1)
-        m2_T = T(m2) 
-        m3_T = T(m3)
-        
-        # Create arrays with the promoted type that can handle Dual numbers
-        mass_squared = Vector{T}(undef, 3*N_int) 
-        delta_mass = Vector{T}(undef, 3*N_int)
-        
-        # Initialize first three elements 
-        mass_squared[1] = m1_T^2
-        mass_squared[2] = m2_T^2  
-        mass_squared[3] = m3_T^2
-        
-        delta_mass[1] = zero(T)
-        delta_mass[2] = T(params.Δm²₂₁)
-        delta_mass[3] = T(params.Δm²₃₁)
-        
-       
-        for i in 2:N_int  
-            eig_val_T = T(eigvalues[i])
-            N_dual_T = T(N_dual)
-            
-            mass_squared[3*i-2] = N_dual_T * eig_val_T * m1_T^2
-            mass_squared[3*i-1] = N_dual_T * eig_val_T * m2_T^2
-            mass_squared[3*i] = N_dual_T * eig_val_T * m3_T^2
-        
-            delta_mass[3*i-2] = mass_squared[3*i-2] - m1_T^2
-            delta_mass[3*i-1] = mass_squared[3*i-1] - m1_T^2
-            delta_mass[3*i] = mass_squared[3*i] - m1_T^2
-        end
-        
-        h = delta_mass
-        U = get_PMNS(params)
-        FinalUmatrix = kron(Usector, U)
-        
-        return FinalUmatrix, h
-    end
-end
 
 function get_matrices(cfg::NNM)
 
@@ -815,14 +738,14 @@ function get_matrices(cfg::NNM)
         U = get_PMNS(params)
         FinalUmatrix = kron(Usector, U)
         
-        return FinalUmatrix, h
+        return FinalUmatrix, h, Usector
     end
 
 end
 
 
 
-function get_neutrinomass(cfg::NND)
+function get_neutrinomass(cfg::NNM)
     function NeutrinoMassNND(params::NamedTuple)
 
         U= get_PMNS(params)
@@ -866,6 +789,33 @@ end
 
 
 
+function get_neutrinomass_SM(cfg::ThreeFlavour)
+    function NeutrinoMass_SM(params::NamedTuple)
+
+        U= get_PMNS(params)
+
+       
+        
+        x_e = U[1,:]
+
+        # Add new parameters
+        new_params = merge(params, (m₀ = 0.1,))
+        masses_SM_sq = get_abs_masses(new_params).^2
+
+        m_nu_sq = 0.0
+
+        for i in 1:3
+            squared_x_e = abs(x_e[i])^2*masses_SM_sq[i]
+
+            m_nu_sq += squared_x_e
+
+        end
+
+     return m_nu_sq
+
+    end
+    return NeutrinoMass_SM
+end
 
 
 
