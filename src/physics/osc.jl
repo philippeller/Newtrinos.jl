@@ -193,9 +193,9 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.5)
+    params[:m₀] = ftype(0.1)
     params[:N] = ftype(100)
-    params[:r] = ftype(0)
+    params[:r] = ftype(1)
     
     NamedTuple(params)
 end
@@ -216,7 +216,7 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.5)
+    params[:m₀] = ftype(0.1)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     
@@ -655,6 +655,7 @@ function get_matrices(cfg::NND)
             
             
         h = delta_mass
+     
         U = get_PMNS(params)
         FinalUmatrix = kron(Usector, U)
         
@@ -762,26 +763,29 @@ function get_neutrinomass(cfg::NNM)
         masses_SM_sq = get_abs_masses(params).^2
 
         delta_masses_NN = h
-        
-        m_nu_sq = 0.0 
 
+        m_nu_sq = 0.0
+        sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
+        
         for i in 1:3
             squared_x_e = abs(x_e[i])^2
 
-            sum = 0.0
+            x_idx = 4 # Start at 4 for x_1
+            delta_idx = 3+i # Start delta_masses_NN
 
-            for j in 1:N
+            for j in 1:(N-3)
 
-            mass = masses_SM_sq[i]+delta_masses_NN[j]
-            integrand= squared_x_e * abs(x_1[j])^2 * mass
+            mass = masses_SM_sq[1]+delta_masses_NN[delta_idx]
+            integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
             sum += integrand
-            end
 
-            m_nu_sq += sum
+            x_idx += 1      # Increment by 1 for x_1
+            delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
+            end
 
         end
 
-     return m_nu_sq
+     return sum
 
     end
     return NeutrinoMassNND
@@ -793,8 +797,6 @@ function get_neutrinomass_SM(cfg::ThreeFlavour)
     function NeutrinoMass_SM(params::NamedTuple)
 
         U= get_PMNS(params)
-
-       
         
         x_e = U[1,:]
 
