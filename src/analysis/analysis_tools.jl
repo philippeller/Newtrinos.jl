@@ -44,83 +44,96 @@ end
 
 "Find Maximum Likelihood Estimator (MLE)"
 function find_mle(likelihood, prior, params)
-
-    adsel = AutoForwardDiff()
-    set_batcontext(ad = adsel)
     
-    posterior = PosteriorMeasure(likelihood, prior)
+    try
 
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
+        adsel = AutoForwardDiff()
+        set_batcontext(ad = adsel)
+        
+        posterior = PosteriorMeasure(likelihood, prior)
 
-    msg = "Running Optimization for point "
-    
-    for key in keys(prior)
-    	if prior[key] isa ValueShapes.ConstValueDist
-            value = prior[key].value
-    	    @reset params[key] = value
-            msg *= " $(key): $(value)"
-    	end
+        #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
+
+        msg = "Running Optimization for point "
+        
+        for key in keys(prior)
+            if prior[key] isa ValueShapes.ConstValueDist
+                value = prior[key].value
+                @reset params[key] = value
+                msg *= " $(key): $(value)"
+            end
+        end
+
+        @info msg
+        # THIS ONE WORKS:
+        res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
+        #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), ))
+
+        # This one also works, and IS thread safe:
+
+        #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-5, iterations=100)))
+
+        
+        #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), kwargs = ()))#reltol=1e-7, maxiters=10000)))
+
+        # target = posterior
+        # context = get_batcontext()
+        # transformed_m, f_pretransform = BAT.transform_and_unshape(PriorToUniform(), target, context)
+        # target_uneval = BAT.unevaluated(target)
+        # inv_trafo = inverse(f_pretransform)
+        # initalg = BAT.apply_trafo_to_init(f_pretransform, InitFromTarget())
+        # x_init = collect(bat_initval(transformed_m, initalg, context).result)
+        # # Maximize density of original target, but run in transformed space, don't apply LADJ:
+        # f = BAT.fchain(inv_trafo, logdensityof(target_uneval), -)
+        # target_f = (x, p) -> f(x)
+        # adsel = BAT.get_adselector(context)
+        # optimization_function = build_optimizationfunction(target_f, adsel)
+        # optimization_problem = Optimization.OptimizationProblem(optimization_function, x_init, (), lb=zeros(size(x_init)), ub=ones(size(x_init)))
+        # #algopts = (maxiters = algorithm.maxiters, maxtime = algorithm.maxtime, abstol = algorithm.abstol, reltol = algorithm.reltol)
+        # # Not all algorithms support abstol, just filter all NaN-valued opts out:
+        # #filtered_algopts = NamedTuple(filter(p -> !isnan(p[2]), ))
+        # optimization_result = Optimization.solve(optimization_problem, Evolutionary.CMAES(μ = 40, λ = 100)) #NLopt.GN_CRS2_LM()) 
+        # transformed_mode =  optimization_result.u
+        # result_mode = inv_trafo(transformed_mode)
+        # res = (result = result_mode, result_trafo = transformed_mode, f_pretransform = f_pretransform, info = optimization_result)
+
+        #println(res)
+
+        #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init]), kwargs = (reltol=1e-7, maxiters=10000)))
+        #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
+        #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
+        #res = bat_findmode(posterior, OptimizationAlg(optalg=NLopt.GN_CRS2_LM()))
+
+        return logdensityof(likelihood, res.result), logdensityof(posterior, res.result), res.result
+
+        # posterior = PosteriorMeasure(llh, prior)
+
+        # tr_pstr, f_trafo = bat_transform(PriorToGaussian(), posterior)
+
+        # v0 = mean(posterior.prior.dist)
+        # x0 = f_trafo(v0)
+
+        # tr_neg_log_likelihood = (-) ∘ logdensityof(posterior.likelihood) ∘ inverse(f_trafo)
+
+        # tr_neg_log_likelihood(x0)
+
+        # r = Optim.optimize(tr_neg_log_likelihood, x0, Optim.LBFGS(), Optim.Options(f_tol=1e-13), autodiff = :forward)
+
+        # x_opt = Optim.minimizer(r)
+        # v_opt = inverse(f_trafo)(x_opt)
+        # f_opt = -Optim.minimum(r)
+        # return f_opt, v_opt
+        
+    catch e
+        if e isa ArgumentError
+            return NaN, NaN, (; (k => NaN for k in keys(params))... )
+
+        else
+            rethrow(e)
+        end
     end
 
-    @info msg
-    # THIS ONE WORKS:
-    res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), ))
-
-    # This one also works, and IS thread safe:
-
-    #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (g_tol=1e-5, iterations=100)))
-
     
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), kwargs = ()))#reltol=1e-7, maxiters=10000)))
-
-    # target = posterior
-    # context = get_batcontext()
-    # transformed_m, f_pretransform = BAT.transform_and_unshape(PriorToUniform(), target, context)
-    # target_uneval = BAT.unevaluated(target)
-    # inv_trafo = inverse(f_pretransform)
-    # initalg = BAT.apply_trafo_to_init(f_pretransform, InitFromTarget())
-    # x_init = collect(bat_initval(transformed_m, initalg, context).result)
-    # # Maximize density of original target, but run in transformed space, don't apply LADJ:
-    # f = BAT.fchain(inv_trafo, logdensityof(target_uneval), -)
-    # target_f = (x, p) -> f(x)
-    # adsel = BAT.get_adselector(context)
-    # optimization_function = build_optimizationfunction(target_f, adsel)
-    # optimization_problem = Optimization.OptimizationProblem(optimization_function, x_init, (), lb=zeros(size(x_init)), ub=ones(size(x_init)))
-    # #algopts = (maxiters = algorithm.maxiters, maxtime = algorithm.maxtime, abstol = algorithm.abstol, reltol = algorithm.reltol)
-    # # Not all algorithms support abstol, just filter all NaN-valued opts out:
-    # #filtered_algopts = NamedTuple(filter(p -> !isnan(p[2]), ))
-    # optimization_result = Optimization.solve(optimization_problem, Evolutionary.CMAES(μ = 40, λ = 100)) #NLopt.GN_CRS2_LM()) 
-    # transformed_mode =  optimization_result.u
-    # result_mode = inv_trafo(transformed_mode)
-    # res = (result = result_mode, result_trafo = transformed_mode, f_pretransform = f_pretransform, info = optimization_result)
-
-    #println(res)
-
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([v_init]), kwargs = (reltol=1e-7, maxiters=10000)))
-    #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
-    #res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([v_init]), kwargs = (f_tol=1e-7, iterations=10000)))
-    #res = bat_findmode(posterior, OptimizationAlg(optalg=NLopt.GN_CRS2_LM()))
-
-    return logdensityof(likelihood, res.result), logdensityof(posterior, res.result), res.result
-
-    # posterior = PosteriorMeasure(llh, prior)
-
-    # tr_pstr, f_trafo = bat_transform(PriorToGaussian(), posterior)
-
-    # v0 = mean(posterior.prior.dist)
-    # x0 = f_trafo(v0)
-
-    # tr_neg_log_likelihood = (-) ∘ logdensityof(posterior.likelihood) ∘ inverse(f_trafo)
-
-    # tr_neg_log_likelihood(x0)
-
-    # r = Optim.optimize(tr_neg_log_likelihood, x0, Optim.LBFGS(), Optim.Options(f_tol=1e-13), autodiff = :forward)
-
-    # x_opt = Optim.minimizer(r)
-    # v_opt = inverse(f_trafo)(x_opt)
-    # f_opt = -Optim.minimum(r)
-    # return f_opt, v_opt
 end
 
 

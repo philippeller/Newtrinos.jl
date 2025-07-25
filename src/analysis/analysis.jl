@@ -40,6 +40,19 @@ function parse_command_line()
         "--plot"
         help = "Enable plotting"
         action = :store_true
+
+        "--lambda"
+        arg_type = Float64
+        default = 1.
+
+        #"--ca"
+        #arg_type = Float64
+        #default = 1.
+
+        #"--scan"
+        #arg_type = String
+        #required = true
+
     end
 
     return parse_args(s)
@@ -60,11 +73,11 @@ context = set_batcontext(ad = adsel)
 name = args["name"]
 
 osc_cfg = Newtrinos.osc.OscillationConfig(
-    flavour=Newtrinos.osc.Darkdim_Lambda(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=Symbol(args["ordering"]))),
+    flavour=Newtrinos.osc.Darkdim_Masses(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=Symbol(args["ordering"]))),
     #propagation=Newtrinos.osc.Basic(),
-    propagation=Newtrinos.osc.Damping(),
+    propagation=Newtrinos.osc.Damping(σₑ=0.05),
     #states=Newtrinos.osc.All(),
-    states=Newtrinos.osc.Cut(cutoff=1.),
+    states=Newtrinos.osc.Cut(cutoff=10.),
     interaction=Newtrinos.osc.SI()
     )
 osc = Newtrinos.osc.configure(osc_cfg)
@@ -89,7 +102,9 @@ experiments = configure_experiments(args["experiments"], physics)
 #conditional_vars = [:θ₁₂, :θ₁₃, :δCP, :Δm²₂₁, :nutau_cc_norm]
 #conditional_vars = [:Darkdim_radius, :δCP, :λ₁, :λ₂, :λ₃]
 
-conditional_vars = Dict(:δCP=>0., :λ₁=>1., :λ₂=>1., :λ₃=>1.)
+#conditional_vars = Dict(:δCP=>0., :ca1=>args["ca"], :ca2=>args["ca"], :ca3=>args["ca"], :nutau_cc_norm=>1., :nc_norm=>1.)
+conditional_vars = Dict(:δCP=>0., :λ₁=>args["lambda"], :λ₂=>args["lambda"], :λ₃=>args["lambda"], :nutau_cc_norm=>1., :nc_norm=>1.)
+#conditional_vars = Dict(:δCP=>0., :nutau_cc_norm=>1., :nc_norm=>1.)
 #conditional_vars = []
 
 # For profile / scan task only: choose scan grid
@@ -98,14 +113,81 @@ vars_to_scan = OrderedDict()
 #vars_to_scan[:Δm²₃₁] = 31
 
 
-vars_to_scan[:ca2] = 11
-
 ###### END CONFIG ######
 
 likelihood = Newtrinos.generate_likelihood(experiments);
 
 p = Newtrinos.get_params(experiments)
 priors = Newtrinos.get_priors(experiments)
+
+
+if args["ordering"] == "NO"
+    #@reset p.ca1 = 0.95
+    #@reset priors.ca1 = LogUniform(1e-3, 10.)
+    #@reset p.ca2 = 7.36
+    #@reset priors.ca2 = LogUniform(1e-3, 10.)
+    ##@reset p.ca3 = 0.2
+    ##@reset priors.ca3 = LogUniform(1e-3, 10.)
+    #@reset p.ca3 = -1.
+    #@reset priors.ca3 = -LogUniform(1e-3, 10.)
+   
+    # informed choices:
+    #@reset p.ca1 = 8.
+    #@reset priors.ca1 = Uniform(0.1, 10.)
+    #@reset p.ca2 = 0.952
+    #@reset priors.ca2 = Uniform(0.01, 1.1)
+    #@reset p.ca3 = 0.203
+    #@reset priors.ca3 = Uniform(0.001, 0.3)
+
+    #@reset priors.θ₁₂ = Uniform(0., pi/2)
+    #@reset priors.θ₁₃ = Uniform(0., pi/2)
+    #@reset priors.θ₂₃ = Uniform(0., pi/2)
+
+    # informed choices 2:
+    #@reset p.ca1 = 2.
+    #@reset priors.ca1 = Uniform(0.5, 10.)
+    #@reset p.ca2 = 0.9
+    #@reset priors.ca2 = Uniform(0.1, 2.)
+    #@reset p.ca3 = -0.1
+    #@reset priors.ca3 = Uniform(-5, -0.01)
+    #
+    #@reset p.λ₁ = 0.044
+    #@reset p.λ₂ = 0.031
+    #@reset p.λ₃ = 0.058
+
+
+elseif args["ordering"] == "IO"
+    #@reset p.λ₁ = 0.021
+    #@reset p.λ₂ = 0.700
+    #@reset p.λ₃ = 0.396
+    #@reset p.ca1 = -4.9977
+    #@reset priors.ca1 = Uniform(-5., -0.1)
+    #@reset p.ca2 = -5.
+    #@reset priors.ca2 = Uniform(-5., -0.1)
+    #@reset p.ca3 = -4.92
+    #@reset priors.ca3 = Uniform(-5., -0.1)
+
+    #@reset priors.θ₁₂ = Uniform(0., pi/2)
+    #@reset priors.θ₁₃ = Uniform(0., pi/2)
+    #@reset priors.θ₂₃ = Uniform(0., pi/2)
+
+    #@reset p.ca3 = -0.1.
+    #@reset priors.ca3 = -LogUniform(1e-3, 10.)
+end
+
+@reset priors.Darkdim_radius = LogUniform(1., 100.)
+@reset priors.m₀ = LogUniform(0.001, 1)
+
+vars_to_scan[:Darkdim_radius] = 11
+vars_to_scan[:m₀] = 16
+
+#if args["scan"] == "ca1"
+#    vars_to_scan[:ca1] = 11
+#elseif args["scan"] == "ca2"
+#    vars_to_scan[:ca2] = 11
+#elseif args["scan"] == "ca3"
+#    vars_to_scan[:ca3] = 11
+#end
 
 function condition(priors::NamedTuple, conditional_vars::AbstractArray, p)
     for var in conditional_vars
@@ -140,7 +222,12 @@ if lowercase(args["task"]) == "nestedsampling"
 elseif lowercase(args["task"]) == "importancesampling"
     prior = distprod(;priors...)
     posterior = PosteriorMeasure(likelihood, prior)
-    init_samples =  make_prior_samples(posterior, 1_000)
+    #init_samples =  make_prior_samples(posterior, 1_000)
+
+    seed_points = load("darkdim_seeds.jld2")["df"]
+    seed_points = seed_points[seed_points.ca3 .< 0, :]
+    init_samples =  make_init_samples(posterior, seed_points[1:10, :], 10_000)
+    
     #init_samples =  make_init_samples(posterior, 10, 100_000)
     FileIO.save(name * "_init_samples.jld2", Dict(String(a)=>init_samples[a] for a in keys(init_samples)))
     whack_samples = whack_many_moles(posterior, init_samples, target_samplesize=100_000, cache_dir=name)

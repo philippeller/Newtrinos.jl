@@ -1,6 +1,8 @@
 using Distributions
 using DataStructures
 using DensityInterface
+using DataFrames
+using Accessors
 using Optimization, ADTypes
 using MeasureBase
 using LinearAlgebra
@@ -56,7 +58,7 @@ end
 
 # end
 
-function make_prior_samples(posterior, nsamples=10_000)
+function make_prior_samples(posterior, nsamples::Int=10_000)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
     pr_dist = MvNormal(zeros(pstr.prior.dist._dim), ones(pstr.prior.dist._dim))
 
@@ -67,7 +69,7 @@ function make_prior_samples(posterior, nsamples=10_000)
 
 end
 
-function make_init_samples(posterior, nseeds=10, nsamples=10_000)
+function make_init_samples(posterior, nseeds::Int=10, nsamples::Int=10_000)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
 
     seeds = bat_sample(pstr.prior, SobolSampler(nsamples=nseeds)).result.v#[2:end]
@@ -83,6 +85,57 @@ function make_init_samples(posterior, nseeds=10, nsamples=10_000)
         set_batcontext(ad = adsel)
         r = bat_findmode(pstr, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([seeds[i]])))
         #@show r.result
+        components[i] = local_MGVI_approx(pstr, r.result)
+    end
+
+    #@show components
+    approx_dist = MixtureModel(components)
+
+    mode_logd_p_approx = [logdensityof(pstr, mode(ad)) for ad in approx_dist.components]
+    mode_logd_q_approx = [logdensityof(approx_dist, mode(ad)) for ad in approx_dist.components]
+    
+    raw_mixture_logw = mode_logd_p_approx .- mode_logd_q_approx
+    raw_mixture_w = exp.(raw_mixture_logw .- maximum(raw_mixture_logw))
+    mixture_w = raw_mixture_w ./ sum(raw_mixture_w)
+
+    approx_dist = MixtureModel(approx_dist.components, mixture_w)
+
+    @info "Generating initial samples"
+    smpls_p = importance_sampling(pstr, approx_dist, nsamples)
+
+    (approx_dist=approx_dist, samples_p=smpls_p, samples_user=bat_transform(inverse(f_trafo), smpls_p).result)
+
+end
+
+function make_init_samples(posterior, seed_points::DataFrame, nsamples::Int=10_000)
+    pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
+
+    seeds = []
+
+    for row in eachrow(seed_points)
+        smpl = bat_sample(posterior, SobolSampler(nsamples=1)).result
+        @reset smpl.v[1].Darkdim_radius = row.Darkdim_radius
+        @reset smpl.v[1].ca1 = row.ca1
+        @reset smpl.v[1].ca2 = row.ca2
+        @reset smpl.v[1].ca3 = row.ca3
+        #@reset smpl.v[1].λ₁ = row.λ₁
+        #@reset smpl.v[1].λ₂ = row.λ₂
+        #@reset smpl.v[1].λ₃ = row.λ₃
+        push!(seeds, BAT.transform_samples(f_trafo, smpl)[1].v)
+    end
+
+
+    components = Array{MvNormal}(undef, length(seeds))
+
+    @info "Finding modes"
+    
+    Threads.@threads for i in 1:length(seeds)
+        #@show pstr
+        #@show seeds[i]
+        adsel = AutoForwardDiff()
+        set_batcontext(ad = adsel)
+        r = bat_findmode(pstr, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([seeds[i]]), kwargs = (reltol=1e-4, maxiters=100)))
+        @show r.result
         components[i] = local_MGVI_approx(pstr, r.result)
     end
 
