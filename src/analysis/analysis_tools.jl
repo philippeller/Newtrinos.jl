@@ -323,6 +323,7 @@ function get_fwd_model(experiments::NamedTuple)
 end
 
 function generate_likelihood(experiments::NamedTuple, observed=get_observed(experiments))
+
     likelihoodof(get_fwd_model(experiments), observed)
 end
 

@@ -35,6 +35,40 @@ function configure(physics)
 end
 
 
+
+
+function get_assets(physics; datadir = @__DIR__)
+    @info "Loading Katrin data"
+
+    # Read the CSV data
+    data_df = CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
+    
+    # Create interpolation function
+    #posterior_m_nu = interpolate((data_df[!, 1],), data_df[!, 2], Gridded(Linear()))
+    #posterior_interp = extrapolate(posterior_m_nu, 0.0)  # Interpolation function
+    
+    # Use original DataFrame for observed data
+    observed = (
+        mass_values = data_df[:, 1],    # x-axis values from DataFrame
+        counts = data_df[:, 2],         # y-axis values from DataFrame
+    )
+    
+    posterior_sample = observed
+    posterior_mean = mean(posterior_sample)
+    assets = (
+
+        posterior_sample = observed,
+        mass_values = observed.mass_values,
+        observed = 0.26,
+       
+    )
+    return assets
+
+    
+end
+
+
+
 # function to get m0 posterior from m_nu posterior in SM 
 
 function get_posterior_SM(params)
@@ -45,8 +79,8 @@ function get_posterior_SM(params)
     posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
 
     #make the distribution continuous
-    posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
+    #posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
+    #posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
 
 
     m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
@@ -87,8 +121,8 @@ function get_posterior_NN(params, cfg)
     posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
 
     #make the distribution continuous
-    posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
+    #posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
+    #posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
 
 
     m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
@@ -166,7 +200,7 @@ end
 
 
 
-function get_neutrinomass(cfg=NNM)
+function get_neutrinomass(cfg=NND)
     function NeutrinoMassNND(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
@@ -176,7 +210,7 @@ function get_neutrinomass(cfg=NNM)
         func=  Newtrinos.osc.get_matrices(cfg)
 
         final, h, V = func(params)
-
+        
         x_e = U[1,:]
         x_1 = V[1,:]
 
@@ -184,7 +218,7 @@ function get_neutrinomass(cfg=NNM)
 
         delta_masses_NN = h
 
-        m_nu_sq = 0.0
+        m_nu_sq = 0.0 #PROBLEMATIC SUM!
         sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
         
         for i in 1:3
@@ -199,12 +233,20 @@ function get_neutrinomass(cfg=NNM)
             integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
             sum += integrand
 
+            # Check if sum exceeds threshold after each addition
+            if sum > 1000
+                error("Neutrino mass calculation exceeded threshold: sum = $sum > 1000 " *
+                        "at iteration i=$i, j=$j (N=$N)")
+            end
+
+
             x_idx += 1      # Increment by 1 for x_1
             delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
             end
 
         end
-
+    # println("at parameters: N=$(params[:N]), m₀=$(params[:m₀]), r=$(params[:r])")   
+    # println(sum)
      return sum
 
     end
@@ -213,7 +255,7 @@ end
 
 
 
-function get_neutrinomass(cfg=Threeflavour )
+function get_neutrinomass_SM(cfg=ThreeFlavour())
     function NeutrinoMass_SM(params::NamedTuple)
 
         U=  Newtrinos.osc.get_PMNS(params)
@@ -241,99 +283,25 @@ end
 
 
 
-function get_assets(physics; datadir = @__DIR__)
-    @info "Loading Katrin data"
-    
-  
-    df= CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
 
-    observed = (
-        mass_values = df[!, 1],      # x-axis values
-        counts = df[!, 2],            # y-axis values
-    )
-
-    println("Observed counts length: ", length(observed.counts))
-
-    
-    posterior_sample = observed.counts
-    posterior_mean = mean(posterior_sample)
-    posterior_std = std(posterior_sample)
-    katrin_posterior = Normal(posterior_mean, posterior_std)
-
-    assets = (
-        mass_values=observed.mass_values,
-        observed = katrin_posterior, #observed.counts,
-    )
-    
-    return assets
-end
-
-
-function get_forward_model(physics, assets)
-
-    function forward_model(params)
-
-        predicted_m_nu = get_neutrinomass(physics)(params)
-
-        println("Predicted m_nu: ", predicted_m_nu)
-
-        #create a gaussan distribution with mean predicted_m_nu and stddev proprtional to the one measured
-
-        sigma_m_nu = 1.3 * predicted_m_nu  # Example: 1% of the predicted value
-
-        predicted=Distributions.Normal(predicted_m_nu, sigma_m_nu)
-
-        #exclude values with x smaller then 0
-        predicted = truncated(Normal(predicted_m_nu, sigma_m_nu), 0.0, Inf)
-
-        #take some points from the distribution at specific x
-        predicted = pdf.(predicted, assets.mass_values)
-
-        # Return vector of Poisson distributions
-        return Poisson.(max.(predicted, 1e-10))
-    end
-    return forward_model
-end
 
 
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
-        # Theory predicts single value
-        #cfg =NNM
-        predicted = Newtrinos.osc.get_posterior_NN(params)
+    
+        cfg = Newtrinos.osc.NND()
+        predicted_value =get_neutrinomass_SM(cfg)(params) #get_neutrinomass_SM(cfg)(params)
+        #println("Predicted m_nu: ", predicted_value)
+        return Normal(predicted_value, 0.3)
+       
 
-        return predicted
-    end
-end
-
-function get_forward_model_compatible(physics, assets)
-    """
-    Implementation that works with your existing BAT.jl framework
-    """
-    function forward_model(params)
-        predicted_m_beta_sq = get_neutrinomass(physics)(params)
-        
-        # KATRIN posterior (approximated as Gaussian)
-        katrin_mean = 0.26
-        katrin_sigma = 0.34
-        
-        # The "likelihood" is actually the posterior probability
-        # But for framework compatibility, we return a distribution
-        # that encodes this information
-        
-        # Method 1: Return Dirac delta at theory point, 
-        # likelihood framework evaluates KATRIN posterior at this point
-        return Normal(predicted_m_beta_sq, 1e-10)
-        
-        # Method 2: Pre-compute the likelihood and encode it
-        # (This might not work with your framework)
-        # posterior_prob = pdf(Normal(katrin_mean, katrin_sigma), predicted_m_beta_sq)
-        # return some_encoding_of(posterior_prob)
     end
     return forward_model
 end
 
-function create_katrin_likelihood_posteriors(experiments)
+
+
+function create_katrin_likelihood_posteriors(experiments,params)
     katrin_exp = experiments.katrin
     posterior_sample = katrin_exp.assets.observed
     posterior_mean = mean(posterior_sample)
@@ -341,7 +309,14 @@ function create_katrin_likelihood_posteriors(experiments)
     katrin_posterior = Normal(posterior_mean, posterior_std)
     
     predicted = get_posterior_SM(params)
-    likelihood=likelihoodof(predicted, katrin_posterior)
+    predicted = predicted[:,2]  # Extract the second column (counts)
+    predicted_mean = mean(predicted)
+    predicted_std = std(predicted)
+    #predicted = Normal(predicted_mean, predicted_std)
+    predicted_safe = max.(predicted, 1e-10)  # Avoid log(0) issues
+    posterior_sample_safe = max.(posterior_sample, 1e-10)  # Avoid log(0) issues
+
+    likelihood=-2*sum(log.(predicted_safe).- log.(posterior_sample_safe))
 
     return likelihood
 end

@@ -121,6 +121,7 @@ get_priors(cfg::OscillationConfig) = get_priors(cfg.flavour)
 
 function get_params(cfg::ThreeFlavour)
     params = OrderedDict()
+    params[:m₀] = ftype(0.1)
     params[:θ₁₂] = ftype(asin(sqrt(0.307)))
     params[:θ₁₃] = ftype(asin(sqrt(0.021)))
     params[:θ₂₃] = ftype(asin(sqrt(0.57)))
@@ -139,6 +140,7 @@ end
 
 function get_priors(cfg::ThreeFlavour)
     priors = OrderedDict()
+    priors[:m₀] = Uniform(ftype(1e-3), ftype(2))
     priors[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
     priors[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
     priors[:θ₂₃] = Uniform(ftype(pi/4 *2/3), ftype(pi/4 *4/3))
@@ -197,7 +199,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(100)
+    params[:N] = ftype(50)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -208,7 +210,7 @@ function get_priors(cfg::NND)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(2)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(45))
+    priors[:N] = Uniform(ftype(3),ftype(100))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
@@ -220,7 +222,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(20)
+    params[:N] = ftype(1000)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -231,7 +233,7 @@ function get_priors(cfg::NNM)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] =  Uniform(ftype(1e-3),ftype(2))  #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(45))
+    priors[:N] = Uniform(ftype(3),ftype(100))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
@@ -748,166 +750,6 @@ function get_matrices(cfg::NNM)
 end
 
 
-
-function get_neutrinomass(cfg::NNM)
-    function NeutrinoMassNND(params::NamedTuple)
-
-        U= get_PMNS(params)
-
-        N = round(Int,params[:N])
-
-        func= get_matrices(cfg)
-        
-        final, h, V = func(params)
-
-        x_e = U[1,:]
-        x_1 = V[1,:]
-
-        masses_SM_sq = get_abs_masses(params).^2
-
-        delta_masses_NN = h
-
-        m_nu_sq = 0.0
-        sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
-        
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2
-
-            x_idx = 4 # Start at 4 for x_1
-            delta_idx = 3+i # Start delta_masses_NN
-
-            for j in 1:(N-3)
-
-            mass = masses_SM_sq[1]+delta_masses_NN[delta_idx]
-            integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
-            sum += integrand
-
-            x_idx += 1      # Increment by 1 for x_1
-            delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
-            end
-
-        end
-
-     return sum
-
-    end
-    return NeutrinoMassNND
-end
-
-
-
-function get_neutrinomass_SM(cfg::ThreeFlavour)
-    function NeutrinoMass_SM(params::NamedTuple)
-
-        U= get_PMNS(params)
-        
-        x_e = U[1,:]
-
-        # Add new parameters
-        new_params = merge(params, (m₀ = 0.1,))
-        masses_SM_sq = get_abs_masses(new_params).^2
-
-        m_nu_sq = 0.0
-
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2*masses_SM_sq[i]
-
-            m_nu_sq += squared_x_e
-
-        end
-
-     return m_nu_sq
-
-    end
-    return NeutrinoMass_SM
-end
-
-
-
-
-function get_posterior_NN(params, cfg=NNM)
-
-        
-    #load m_nu posterior data
-
-    posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-
-    #make the distribution continuous
-    posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
-
-
-    m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
-
-    for k in 1:size(posterior_data_m_nu, 1)
-
-        m_nu_squared = posterior_data_m_nu[!,1][k] 
-
-        p= params
-        N = round(Int,params[:N])
-
-        U= Newtrinos.osc.get_PMNS(p)
-
-        func= Newtrinos.osc.get_matrices(cfg)
-        final, h, V = func(params)
-
-        x_e = U[1,:]
-        x_1 = V[1,:]
-
-        
-        delta_masses_NN = h
-
-        delta_m_nu_sq = 0.0
-        sumU = 0.0
-        sumV= 0.0
-
-        for i in 1:3
-            sumU += abs(U[1,i])^2
-        end
-
-        for j in 1:N
-            sumV += abs(V[1,j])^2
-        end
-
-        sum=params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2
-
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2
-
-            x_idx = 4 # Start at 4 for x_1
-            delta_idx = 3+i # Start delta_masses_NN
-            sum_int = 0.0
-            for j in 1:(N-3)
-
-            delta_mass = delta_masses_NN[delta_idx]
-            integrand= squared_x_e * abs(x_1[x_idx])^2 * delta_mass
-            sum_int += integrand
-
-            x_idx += 1      # Increment by 1 for x_1
-            delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
-            end
-
-            delta_m_nu_sq += sum_int
-
-        end
-
-        m0_squared= (m_nu_squared-delta_m_nu_sq-sum) / (sumU*sumV)
-
-        
-       jacobian = (sumU * sumV * sqrt(abs(m0_squared))) / sqrt(m_nu_squared)
-
-        if m0_squared < 0
-            m0_squared = 0.0
-        end
-
-        m0_posterior[k, 1] = m0_squared
-        m0_posterior[k, 2] = posterior_data_m_nu[!, 2][k] * jacobian
-
-
-    end
-    return m0_posterior
-
-end    
 
 
 
