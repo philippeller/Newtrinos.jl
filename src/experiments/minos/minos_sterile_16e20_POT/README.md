@@ -1,6 +1,3 @@
-# MINOS & MINOS+
+MINOS & MINOS+ data from supplemental files of:
 
-Author: Philipp Eller
-
-## References:
-* https://arxiv.org/pdf/1710.06488.pdf
+https://arxiv.org/abs/1710.06488

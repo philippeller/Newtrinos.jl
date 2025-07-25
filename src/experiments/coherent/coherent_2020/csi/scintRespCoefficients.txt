@@ -1,0 +1,17 @@
+# Scintillation response curve
+# Eee(x) = a*x + b*x*x + c*x*x*x + d*x*x*x*x
+# x is recoil energy in MeVnr
+# Coefficients given as: a b c d
+
+# Nominal scintillation model
+0.0554628 4.30681 -111.707 840.384
+
+# Syst model 0, +1 sigma
+0.0613632 3.51547 -85.5548 595.562
+# Syst model 0, -1 sigma
+0.0495624 5.09815 -137.858 1085.2
+
+# Syst model 1, +1 sigma
+0.055413 3.93597 -93.1045 630.092
+# Syst model 1, -1 sigma
+0.0555126 4.67765 -130.309 1050.68
