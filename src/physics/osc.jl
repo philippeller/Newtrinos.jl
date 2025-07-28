@@ -198,8 +198,8 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
-    params[:N] = ftype(50)
+    params[:m₀] = ftype(0.01)
+    params[:N] = ftype(10)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -615,7 +615,19 @@ function get_matrices(cfg::NND)
             end
         end
         
+        #reg_param = T(1e-12)  # Regularization parameter
+        #regularized_matrix = matrix + reg_param * I
+        #Usector, s, V = svd(matrix)
+        #eigvalues = eigen(Usector * Diagonal(s) * V)
         eigvalues, Usector = eigen(matrix)
+           
+        #nan_mask = isnan.(Usector)
+        #Usector[nan_mask] .= 1e-15
+
+        # Only apply tiny threshold to non-NaN values
+        #tiny_mask = (.!nan_mask) .& (abs.(Usector) .< 1e-15)
+        #Usector[tiny_mask] .= sign.(Usector[tiny_mask]) .* 1e-15
+
         m1, m2, m3 = get_abs_masses(params)
         
         # Convert masses to the correct type 
@@ -655,10 +667,13 @@ function get_matrices(cfg::NND)
             delta_mass[base_idx] = mass_squared[base_idx] - m1_squared
             delta_mass[base_idx + 1] = mass_squared[base_idx + 1] - m1_squared
             delta_mass[base_idx + 2] = mass_squared[base_idx + 2] - m1_squared
-        
+             
+                
+           #println("Mass squared $base_idx: ", maximum(mass_squared[base_idx]))
+           #println("Usector $base_idx: ", maximum(Usector[1, base_idx]))
+           #println("Delta mass $base_idx: ", maximum(delta_mass[base_idx]))
         end
-            
-            
+
         h = delta_mass
      
         U = get_PMNS(params)

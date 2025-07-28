@@ -217,6 +217,12 @@ function get_neutrinomass(cfg=NND)
         masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
 
         delta_masses_NN = h
+        if any(delta_masses_NN .> 1000)
+            cancelled=delta_masses_NN[delta_masses_NN .> 1000]
+            println("Delta masses exceed threshold: $cancelled > 1000")
+            delta_masses_NN[delta_masses_NN .> 1000] .= 0
+        end
+
 
         m_nu_sq = 0.0 #PROBLEMATIC SUM!
         sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
@@ -290,7 +296,7 @@ function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
         cfg = Newtrinos.osc.NND()
-        predicted_value =get_neutrinomass_SM(cfg)(params) #get_neutrinomass_SM(cfg)(params)
+        predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         #println("Predicted m_nu: ", predicted_value)
         return Normal(predicted_value, 0.3)
        
