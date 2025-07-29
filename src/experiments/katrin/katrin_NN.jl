@@ -59,7 +59,7 @@ function get_assets(physics; datadir = @__DIR__)
 
         posterior_sample = observed,
         mass_values = observed.mass_values,
-        observed = 0.26,
+        observed = -0.14,
        
     )
     return assets
@@ -200,7 +200,7 @@ end
 
 
 
-function get_neutrinomass(cfg=NND)
+function get_neutrinomass(cfg=NNM)
     function NeutrinoMassNND(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
@@ -217,14 +217,17 @@ function get_neutrinomass(cfg=NND)
         masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
 
         delta_masses_NN = h
-        if any(delta_masses_NN .> 1000)
-            cancelled=delta_masses_NN[delta_masses_NN .> 1000]
-            println("Delta masses exceed threshold: $cancelled > 1000")
-            delta_masses_NN[delta_masses_NN .> 1000] .= 0
+
+        masses_NN=masses_SM_sq[1].+delta_masses_NN
+        masses_NN[1]= masses_SM_sq[1] 
+
+        if any(masses_NN .> 1e6)
+            cancelled=masses_NN[masses_NN .> 1e6]
+            #println("Delta masses exceed threshold: $cancelled > 1e6")
+            masses_NN[masses_NN .> 1e6] .= 0
         end
 
-
-        m_nu_sq = 0.0 #PROBLEMATIC SUM!
+        #PROBLEMATIC SUM!
         sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
         
         for i in 1:3
@@ -234,27 +237,21 @@ function get_neutrinomass(cfg=NND)
             delta_idx = 3+i # Start delta_masses_NN
 
             for j in 1:(N-3)
+             
+                mass = masses_NN[delta_idx]
+                integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
+                sum += integrand
 
-            mass = masses_SM_sq[1]+delta_masses_NN[delta_idx]
-            integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
-            sum += integrand
-
-            # Check if sum exceeds threshold after each addition
-            if sum > 1000
-                error("Neutrino mass calculation exceeded threshold: sum = $sum > 1000 " *
-                        "at iteration i=$i, j=$j (N=$N)")
-            end
-
-
-            x_idx += 1      # Increment by 1 for x_1
-            delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
+                x_idx += 1      # Increment by 1 for x_1
+                delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
+             
             end
 
         end
-    # println("at parameters: N=$(params[:N]), m₀=$(params[:m₀]), r=$(params[:r])")   
-    # println(sum)
-     return sum
+   
 
+        return sum
+     
     end
     return NeutrinoMassNND
 end
@@ -295,10 +292,10 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NND()
+        cfg = Newtrinos.osc.NNM()
         predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         #println("Predicted m_nu: ", predicted_value)
-        return Normal(predicted_value, 0.3)
+        return Normal(predicted_value, 0.15)
        
 
     end

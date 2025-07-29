@@ -10,6 +10,7 @@ using ..Newtrinos
 using CSV
 using Interpolations
 using DataFrames
+using DelimitedFiles
 
 export ftype
 export Layer
@@ -222,7 +223,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(1000)
+    params[:N] = ftype(100)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -615,12 +616,12 @@ function get_matrices(cfg::NND)
             end
         end
         
-        #reg_param = T(1e-12)  # Regularization parameter
-        #regularized_matrix = matrix + reg_param * I
-        #Usector, s, V = svd(matrix)
-        #eigvalues = eigen(Usector * Diagonal(s) * V)
+      
         eigvalues, Usector = eigen(matrix)
-           
+
+        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data1.csv", Usector, ',')
+        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data1.csv", eigvalues, ',')
+
         #nan_mask = isnan.(Usector)
         #Usector[nan_mask] .= 1e-15
 
@@ -719,10 +720,14 @@ function get_matrices(cfg::NNM)
                 end
             end
         end
-        
+
         eigvalues, Usector = eigen(matrix)
         m1, m2, m3 = get_abs_masses(params)
         
+        
+        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data1.csv", Usector, ',')
+        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data1.csv", eigvalues, ',')
+
         # Convert masses to the correct type 
         m1_T = T(m1)
         m2_T = T(m2) 
