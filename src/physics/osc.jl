@@ -721,12 +721,13 @@ function get_matrices(cfg::NNM)
             end
         end
 
-        eigvalues, Usector = eigen(matrix)
+        eigvalues, Usector = eigen(Symmetric(matrix))
         m1, m2, m3 = get_abs_masses(params)
-        
-        
-        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data1.csv", Usector, ',')
-        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data1.csv", eigvalues, ',')
+        #Usector = [abs.(Usector[i,:]) for i in 1:length(Usector[:,1])]
+
+
+        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data2.csv", Usector, ',')
+        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data2.csv", eigvalues, ',')
 
         # Convert masses to the correct type 
         m1_T = T(m1)
