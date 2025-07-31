@@ -199,7 +199,7 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.01)
+    params[:m₀] = ftype(0.1)
     params[:N] = ftype(10)
     params[:r] = ftype(1)
     
@@ -223,7 +223,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(100)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -619,8 +619,8 @@ function get_matrices(cfg::NND)
       
         eigvalues, Usector = eigen(matrix)
 
-        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data1.csv", Usector, ',')
-        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data1.csv", eigvalues, ',')
+        #writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data1.csv", Usector, ',')
+        #writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data1.csv", eigvalues, ',')
 
         #nan_mask = isnan.(Usector)
         #Usector[nan_mask] .= 1e-15
@@ -726,8 +726,8 @@ function get_matrices(cfg::NNM)
         #Usector = [abs.(Usector[i,:]) for i in 1:length(Usector[:,1])]
 
 
-        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data2.csv", Usector, ',')
-        writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data2.csv", eigvalues, ',')
+        #writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data3.csv", Usector, ',')
+        #writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data3.csv", eigvalues, ',')
 
         # Convert masses to the correct type 
         m1_T = T(m1)

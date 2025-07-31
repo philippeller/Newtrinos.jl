@@ -241,8 +241,7 @@ function get_assets(physics, livetime_years, datadir = @__DIR__)
         co_bkg_rate_interp,
         atmnc_bkg_rate_interp,
         fast_neutron_bkg_rate_interp,
-        LIVETIME_DAYS,
-        observed=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/juno/juno_NO_observed.csv", DataFrame; select=[2])[:, 1]
+        LIVETIME_DAYS
         )    
     
 end
@@ -338,10 +337,8 @@ end
 function get_forward_model(physics, assets)
     function forward_model(params)
         exp_events = get_expected(params, physics, assets)
-        exp_events = round.(Int, exp_events)   # Do in analysis scrpt?
-       Poisson.(max.(exp_events, 1e-10))
+        distprod(Poisson.(exp_events))
     end
-     return forward_model
 end
 
 
