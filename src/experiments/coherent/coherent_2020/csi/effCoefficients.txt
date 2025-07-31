@@ -1,0 +1,12 @@
+# Energy-dependent efficiency curve
+# eff_E(x) = a/( 1 + exp(-b*(x-c))) + d
+# x is reconstructed recoil energy in PE
+# Coefficients given as: a b c d
+
+# Nominal efficiency model
+1.32045  0.285979 10.8646 -0.333322
+
+# Syst model, +1 sigma
+1.3439  0.285366 9.84596 -0.356364
+# Syst model, +1 sigma
+1.297  0.286592 11.8832 -0.31028
