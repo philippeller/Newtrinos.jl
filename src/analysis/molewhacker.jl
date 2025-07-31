@@ -2,20 +2,20 @@ using Distributions
 using DataStructures
 using DensityInterface
 using DataFrames
-using Accessors
+#using Accessors
 using Optimization, ADTypes
 using MeasureBase
 using LinearAlgebra
-using PositiveFactorizations
-using PDMats
+#using PositiveFactorizations
+#using PDMats
 using InverseFunctions
 using Logging
 using StatsBase
 using ArraysOfArrays
 using BAT
-using MGVI
+#using MGVI
 using ForwardDiff
-using ProgressMeter
+#using ProgressMeter
 
 function importance_sampling(pstr, approx_dist, nsamples)
     smpls_q, _ = bat_sample(approx_dist, IIDSampling(nsamples = nsamples))

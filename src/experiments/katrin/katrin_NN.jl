@@ -218,13 +218,34 @@ function get_neutrinomass(cfg=NNM)
 
         delta_masses_NN = h
 
-        masses_NN=masses_SM_sq[1].+delta_masses_NN
-        masses_NN[1]= masses_SM_sq[1] 
+        masses_NN_original = masses_SM_sq[1].+delta_masses_NN
+        masses_NN_original[1] = masses_SM_sq[1]
 
-        if any(masses_NN .> 1e6)
-            cancelled=masses_NN[masses_NN .> 1e6]
+        if any(masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
+            # Find all indices where masses exceed threshold
+            indices_above_threshold = findall(masses_NN_original .> 1e6)
+            println("Indices of masses exceeding threshold: ", indices_above_threshold)
+            
             #println("Delta masses exceed threshold: $cancelled > 1e6")
-            masses_NN[masses_NN .> 1e6] .= 0
+           
+
+            masses_NN = masses_NN_original[masses_NN_original .<= 1e6] #keep only the ones inside the threshold
+            N=N-length(indices_above_threshold) #reduce the N value accordingly
+            
+            #unitarity of the new matrix
+
+            A_square = V[1:N, 1:N]
+
+            # Make it unitary  (write normalization term)
+            #F = svd(A_square)
+            #U_unitary = F.U * F.Vt
+
+            # Verify
+            @assert isapprox(U_unitary' * U_unitary, I)
+
+            x_1 = U_unitary[1,:]
+
+
         end
 
         #PROBLEMATIC SUM!
@@ -265,7 +286,7 @@ function get_neutrinomass_SM(cfg=ThreeFlavour())
         
         x_e = U[1,:]
 
-        # Add new parameters
+        # Add new parameter
         new_params = merge(params, (m₀ = 0.1,))
         masses_SM_sq =  Newtrinos.osc.get_abs_masses(new_params).^2
 
