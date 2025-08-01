@@ -14,13 +14,14 @@ using PairPlots
 
 import Newtrinos.NewtrinosResult
 
-function plot!(ax, result::NewtrinosResult; max_llh=maximum(result.values.log_posterior), levels=1 .- 2*ccdf(Normal(), 1:3), label=nothing, color=:blue, linestyle=:solid, cmap=:Blues, filled=false, edge=true, transform_x=identity, transform_y=identity)
+function plot!(ax, result::NewtrinosResult; max_llh=maximum(result.values.log_posterior), levels=1 .- 2*ccdf(Normal(), 1:3), label=["68%", "90%", "95%"], color=:blue, linestyle=:solid, cmap=:Blues, filled=false, edge=true, transform_x=identity, transform_y=identity)
     neg2dllh = 2*(max_llh .- result.values.log_posterior)
 
     if length(result.axes) == 1
         x = transform_x(result.axes[1])
 
-        hlines!(ax, quantile(Chisq(1), levels), color=:black, linestyle=:dot)
+        hlines!(ax, quantile(Chisq(1), levels), color=:black, linestyle=linestyle,
+            label=label, linewidth=2)
         lines!(ax, x, neg2dllh, linewidth=2,
             color=color,
             linestyle=linestyle,
@@ -58,5 +59,6 @@ function plot(result::NewtrinosResult; kwargs...)
     plot!(ax, result; kwargs...)
     fig
 end
+
     
 end

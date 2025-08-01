@@ -230,21 +230,25 @@ function get_neutrinomass(cfg=NNM)
            
 
             masses_NN = masses_NN_original[masses_NN_original .<= 1e6] #keep only the ones inside the threshold
-            N=N-length(indices_above_threshold) #reduce the N value accordingly
-            
+            N=round(Int,length(masses_NN)/3) #reduce the N value accordingly
+
             #unitarity of the new matrix
 
             A_square = V[1:N, 1:N]
-
+            x_1=x_1[1:N]
             # Make it unitary  (write normalization term)
-            #F = svd(A_square)
-            #U_unitary = F.U * F.Vt
+            #Q, R = qr(A_square)
+            U, S, V = svd(A_square)
+            U_clean = U*V'
+            V_unitary = U_clean
 
             # Verify
-            @assert isapprox(U_unitary' * U_unitary, I)
-
-            x_1 = U_unitary[1,:]
-
+            @assert isapprox(V_unitary' * V_unitary, I)
+            xcol=V_unitary[:,1]
+            x_1=V_unitary[1,:]
+            sum_norm = Base.sum(abs.(x_1).^2)
+            sum_norm_col=Base.sum(abs.(xcol).^2)
+            @assert isapprox(sum_norm, sum_norm_col)
 
         end
 
