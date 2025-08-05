@@ -143,7 +143,7 @@ function get_posterior_NN(params, cfg)
         x_1 = V[1,:]
 
         
-        delta_masses_NN = h
+        delta_masses_NN_original = h
 
         delta_m_nu_sq = 0.0
         sumU = 0.0
@@ -158,6 +158,40 @@ function get_posterior_NN(params, cfg)
         end
 
         sum=params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2
+        
+        #eliminate masses that exceed the threshold
+        delta_masses_NN= delta_masses_NN_original
+         
+        if any(delta_masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
+            # Find all indices where masses exceed threshold
+            indices_above_threshold = findall(delta_masses_NN_original .> 1e6)
+            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
+            
+            #println("Delta masses exceed threshold: $cancelled > 1e6")
+           
+
+            delta_masses_NN = delta_masses_NN_original[delta_masses_NN_original .<= 1e6] #keep only the ones inside the threshold
+            N=round(Int,length(delta_masses_NN)/3) #reduce the N value accordingly
+
+            #unitarity of the new matrix
+
+            A_square = V[1:N, 1:N]
+            x_1=x_1[1:N]
+            # Make it unitary  (write normalization term)
+            #Q, R = qr(A_square)
+            U, S, V = svd(A_square)
+            U_clean = U*V'
+            V_unitary = U_clean
+
+            # Verify
+            @assert isapprox(V_unitary' * V_unitary, I)
+            xcol=V_unitary[:,1]
+            x_1=V_unitary[1,:]
+            sum_norm = Base.sum(abs.(x_1).^2)
+            sum_norm_col=Base.sum(abs.(xcol).^2)
+            @assert isapprox(sum_norm, sum_norm_col)
+
+        end
 
         for i in 1:3
             squared_x_e = abs(x_e[i])^2
@@ -220,11 +254,12 @@ function get_neutrinomass(cfg=NNM)
 
         masses_NN_original = masses_SM_sq[1].+delta_masses_NN
         masses_NN_original[1] = masses_SM_sq[1]
-
+        masses_NN = masses_NN_original
+            
         if any(masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
             # Find all indices where masses exceed threshold
             indices_above_threshold = findall(masses_NN_original .> 1e6)
-            println("Indices of masses exceeding threshold: ", indices_above_threshold)
+            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
             
             #println("Delta masses exceed threshold: $cancelled > 1e6")
            

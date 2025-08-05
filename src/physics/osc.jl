@@ -72,7 +72,7 @@ struct SI <: InteractionModel end
 
 abstract type FlavourModel end
 @kwdef struct ThreeFlavour <: FlavourModel 
-    ordering::Symbol = :NO
+    ordering::Symbol = :IO
 end
 @kwdef struct ThreeFlavourXYCP <: FlavourModel
     three_flavour::ThreeFlavour = ThreeFlavour()
@@ -234,7 +234,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(10)
+    params[:N] = ftype(30)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -256,7 +256,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(100)
+    params[:N] = ftype(30)
     params[:r] = ftype(1)
     
     NamedTuple(params)
