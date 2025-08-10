@@ -354,7 +354,7 @@ function generate_toy_data(experiments::NamedTuple, params::NamedTuple )
     
     final_data = map(experiments) do experiment
     
-        model = experiment.forward_model
+        model = ThreeFlavour() #experiment.forward_model
         dist_obj = model(params)
         toy_data = rand(dist_obj)
 
