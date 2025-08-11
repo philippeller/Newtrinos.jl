@@ -40,11 +40,9 @@ end
 function get_assets(physics; datadir = @__DIR__)
     @info "Loading Gerda data"
 
-    # MAYBE LOADING THE POSTERIOR OF T1/2 (?)
-
     assets = (
 
-        observed = 0.9*1e26, #0.9* 1e26  ,
+        observed =0.9*1e26,
        
     )
     return assets
@@ -53,172 +51,7 @@ function get_assets(physics; datadir = @__DIR__)
 end
 
 
-
-# function to get m0 posterior from m_nu posterior in SM 
-
-function get_posterior_SM(params)
-
-        
-    #load m_nu posterior data
-
-    posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-
-    #make the distribution continuous
-    #posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    #posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
-
-
-    m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
-
-    for i in 1:size(posterior_data_m_nu, 1)
-        m_nu_squared = posterior_data_m_nu[!, 1][i] 
-
-        p = params
-        U = Newtrinos.osc.get_PMNS(p)
-
-        sumU = 0.0
-        for j in 1:3 
-            sumU += abs(U[1, j])^2
-        end
-
-        term1 = abs(U[1, 2])^2 * (p[:Δm²₂₁])
-        term2 = abs(U[1, 3])^2 * (p[:Δm²₃₁])  
-        m0_squared = (m_nu_squared - term1 - term2) / sumU
-
-        m0_posterior[i, 1] = m0_squared
-        jacobian = (sumU * sqrt(m0_squared)) / sqrt(m_nu_squared)
-
-        m0_posterior[i, 2] =  posterior_data_m_nu[!, 2][i]  * jacobian
-
-    end
-    return m0_posterior
-
-end    
-
-# function to get m0 posterior from m_nu posterior in NND-NNM
-
-
-function get_posterior_NN(params, cfg)
-
-        
-    #load m_nu posterior data
-
-    posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-
-    #make the distribution continuous
-    #posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    #posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
-
-
-    m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
-
-    for k in 1:size(posterior_data_m_nu, 1)
-
-        m_nu_squared = posterior_data_m_nu[!,1][k] 
-
-        p= params
-        N = round(Int,params[:N])
-
-        U= Newtrinos.osc.get_PMNS(p)
-
-        func= Newtrinos.osc.get_matrices(cfg)
-        final, h, V = func(params)
-
-        x_e = U[1,:]
-        x_1 = V[1,:]
-
-        
-        delta_masses_NN_original = h
-
-        delta_m_nu_sq = 0.0
-        sumU = 0.0
-        sumV= 0.0
-
-        for i in 1:3
-            sumU += abs(U[1,i])^2
-        end
-
-        for j in 1:N
-            sumV += abs(V[1,j])^2
-        end
-
-        sum=params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2
-        
-        #eliminate masses that exceed the threshold
-        delta_masses_NN= delta_masses_NN_original
-         
-        if any(delta_masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
-            # Find all indices where masses exceed threshold
-            indices_above_threshold = findall(delta_masses_NN_original .> 1e6)
-            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
-            
-            #println("Delta masses exceed threshold: $cancelled > 1e6")
-           
-
-            delta_masses_NN = delta_masses_NN_original[delta_masses_NN_original .<= 1e6] #keep only the ones inside the threshold
-            N=round(Int,length(delta_masses_NN)/3) #reduce the N value accordingly
-
-            #unitarity of the new matrix
-
-            A_square = V[1:N, 1:N]
-            x_1=x_1[1:N]
-            # Make it unitary  (write normalization term)
-            #Q, R = qr(A_square)
-            U, S, V = svd(A_square)
-            U_clean = U*V'
-            V_unitary = U_clean
-
-            # Verify
-            @assert isapprox(V_unitary' * V_unitary, I)
-            xcol=V_unitary[:,1]
-            x_1=V_unitary[1,:]
-            sum_norm = Base.sum(abs.(x_1).^2)
-            sum_norm_col=Base.sum(abs.(xcol).^2)
-            @assert isapprox(sum_norm, sum_norm_col)
-
-        end
-
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2
-
-            x_idx = 4 # Start at 4 for x_1
-            delta_idx = 3+i # Start delta_masses_NN
-            sum_int = 0.0
-            for j in 1:(N-3)
-
-            delta_mass = delta_masses_NN[delta_idx]
-            integrand= squared_x_e * abs(x_1[x_idx])^2 * delta_mass
-            sum_int += integrand
-
-            x_idx += 1      # Increment by 1 for x_1
-            delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
-            end
-
-            delta_m_nu_sq += sum_int
-
-        end
-
-        m0_squared= (m_nu_squared-delta_m_nu_sq-sum) / (sumU*sumV)
-
-        
-       jacobian = (sumU * sumV * sqrt(abs(m0_squared))) / sqrt(m_nu_squared)
-
-        if m0_squared < 0
-            m0_squared = 0.0
-        end
-
-        m0_posterior[k, 1] = m0_squared
-        m0_posterior[k, 2] = posterior_data_m_nu[!, 2][k] * jacobian
-
-
-    end
-    return m0_posterior
-
-end    
-
-
-
-
+ 
 function get_neutrinomass(cfg=NNM)
     function NeutrinoMassNNM(params::NamedTuple)
 
@@ -356,7 +189,7 @@ function get_halftime(cfg= Newtrinos.osc.NNM())
      T_inv=(Gg*((g_a)^4)*M_sq*(mass)^2)/(m_e)^2
      Thalf=1/T_inv
      
-     println(Thalf)
+     #println(Thalf)
 
 
 
@@ -376,15 +209,18 @@ function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
         cfg = Newtrinos.osc.NNM()
+        observed =0.9*1e26
         #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         fun=get_halftime()
         predicted_value_T=fun(params)
-        sigma=1.1 * 1e26 #1.1* 1e26 
-        lower_bound=predicted_value_T-sigma
-        upper_bound=1e46 #predicted_value_T+3*sigma
+
+        if predicted_value_T >= observed 
+           predicted_value_T=observed
+        end   
+        sigma=0.1*1e26
         #println("Predicted m_nu: ", predicted_value_T)
        
-        return Uniform(lower_bound, upper_bound)#Normal(predicted_value_T, sigma)
+        return Normal(predicted_value_T, sigma)
        
 
     end
