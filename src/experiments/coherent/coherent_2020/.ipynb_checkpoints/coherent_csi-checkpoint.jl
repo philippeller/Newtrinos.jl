@@ -138,9 +138,9 @@ end
 
 function response_matrix_per_er_bin(keVnr, params, assets)
     keVee = qf(keVnr)
-    if keVee <= 0:
+    #if keVee <= 0:
         return 0.
-    end
+    #end
 
     # Compute the gamma PDF values over the PE bins
     gamma_weights = gamma_pdf_integrated_over_bins(keVee, assets.out_centers, assets.out_edges, assets.resolution, assets.light_yield)
@@ -164,8 +164,7 @@ end
 
 
 
-function build_rate_matrix(er_centers, enu_centers, nupar, physics, params):
-    """
+function build_rate_matrix(er_centers, enu_centers, nupar, physics, params):"""
     Vectorized version: computes a stack of rate matrices for each freepar set.
     - freepar_array: shape (n_samples, 4)
     - Returns: R: shape (n_samples, n_er, n_enu)
@@ -190,7 +189,7 @@ function get_expected(params, physics, assets)
     # This will hold the sum over isotopes for each parameter set
     dNdEr_all = zeros(n_er)
 
-    for nupar in assets.isotopes:    
+    #for nupar in assets.isotopes:
         # 1. Build the rate matrix for all parameter sets: (n_samples, n_er, n_enu)
         rate_matrix = build_rate_matrix(
             assets.er_centers * 1e-3,  # Convert to MeV
@@ -204,7 +203,7 @@ function get_expected(params, physics, assets)
         # rate_matrix: (n_samples, n_er, n_enu), self.flux[:, 1]: (n_enu,)
         dNdEr = rate_matrix * self.flux[:, 1]  # (n_samples, n_er)
         dNdEr_all .+= nupar[1] * dNdEr  # sum over isotopes
-    end
+    #end
     
     # 3. Integrate over recoil energy bins (multiply by bin width)
     int_rate = assets.Nt * dNdEr_all * diff(assets.er_edges * 1e-3) # (n_samples, n_er)

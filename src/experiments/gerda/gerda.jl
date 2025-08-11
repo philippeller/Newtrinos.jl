@@ -1,5 +1,5 @@
 
-module katrin
+module gerda
 
 import ..Newtrinos
 
@@ -13,7 +13,7 @@ using Interpolations
 
 
 
-@kwdef struct Katrin <: Newtrinos.Experiment
+@kwdef struct Gerda <: Newtrinos.Experiment
       physics::NamedTuple
       params::NamedTuple
       priors::NamedTuple
@@ -25,7 +25,7 @@ function configure(physics)
     physics = (;physics.osc)
     assets = get_assets(physics)
 
-    return Katrin(
+    return Gerda(
         physics = physics,
         params = (;),
         priors = (;),
@@ -38,28 +38,13 @@ end
 
 
 function get_assets(physics; datadir = @__DIR__)
-    @info "Loading Katrin data"
+    @info "Loading Gerda data"
 
-    # Read the CSV data
-    data_df = CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-    
-    # Create interpolation function
-    #posterior_m_nu = interpolate((data_df[!, 1],), data_df[!, 2], Gridded(Linear()))
-    #posterior_interp = extrapolate(posterior_m_nu, 0.0)  # Interpolation function
-    
-    # Use original DataFrame for observed data
-    observed = (
-        mass_values = data_df[:, 1],    # x-axis values from DataFrame
-        counts = data_df[:, 2],         # y-axis values from DataFrame
-    )
-    
-    posterior_sample = observed
-    posterior_mean = mean(posterior_sample)
+    # MAYBE LOADING THE POSTERIOR OF T1/2 (?)
+
     assets = (
 
-        posterior_sample = observed,
-        mass_values = observed.mass_values,
-        observed = -0.14,
+        observed = 0.9*1e26, #0.9* 1e26  ,
        
     )
     return assets
@@ -235,7 +220,7 @@ end
 
 
 function get_neutrinomass(cfg=NNM)
-    function NeutrinoMassNND(params::NamedTuple)
+    function NeutrinoMassNNM(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -256,8 +241,10 @@ function get_neutrinomass(cfg=NNM)
         masses_NN_original[1] = masses_SM_sq[1]
         masses_NN_original[2] = masses_SM_sq[2]
         masses_NN_original[3] = masses_SM_sq[3]
+
         masses_NN = masses_NN_original
-            
+        
+        #=
         if any(masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
             # Find all indices where masses exceed threshold
             indices_above_threshold = findall(masses_NN_original .> 1e6)
@@ -287,21 +274,25 @@ function get_neutrinomass(cfg=NNM)
             sum_norm_col=Base.sum(abs.(xcol).^2)
             @assert isapprox(sum_norm, sum_norm_col)
 
-        end
+        end=#
 
-        #PROBLEMATIC SUM!
-        sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
-        
+        # Calculate the neutrino mass sum for the SM only
+        sum = abs((x_e[1]*x_1[1])^2* sqrt(masses_SM_sq[1]))+
+              abs((x_e[2]*x_1[1])^2* sqrt(masses_SM_sq[2]))+
+              abs((x_e[3]*x_1[1])^2* sqrt(masses_SM_sq[3]))
+       
+
+        # Calculate the neutrino mass sum for the other sectors      
         for i in 1:3
-            squared_x_e = abs(x_e[i])^2
+            
 
             x_idx = 4 # Start at 4 for x_1
             delta_idx = 3+i # Start delta_masses_NN
 
             for j in 1:(N-3)
-             
-                mass = masses_NN[delta_idx]
-                integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
+
+                mass = sqrt(masses_NN[delta_idx])
+                integrand= abs((x_e[i]*x_1[x_idx])^2 * mass)
                 sum += integrand
 
                 x_idx += 1      # Increment by 1 for x_1
@@ -315,7 +306,7 @@ function get_neutrinomass(cfg=NNM)
         return sum
      
     end
-    return NeutrinoMassNND
+    return NeutrinoMassNNM
 end
 
 
@@ -329,12 +320,12 @@ function get_neutrinomass_SM(cfg=ThreeFlavour())
 
         # Add new parameter
         new_params = merge(params, (m₀ = 0.1,))
-        masses_SM_sq =  Newtrinos.osc.get_abs_masses(new_params).^2
+        masses_SM_sq =  Newtrinos.osc.get_abs_masses(new_params)
 
         m_nu_sq = 0.0
 
         for i in 1:3
-            squared_x_e = abs(x_e[i])^2*masses_SM_sq[i]
+            squared_x_e = abs(x_e[i]^2*masses_SM_sq[i])
 
             m_nu_sq += squared_x_e
 
@@ -348,6 +339,36 @@ end
 
 
 
+function get_halftime(cfg= Newtrinos.osc.NNM())
+    function halftime(params::NamedTuple)
+
+     
+     mass=get_neutrinomass(cfg)(params)
+     
+     Gg=3.37*(1e-15) #2.363*( 1e-15) #yr^-1
+     g_a=1.27#1.25
+     M_sq=(5.551)^2
+     m_e=0.511*(1e6)
+
+    
+
+
+     T_inv=(Gg*((g_a)^4)*M_sq*(mass)^2)/(m_e)^2
+     Thalf=1/T_inv
+     
+     println(Thalf)
+
+
+
+     return Thalf
+
+    end
+    return halftime
+end
+
+
+
+
 
 
 
@@ -355,36 +376,21 @@ function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
         cfg = Newtrinos.osc.NNM()
-        predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
-        #println("Predicted m_nu: ", predicted_value)
-        return Normal(predicted_value, 0.15)
+        #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
+        fun=get_halftime()
+        predicted_value_T=fun(params)
+        sigma=1.1 * 1e26 #1.1* 1e26 
+        lower_bound=predicted_value_T-sigma
+        upper_bound=1e46 #predicted_value_T+3*sigma
+        #println("Predicted m_nu: ", predicted_value_T)
+       
+        return Uniform(lower_bound, upper_bound)#Normal(predicted_value_T, sigma)
        
 
     end
     return forward_model
 end
 
-
-
-function create_katrin_likelihood_posteriors(experiments,params)
-    katrin_exp = experiments.katrin
-    posterior_sample = katrin_exp.assets.observed
-    posterior_mean = mean(posterior_sample)
-    posterior_std = std(posterior_sample)
-    katrin_posterior = Normal(posterior_mean, posterior_std)
-    
-    predicted = get_posterior_SM(params)
-    predicted = predicted[:,2]  # Extract the second column (counts)
-    predicted_mean = mean(predicted)
-    predicted_std = std(predicted)
-    #predicted = Normal(predicted_mean, predicted_std)
-    predicted_safe = max.(predicted, 1e-10)  # Avoid log(0) issues
-    posterior_sample_safe = max.(posterior_sample, 1e-10)  # Avoid log(0) issues
-
-    likelihood=-2*sum(log.(predicted_safe).- log.(posterior_sample_safe))
-
-    return likelihood
-end
 
 
 end

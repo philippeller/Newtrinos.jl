@@ -32,4 +32,5 @@ include("experiments/coherent/coherent_2020/coherent_csi.jl")
 
 include("experiments/juno/juno.jl")
 include("experiments/juno/tao.jl")
+include("experiments/gerda/gerda.jl")
 end
