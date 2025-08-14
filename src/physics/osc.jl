@@ -234,7 +234,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.1)
-    params[:N] = ftype(100)
+    params[:N] = ftype(10)
     params[:r] = ftype(1)
     
     NamedTuple(params)
