@@ -1,0 +1,14 @@
+Enhanced Asimov Sensitivity Analysis Results
+Observable: Minimum Energy Bin Count
+============================================================
+Parameter r correlation: -0.18967441874016822
+Parameter N correlation: 0.623310780471187
+Parameter r Spearman: -0.7052631578947368
+Parameter N Spearman: 0.7265889945950537
+Total variance: 12277.5684145615
+Number of simulations: 20
+
+Energy Bin Analysis:
+Most common minimum bin: 25
+Bin frequencies:
+  Bin 25: 20 times (100.0%)
