@@ -27,32 +27,11 @@ experiments = (
 p = Newtrinos.get_params(experiments)
 
 
-
-"""
-Generate Latin Hypercube samples for efficient parameter space sampling
-"""
-function latin_hypercube_sampling(n_samples, n_dimensions; seed=42)
-    Random.seed!(seed)
-    
-    samples = zeros(n_samples, n_dimensions)
-    
-    for dim in 1:n_dimensions
-        # Create equally spaced intervals [0, 1/n, 2/n, ..., (n-1)/n]
-        intervals = (0:(n_samples-1)) / n_samples
-        # Add random jitter within each interval
-        jittered = intervals .+ rand(n_samples) / n_samples  
-        # Randomly permute
-        samples[:, dim] = shuffle(jittered)
-    end
-    
-    return samples
-end
-
 """
 Comprehensive Asimov sensitivity analysis
 """
 function asimov_sensitivity_analysis(experiments, p , r_range, N_range; 
-                                   sampling_method=:lhs, n_samples=20, grid_size=31)
+                                   sampling_method=:lhs, n_samples=30, grid_size=31)
     
     println("ASIMOV SENSITIVITY ANALYSIS")
     println("="^60)
@@ -60,35 +39,24 @@ function asimov_sensitivity_analysis(experiments, p , r_range, N_range;
     println("Parameter N range: $(N_range[1]) to $(N_range[2])")
     println("Sampling method: $(sampling_method)")
     
-    if sampling_method == :lhs
-        println("Number of samples: $(n_samples)")
-        
-        # Latin Hypercube Sampling
-        lhs_samples = latin_hypercube_sampling(n_samples, 2)
-        
-        # Scale to parameter ranges
-        r_vals = lhs_samples[:, 1] .* (r_range[2] - r_range[1]) .+ r_range[1]
-        N_vals = lhs_samples[:, 2] .* (N_range[2] - N_range[1]) .+ N_range[1]
-        N_vals = round.(Int, N_vals)  # N should be integer
-        
-    elseif sampling_method == :grid
-        println("Grid size: $(grid_size) × $(grid_size)")
-        
-        # Grid sampling
-        r_grid = range(r_range[1], r_range[2], length=grid_size)
-        N_grid = range(N_range[1], N_range[2], length=grid_size)
-        N_grid = round.(Int, N_grid)
-        
-        r_vals = Float64[]
-        N_vals = Int[]
-        
-        for r in r_grid
-            for N in N_grid
-                push!(r_vals, r)
-                push!(N_vals, N)
-            end
+    
+    println("Grid size: $(grid_size) × $(grid_size)")
+    
+    # Grid sampling
+    r_grid = range(r_range[1], r_range[2], length=grid_size)
+    N_grid = range(N_range[1], N_range[2], length=grid_size)
+    N_grid = round.(Int, N_grid)
+    
+    r_vals = Float64[]
+    N_vals = Int[]
+    
+    for r in r_grid
+        for N in N_grid
+            push!(r_vals, r)
+            push!(N_vals, N)
         end
     end
+
     
     println("Generating Asimov dataset...")
     println("Running $(length(r_vals)) simulations...")
@@ -115,7 +83,7 @@ function asimov_sensitivity_analysis(experiments, p , r_range, N_range;
         
         if i % progress_interval == 0
             progress = round(100 * i / length(r_vals), digits=1)
-            println("  Progress: $(progress)%")
+            println("Progress: $(progress)%")
         end
     end
     
@@ -140,10 +108,6 @@ function asimov_sensitivity_analysis(experiments, p , r_range, N_range;
     residuals_N = measurements .- mean(measurements) .- correlation_r * std.(measurements) / std(r_vals) .* (r_vals .- mean(r_vals))
     partial_corr_N = cor(N_vals, residuals_N)
     
-    # Which energy bins have the minimum most often?
-    min_bins = [data.min_bin for data in simulation_data]
-    min_bin_frequencies = StatsBase.countmap(min_bins)
-    most_common_min_bin = argmax(min_bin_frequencies)
     
     # Calculate sensitivity ranges
     measurement_range = maximum(measurements) .- minimum(measurements)
@@ -153,7 +117,6 @@ function asimov_sensitivity_analysis(experiments, p , r_range, N_range;
         r_vals = r_vals,
         N_vals = N_vals,
         measurements = measurements,
-        min_bins = min_bins,
         simulation_data = simulation_data,
         
         # Linear correlations
@@ -167,10 +130,6 @@ function asimov_sensitivity_analysis(experiments, p , r_range, N_range;
         # Partial correlations
         partial_corr_r = partial_corr_r,
         partial_corr_N = partial_corr_N,
-        
-        # Enhanced analysis
-        min_bin_frequencies = min_bin_frequencies,
-        most_common_min_bin = most_common_min_bin,
         
         # Variance metrics
         total_variance = total_variance,
@@ -190,13 +149,14 @@ function asimov_sensitivity_analysis(experiments, p , r_range, N_range;
     
     return results
 end
+
 function create_sensitivity_plots(results)
     println("Creating visualization plots...")
     
-    # Plot 1: Parameter r vs Measurement scatter plot
+    
     p1 = scatter(results.r_vals, results.measurements,
                 alpha=0.6, markersize=4,
-                xlabel="Parameter r",
+                xlabel="r",
                 ylabel="Minimum Bin Count",
                 title="r scan",
                 legend=false,
@@ -207,12 +167,12 @@ function create_sensitivity_plots(results)
     # Add correlation text in bottom right
     annotate!(p1, maximum(results.r_vals) * 0.95, minimum(results.measurements) * 1.05, 
              text("Pearson: $(round(results.correlation_r, digits=3))\nSpearman: $(round(results.spearman_r, digits=3))", 
-                  :left, :bottom, 10, :black))
+                  :right, :bottom, 10, :black))
     
     # Plot 2: Parameter N vs Measurement scatter plot
     p2 = scatter(results.N_vals, results.measurements,
                 alpha=0.6, markersize=4,
-                xlabel="Parameter N", 
+                xlabel="N", 
                 ylabel="Minimum Bin Count",
                 title="N scan",
                 legend=false,
@@ -243,8 +203,8 @@ function create_sensitivity_plots(results)
     end
     
     p3 = heatmap(r_grid, N_grid, measurement_grid,
-                xlabel="Parameter r",
-                ylabel="Parameter N",
+                xlabel="r",
+                ylabel="N",
                 title="r vs N Parameter Space",
                 color=:viridis,
                 left_margin=8Plots.mm,
@@ -259,10 +219,6 @@ function create_sensitivity_plots(results)
             colorbar_title="Min Bin Count",
             legend=false)
     
-    # Add correlation info as annotation
-    annotate!(p3, maximum(results.r_vals) * 0.95, maximum(results.N_vals) * 0.95, 
-             text("r sensitivity: $(round(abs(results.correlation_r), digits=3))\nN sensitivity: $(round(abs(results.correlation_N), digits=3))", 
-                  :right, :top, 9, :white))
     
     # Combine all plots
     combined_plot = plot(p1, p2, p3,

@@ -277,7 +277,7 @@ function get_plot(physics, assets)
             axislegend(ax, framevisible = false)
             
             ax2 = Axis(f[2,1])
-            plot!(ax2, assets.energy, data ./ m, color=:black, label="Observed")
+            plot!(ax2, assets.energy, data ./m, color=:black, label="Observed")
             hlines!(ax2, 1, label="Expected")
             barplot!(ax2, assets.energy, 1 .+ sqrt.(v) ./ m, width=diff(assets.energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
             ylims!(ax2, 0.9, 1.1)
@@ -289,7 +289,7 @@ function get_plot(physics, assets)
             rowgap!(f.layout, 1, 0)
             
             ax2.xlabel = "Eₚ (MeV)"
-            ax2.ylabel = "Counts/Expected"
+            ax2.ylabel = "Counts - Expected"
         
             xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
             xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
@@ -337,9 +337,9 @@ function get_plot(physics, assets)
         for (i, N) in enumerate(N_values)
             m = all_means[i]
             v = all_variances[i]
-            lines!(ax_ratio, assets.energy, data ./ m, color=colors[i], label="Data/Expected N=$N")
+            lines!(ax_ratio, assets.energy, data ./ m, color=colors[i], label="Data-Expected N=$N")
             # Add uncertainty bands for ratios
-            barplot!(ax_ratio, assets.energy, 1 .+ sqrt.(v) ./ m, width=diff(assets.energy_bins), 
+            barplot!(ax_ratio, assets.energy, 1 .+ sqrt.(v) ./ m , width=diff(assets.energy_bins), 
                     gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.2, color=colors[i])
         end
         
@@ -354,7 +354,7 @@ function get_plot(physics, assets)
         ylims!(ax_ratio, 0.9, 1.1)
         
         display(f_ratio)
-        save("/home/sofialon/Newtrinos.jl/profiled plot/dayabay/dayabay_data_NND_N_ratio.png", f_ratio)
+        save("/home/sofialon/Newtrinos.jl/profiled plot/dayabay/dayabay_data_NND_N_diff.png", f_ratio)
     end
     
 end
