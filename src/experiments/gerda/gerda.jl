@@ -42,7 +42,8 @@ function get_assets(physics; datadir = @__DIR__)
 
     assets = (
 
-        observed =0.9*1e26,
+        observed =1*1e28, #legend 200
+        #0.9*1e26, gerda
        
     )
     return assets
@@ -209,7 +210,7 @@ function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
         cfg = Newtrinos.osc.NNM()
-        observed =0.9*1e26
+        observed =1*1e28 #legend 200
         #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         fun=get_halftime()
         predicted_value_T=fun(params)
@@ -217,7 +218,7 @@ function get_forward_model_correct(physics, assets)
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma=0.1*1e26
+        sigma= 0.1*1e28 #0.1*1e26
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)
