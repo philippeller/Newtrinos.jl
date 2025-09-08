@@ -191,9 +191,9 @@ function get_forward_model(physics, assets)
     end
 end
 
-function get_plot_old(physics, assets)
+function get_plot(physics, assets)
 
-    function plot_old(params, data=assets.observed)
+    function plot(params, data=assets.observed)
         
         m = mean(get_forward_model(physics, assets)(params))
         v = var(get_forward_model(physics, assets)(params))
@@ -243,8 +243,8 @@ function get_plot_old(physics, assets)
 end
 
 
-function get_plot(physics, assets)
-    function plot(params, data=assets.observed)
+function get_plot_new(physics, assets)
+    function plot_new(params, data=assets.observed)
         N_values = [5, 10, 50, 100]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
         

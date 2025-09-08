@@ -233,7 +233,7 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
+    params[:m₀] = ftype(0.3)
     params[:N] = ftype(30)
     params[:r] = ftype(1)
     
@@ -255,8 +255,8 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
-    params[:N] = ftype(100)
+    params[:m₀] = ftype(0.01)
+    params[:N] = ftype(30)
     params[:r] = ftype(1)
     
     NamedTuple(params)
@@ -779,8 +779,6 @@ function get_matrices(cfg::NNM)
         eigvalues, Usector = eigen(Symmetric(matrix))
         m1, m2, m3 = get_abs_masses(params)
         #Usector = [abs.(Usector[i,:]) for i in 1:length(Usector[:,1])]
-
-
         #writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/Usector_data3.csv", Usector, ',')
         #writedlm("/home/sofialon/Newtrinos.jl/src/experiments/katrin/eigen_data3.csv", eigvalues, ',')
 
@@ -827,117 +825,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# module Darkdim
-#     using Distributions
-#     using DataStructures
-#     using ..osc
-#     using LinearAlgebra
-
-#     function get_matrices(params)
-#         N_KK = 5
-        
-#         # um to eV
-#         umev = 5.067730716156395
-#         PMNS = get_PMNS(params)
-    
-#         m1, m2, m3 = get_abs_masses(params)
-    
-#         m1_MD = m1 * sqrt((exp(2 * π * params.ca1) - 1) / (2 * π * params.ca1))
-#         m2_MD = m2 * sqrt((exp(2 * π * params.ca2) - 1) / (2 * π * params.ca2))
-#         m3_MD = m3 * sqrt((exp(2 * π * params.ca3) - 1) / (2 * π * params.ca3))
-        
-#         #MD is the Dirac mass matrix that appears in the Lagrangian. Note the difference with ADD through the multiplication by c.
-        
-#         # Compute MDc00
-#         MDc00 = PMNS * Diagonal([m1, m2, m3]) * adjoint(PMNS)
-    
-#         # Initialize aM1 matrix
-#         aM1 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-#         aM2 = similar(PMNS, 3*(N_KK+1), 3*(N_KK+1))
-#         # init buffers
-#         for i in 1:3*(N_KK+1)
-#             for j in 1:3*(N_KK+1)
-#                 aM1[i,j] = 0.
-#                 aM2[i,j] = 0.
-#             end
-#         end
-        
-#         # Fill in the aM1 matrix for the first term
-#         for i in 1:3
-#             for j in 1:3
-#                 aM1[i, j] = params.Darkdim_radius * MDc00[i, j] * umev
-#             end
-#         end
-    
-#         # Update aM1 matrix for the second term
-#         for n in 1:N_KK
-#             MDcoff = PMNS * Diagonal([
-#                 m1_MD * sqrt(n^2 / (n^2 + params.ca1^2)),
-#                 m2_MD * sqrt(n^2 / (n^2 + params.ca2^2)),
-#                 m3_MD * sqrt(n^2 / (n^2 + params.ca3^2))
-#             ]) * adjoint(PMNS)
-#             for i in 1:3
-#                 for j in 1:3
-#                     aM1[3 * n + i, j] = sqrt(2) * params.Darkdim_radius * MDcoff[i, j] * umev
-#                 end
-#             end
-#         end
-    
-#         # Fill in the aM2 matrix
-#         for n in 1:N_KK
-#             aMD2 = PMNS * Diagonal([
-#                 sqrt(n^2 + params.ca1^2),
-#                 sqrt(n^2 + params.ca2^2),
-#                 sqrt(n^2 + params.ca3^2)
-#             ]) * adjoint(PMNS)
-#             for i in 1:3
-#                 for j in 1:3
-#                     aM2[3 * n + i, 3 * n + j] = aMD2[i, j]
-#                 end
-#             end
-#         end
-    
-#         aM = copy(aM1) + copy(aM2)
-#         aaMM = Hermitian(conj(transpose(aM)) * aM)
-    
-#         h, U = eigen(aaMM)
-#         h = h / (params.Darkdim_radius^2 * umev^2)
-    
-#         return U, h
-#     end
-
-
-#     osc_prob = make_osc_prob_function(get_matrices)
-
-#     params = OrderedDict(pairs(standard.params))
-#     params[:m₀] = ftype(0.01)
-#     params[:ca1] = ftype(1e-4)
-#     params[:ca2] = ftype(1e-4)
-#     params[:ca3] = ftype(1e-4)
-#     params[:Darkdim_radius] = ftype(1e-2)
-#     params = NamedTuple(params)
-   
-#     priors = OrderedDict{Symbol, Distribution}(pairs(standard.priors))
-#     priors[:m₀] = LogUniform(ftype(1e-3),ftype(1))
-#     priors[:ca1] = LogUniform(ftype(1e-5), ftype(10))
-#     priors[:ca2] = LogUniform(ftype(1e-5), ftype(10))
-#     priors[:ca3] = LogUniform(ftype(1e-5), ftype(10))
-#     priors[:Darkdim_radius] = LogUniform(ftype(1e-3),ftype(1))
-#     priors = NamedTuple(priors)
-
-# end
 
 function get_matrices(cfg::Darkdim_Lambda)
     function matrices(params::NamedTuple)
