@@ -72,9 +72,9 @@ function get_neutrinomass(cfg=NNM)
         delta_masses_NN = h
 
         masses_NN_original = masses_SM_sq[1].+delta_masses_NN
-        masses_NN_original[1] = masses_SM_sq[1]
-        masses_NN_original[2] = masses_SM_sq[2]
-        masses_NN_original[3] = masses_SM_sq[3]
+        #masses_NN_original[1] = masses_SM_sq[1]
+        #masses_NN_original[2] = masses_SM_sq[2]
+        #masses_NN_original[3] = masses_SM_sq[3]
 
         masses_NN = masses_NN_original
         
@@ -119,7 +119,6 @@ function get_neutrinomass(cfg=NNM)
         # Calculate the neutrino mass sum for the other sectors      
         for i in 1:3
             
-
             x_idx = 4 # Start at 4 for x_1
             delta_idx = 3+i # Start delta_masses_NN
 
