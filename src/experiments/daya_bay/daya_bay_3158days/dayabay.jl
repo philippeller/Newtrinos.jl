@@ -191,9 +191,9 @@ function get_forward_model(physics, assets)
     end
 end
 
-function get_plot(physics, assets)
+function get_plot_old(physics, assets)
 
-    function plot(params, data=assets.observed)
+    function plot_old(params, data=assets.observed)
         
         m = mean(get_forward_model(physics, assets)(params))
         v = var(get_forward_model(physics, assets)(params))
@@ -243,8 +243,8 @@ function get_plot(physics, assets)
 end
 
 
-function get_plot_new(physics, assets)
-    function plot_new(params, data=assets.observed)
+function get_plot_N(physics, assets)
+    function plot_N(params, data=assets.observed)
         N_values = [5, 10, 50, 100]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
         
@@ -320,14 +320,14 @@ function get_plot_new(physics, assets)
         
         ax_comp.ylabel = "Counts"
         ax_comp.xlabel = "Eₚ (MeV)"
-        ax_comp.title = "Daya Bay - Comparison of All N Values"
+        ax_comp.title = "Daya Bay - Comparison of All N Values - r=1"
         axislegend(ax_comp, framevisible = false, position = :rt)
         
         xlims!(ax_comp, minimum(assets.energy_bins), maximum(assets.energy_bins))
         ylims!(ax_comp, 0, 60000)
         
         display(f_comp)
-        #save("/home/sofialon/Newtrinos.jl/natural_plot/dayabay_data_NND_r_comp.png", f_comp)
+        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_comp.png", f_comp)
         
         # Generate ratio comparison plot
         f_ratio = Figure()
@@ -337,26 +337,151 @@ function get_plot_new(physics, assets)
         for (i, N) in enumerate(N_values)
             m = all_means[i]
             v = all_variances[i]
-            lines!(ax_ratio, assets.energy, data ./ m, color=colors[i], label="Data-Expected N=$N")
+            #lines!(ax_ratio, assets.energy, data ./ m, color=colors[i], label="Data-Expected N=$N")
+            lines!(ax_ratio, assets.energy, data .- m, color=colors[i], label="Data-Expected N=$N")
+            band!(ax_ratio, assets.energy,  data .- m.-sqrt.(v),  data .- m.+ sqrt.(v), alpha=0.4, color=colors[i])
             # Add uncertainty bands for ratios
-            barplot!(ax_ratio, assets.energy, 1 .+ sqrt.(v) ./ m , width=diff(assets.energy_bins), 
-                    gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.2, color=colors[i])
+           # barplot!(ax_ratio, assets.energy, 1 .+ sqrt.(v) ./ m , width=diff(assets.energy_bins), 
+
+                    #gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.2, color=colors[i])
         end
         
-        hlines!(ax_ratio, 1, color=:black, linestyle=:dash, label="Unity")
-        
-        ax_ratio.ylabel = "Data/Expected"
+        hlines!(ax_ratio, 0, color=:black, linestyle=:dash)
+
+        ax_ratio.ylabel = "Data - Expected"
         ax_ratio.xlabel = "Eₚ (MeV)"
-        ax_ratio.title = "Daya Bay - Ratio Comparison of All N Values"
+        ax_ratio.title = "Daya Bay - Residues for All N Values - r=1"
         axislegend(ax_ratio, framevisible = false, position = :rt)
         
         xlims!(ax_ratio, minimum(assets.energy_bins), maximum(assets.energy_bins))
-        ylims!(ax_ratio, 0.9, 1.1)
+        #ylims!(ax_ratio, 0.9, 1.1)
         
         display(f_ratio)
-        save("/home/sofialon/Newtrinos.jl/profiled plot/dayabay/dayabay_data_NND_N_diff.png", f_ratio)
+        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_N_diff.png", f_ratio)
     end
     
 end
+
+
+
+
+function get_plot(physics, assets)
+    function plot(params, data=assets.observed)
+        r_values = [0, 0.25, 0.5, 1]
+        colors = [:red, :blue, :green, :orange]  # Different colors for each r
+        
+        # Calculate all means and variances first
+        all_means = []
+        all_variances = []
+
+        for r in r_values
+            p_r = merge(params, (r = Float64(r),))
+            m = mean(get_forward_model(physics, assets)(p_r))
+            v = var(get_forward_model(physics, assets)(p_r))
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+
+        # Generate individual plots for each r value
+        for (i, r) in enumerate(r_values)
+            m = all_means[i]
+            v = all_variances[i]
+            
+            f = Figure()
+            ax = Axis(f[1,1])
+            
+            plot!(ax, assets.energy, data, color=:black, label="Observed")
+            stephist!(ax, assets.energy, weights=m, bins=assets.energy_bins, label="Expected")
+            barplot!(ax, assets.energy, m .+ sqrt.(v), width=diff(assets.energy_bins), gap=0, fillto= m .- sqrt.(v), alpha=0.5, label="Standard Deviation")
+            
+            ax.ylabel = "Counts"
+            ax.title = "Daya Bay (r = $r)"
+            axislegend(ax, framevisible = false)
+            
+            ax2 = Axis(f[2,1])
+            plot!(ax2, assets.energy, data ./m, color=:black, label="Observed")
+            hlines!(ax2, 1, label="Expected")
+            barplot!(ax2, assets.energy, 1 .+ sqrt.(v) ./ m, width=diff(assets.energy_bins), gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.5, label="Standard Deviation")
+            ylims!(ax2, 0.9, 1.1)
+            
+            ax.xticksvisible = false
+            ax.xticklabelsvisible = false
+            
+            rowsize!(f.layout, 1, Relative(3/4))
+            rowgap!(f.layout, 1, 0)
+            
+            ax2.xlabel = "Eₚ (MeV)"
+            ax2.ylabel = "Counts - Expected"
+        
+            xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+            xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+            
+            ylims!(ax, 0, 60000)
+            
+            display(f)
+            #save("/home/sofialon/Newtrinos.jl/profiled_plot/dayabay_data_NND_r_$r.png", f)
+        end
+        
+        # Generate comparison plot with all r values
+        f_comp = Figure()
+        ax_comp = Axis(f_comp[1,1])
+        
+        # Plot observed data
+        scatter!(ax_comp, assets.energy, data, color=:black, label="Observed")
+        
+        # Plot all expected values
+        for (i, r) in enumerate(r_values)
+            m = all_means[i]
+            v = all_variances[i]
+            stephist!(ax_comp, assets.energy, weights=m, bins=assets.energy_bins, 
+                    color=colors[i], label="Expected r=$r")
+            # Add uncertainty bands
+            barplot!(ax_comp, assets.energy, m .+ sqrt.(v), width=diff(assets.energy_bins), 
+                    gap=0, fillto= m .- sqrt.(v), alpha=0.2, color=colors[i])
+        end
+        
+        ax_comp.ylabel = "Counts"
+        ax_comp.xlabel = "Eₚ (MeV)"
+        ax_comp.title = "Daya Bay - Comparison of All r Values - N=20"
+        axislegend(ax_comp, framevisible = false, position = :rt)
+        
+        xlims!(ax_comp, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        ylims!(ax_comp, 0, 60000)
+        
+        display(f_comp)
+        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_comp.png", f_comp)
+        
+        # Generate ratio comparison plot
+        f_ratio = Figure()
+        ax_ratio = Axis(f_ratio[1,1])
+        # Plot ratios for all r values
+        for (i, r) in enumerate(r_values)
+            m = all_means[i]
+            v = all_variances[i]
+            #lines!(ax_ratio, assets.energy, data ./ m, color=colors[i], label="Data-Expected r=$r")
+            lines!(ax_ratio, assets.energy, data .- m, color=colors[i], label="Data-Expected r=$r")
+            band!(ax_ratio, assets.energy,  data .- m.-sqrt.(v),  data .- m.+ sqrt.(v), alpha=0.4, color=colors[i])
+            # Add uncertainty bands for ratios
+           # barplot!(ax_ratio, assets.energy, 1 .+ sqrt.(v) ./ m , width=diff(assets.energy_bins), 
+
+                    #gap=0, fillto= 1 .- sqrt.(v)./m, alpha=0.2, color=colors[i])
+        end
+        
+        hlines!(ax_ratio, 0, color=:black, linestyle=:dash)
+
+        ax_ratio.ylabel = "Data - Expected"
+        ax_ratio.xlabel = "Eₚ (MeV)"
+        ax_ratio.title = "Daya Bay - Residues for All r Values - N=20"
+        axislegend(ax_ratio, framevisible = false, position = :rt)
+        
+        xlims!(ax_ratio, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        #ylims!(ax_ratio, 0.9, 1.1)
+        
+        display(f_ratio)
+        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_diff.png", f_ratio)
+    end
+    
+end
+
 
 end
