@@ -241,6 +241,7 @@ else
     end 
     FileIO.save(name * ".jld2", Dict("result" => result))
 
+
     if args["plot"]
         using CairoMakie
         fig = Figure()

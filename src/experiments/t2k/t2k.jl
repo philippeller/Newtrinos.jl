@@ -1,4 +1,4 @@
-module nova
+module t2k
 
 using LinearAlgebra
 using Distributions
@@ -11,7 +11,7 @@ using Printf
 using Statistics
 import ..Newtrinos
 
-@kwdef struct novaExperiment <: Newtrinos.Experiment
+@kwdef struct t2kExperiment <: Newtrinos.Experiment
     physics::NamedTuple
     params::NamedTuple
     priors::NamedTuple
@@ -20,39 +20,11 @@ import ..Newtrinos
     plot::Function
 end
 
-# extract data from ROOT histograms
-
-function extract_histogram_data(hist)
-    """Safely extract bin contents from ROOT histogram"""
-    
-        if hasfield(typeof(hist), :fN) && hist.fN > 0
-            return hist.fArray[1:hist.fN]
-        end
-end
-
-function extract_histogram_edges(hist)
-    """Extract bin edges from ROOT histogram axis"""
-    if hasfield(typeof(hist), :fXaxis)
-        axis = hist.fXaxis
-        if hasfield(typeof(axis), :fXbins) && !isempty(axis.fXbins.fArray)
-            return axis.fXbins.fArray
-        else
-            # Uniform binning case
-            nbins = axis.fNbins
-            xmin = axis.fXmin
-            xmax = axis.fXmax
-            return range(xmin, xmax, length=nbins+1)
-        end
-    else
-        throw(ArgumentError("Cannot extract edges from histogram"))
-    end
-end
-
 
 function configure(physics)
     physics = (;physics.osc, physics.xsec)
     assets = get_assets(physics)
-    return novaExperiment(
+    return t2kExperiment(
         physics = physics,
         params = (;),
         priors = (;),
@@ -63,9 +35,9 @@ function configure(physics)
 end
 
 function get_assets(physics; datadir = @__DIR__)
-    @info "Loading NOvA data"
+    @info "Loading T2K data"
     
-    # Load data from ROOT files (as in original Python code)
+    # Load data 
     data_file = ROOTFile(joinpath(datadir, "NOvA_2020_data_histograms.root"))
     mc_file = ROOTFile(joinpath(datadir, "NOvA_2020_data_release_predictions_with_systs_all_hists.root"))
     

@@ -354,14 +354,14 @@ function generate_toy_data(experiments::NamedTuple, params::NamedTuple )
     
     final_data = map(experiments) do experiment
     
-        model = ThreeFlavour() #experiment.forward_model
+        model = experiment.forward_model
         dist_obj = model(params)
         toy_data = rand(dist_obj)
 
     end
-    
+
     return final_data
-    
+
 end
 
 function generate_asimov_data(experiment::Newtrinos.Experiment, params::NamedTuple)

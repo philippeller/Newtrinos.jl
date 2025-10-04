@@ -763,7 +763,7 @@ function get_matrices(cfg::NNM)
         matrix = zeros(T, N_int, N_int)
         
      
-        Threads.@threads for i in 1:N_int  
+        for i in 1:N_int  
             for j in 1:N_int 
                 sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
                 sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))

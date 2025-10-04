@@ -93,7 +93,7 @@ function CairoMakie.plot_old(result::NewtrinosResult)
     f
 end =#
 
-function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results")
+#= function CairoMakie.plot_old(result::NewtrinosResult; title="Parameter Estimation Results")
 
     dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior);
     
@@ -136,6 +136,68 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     
     # Position text in data coordinates (top-right corner)
     text_x = x_min + 0.8 * (x_max - x_min)  # 2% from left
+    text_y = y_max - 0.02 * (y_max - y_min)  # 2% from top
+    
+    text!(ax, text_content,
+        position = (text_x, text_y),
+        align = (:left, :top),
+        fontsize = 12,
+        color = :black
+    )
+    
+    f
+end =#
+
+function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results")
+
+    dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior);
+    
+    # Find best fit values (indices of maximum log_posterior)
+    best_idx = argmin(dLLH)  # Minimum dLLH corresponds to maximum log_posterior
+    best_fit_x = result.axes[1][best_idx[1]]
+    best_fit_y = result.axes[2][best_idx[2]]
+    
+    f = Figure()
+    ax = Axis(f[1, 1], 
+        xlabel = String(keys(result.axes)[1]), 
+        ylabel = String(keys(result.axes)[2]), 
+        title = title,
+        xminorticksvisible = true, 
+        xminorgridvisible = true, 
+        yminorticksvisible = true, 
+        yminorgridvisible = true
+    )
+    
+    # Contour levels
+    levels = quantile(Chisq(2), 1 .- 2*ccdf(Normal(), 0:3))
+    
+    # Create contourf with green colormap and capture the plot object
+    cf = contourf!(ax, result.axes[1], result.axes[2], dLLH, 
+        levels=levels, 
+        colormap=(Reverse(:Purples), 0.6))  # Nice purple palette
+    
+    contour!(ax, result.axes[1], result.axes[2], dLLH, 
+        levels=levels, 
+        color=:black)
+    
+    # Add best fit point
+    scatter!(ax, [best_fit_x], [best_fit_y], color=:red, markersize=8, marker=:star5)
+    
+    # Add colorbar
+    Colorbar(f[1, 2], cf, label = "-2LLH")
+    
+    # Create text with best fit values using absolute positioning
+    var1_name = String(keys(result.axes)[1])
+    var2_name = String(keys(result.axes)[2])
+
+    text_content = "Best Fit Values:\n$(var1_name) = $(round(best_fit_x, digits=6))\n$(var2_name) = $(round(best_fit_y, digits=6))"
+
+    # Get axis ranges for absolute positioning
+    x_min, x_max = extrema(result.axes[1])
+    y_min, y_max = extrema(result.axes[2])
+    
+    # Position text in data coordinates (top-right corner)
+    text_x = x_min + 0.7 * (x_max - x_min)  # 80% from left
     text_y = y_max - 0.02 * (y_max - y_min)  # 2% from top
     
     text!(ax, text_content,
