@@ -243,8 +243,8 @@ function get_plot_old(physics, assets)
 end
 
 
-function get_plot_N(physics, assets)
-    function plot_N(params, data=assets.observed)
+function get_plot(physics, assets)
+    function plot(params, data=assets.observed)
         N_values = [5, 10, 50, 100]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
         
@@ -327,7 +327,7 @@ function get_plot_N(physics, assets)
         ylims!(ax_comp, 0, 60000)
         
         display(f_comp)
-        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_comp.png", f_comp)
+        save("/home/sofialon/Newtrinos.jl/new_plots/dayabay_data_NND_r_comp.png", f_comp)
         
         # Generate ratio comparison plot
         f_ratio = Figure()
@@ -357,7 +357,7 @@ function get_plot_N(physics, assets)
         #ylims!(ax_ratio, 0.9, 1.1)
         
         display(f_ratio)
-        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_N_diff.png", f_ratio)
+        save("/home/sofialon/Newtrinos.jl/new_plots/dayabay_data_NND_N_diff.png", f_ratio)
     end
     
 end
@@ -365,8 +365,8 @@ end
 
 
 
-function get_plot(physics, assets)
-    function plot(params, data=assets.observed)
+function get_plot_r(physics, assets)
+    function plot_r(params, data=assets.observed)
         r_values = [0, 0.25, 0.5, 1]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
         
@@ -442,7 +442,7 @@ function get_plot(physics, assets)
         
         ax_comp.ylabel = "Counts"
         ax_comp.xlabel = "Eₚ (MeV)"
-        ax_comp.title = "Daya Bay - Comparison of All r Values - N=20"
+        ax_comp.title = "Daya Bay - Comparison of All r Values - N=100"
         axislegend(ax_comp, framevisible = false, position = :rt)
         
         xlims!(ax_comp, minimum(assets.energy_bins), maximum(assets.energy_bins))
@@ -471,7 +471,7 @@ function get_plot(physics, assets)
 
         ax_ratio.ylabel = "Data - Expected"
         ax_ratio.xlabel = "Eₚ (MeV)"
-        ax_ratio.title = "Daya Bay - Residues for All r Values - N=20"
+        ax_ratio.title = "Daya Bay - Residues for All r Values - N=100"
         axislegend(ax_ratio, framevisible = false, position = :rt)
         
         xlims!(ax_ratio, minimum(assets.energy_bins), maximum(assets.energy_bins))

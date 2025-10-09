@@ -234,8 +234,9 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(100)
     params[:r] = ftype(1)
+
     
     NamedTuple(params)
 end
@@ -244,7 +245,7 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(2)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:N] = Uniform(ftype(40),ftype(80))
     priors[:r] = Uniform(ftype(0),ftype(1))
 
     NamedTuple(priors)
@@ -626,10 +627,10 @@ end
 
 
 
-function get_matrices(cfg::NND)
+function get_matrices_old(cfg::NND)
 
 
-    function get_Nnaturalness(params::NamedTuple)
+    function get_Nnaturalness_old(params::NamedTuple)
         N_int = round(Int, ForwardDiff.value(params[:N]))
         N_dual = params[:N]
 
@@ -637,7 +638,8 @@ function get_matrices(cfg::NND)
         T = promote_type(
             typeof(params[:N]), 
             typeof(params[:m₀]),
-            typeof(params[:r]), 
+            typeof(params[:r]),
+            typeof(params[:b]),
             typeof(params[:Δm²₂₁]), 
             typeof(params[:Δm²₃₁]),
             typeof(params[:δCP]),
@@ -822,6 +824,354 @@ function get_matrices(cfg::NNM)
     end
 
 end
+
+
+
+
+function get_matrices_diff(cfg::NND)
+
+   function get_Nnaturalness_diff(params::NamedTuple)
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]      
+        
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        ) 
+
+        m1, m2, m3 = get_abs_masses(params)
+
+        # Convert masses to the correct type (three flavours masses)
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        
+        # I assume lambdaH=10^13eV, lambda_higgs=0.2
+        overall_factor= T(N_dual * 0.2 /(1e26))
+
+        gamma= Vector{T}(undef, 3)
+        
+
+        gamma[1] = m1_T^2*overall_factor
+        gamma[2] = m2_T^2*overall_factor
+        gamma[3] = m3_T^2*overall_factor
+
+        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
+
+        for i in 1:3
+            if gamma[i]==Inf || gamma[i]==-Inf || isnan(gamma[i])
+               gamma[i] = zero(T)
+            end
+        end
+
+         
+        matrix= Vector{Matrix{T}}(undef, 3)
+
+        for k in 1:3
+            matrix[k] = zeros(T, N_int, N_int)
+            for i in 1:N_int
+                for j in 1:N_int 
+                    sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+                    sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
+                    
+                    if i == j
+                        matrix[k][i, j] = sqrt_i * sqrt_j * (gamma[k]+one(T)/overall_factor)
+                    else
+                        matrix[k][i, j] = sqrt_i * sqrt_j*(one(T)/overall_factor)
+                    end
+                end
+            end
+       
+        end
+
+        U = get_PMNS(params)
+
+            
+        M_matrix = zeros(Complex{T}, 3*N_int, 3*N_int)
+
+        cols=hcat([kron(matrix[j][:,i],U[:,j]) for i in 1:N_int for j in 1:3 ])
+        M_matrix=reduce(hcat,cols)
+
+        eigenvalues, FinalUmatrix = eigen(M_matrix)
+
+
+
+        delta_mass = Vector{T}(undef, 3*N_int)
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+
+        if delta_mass[1] != eigenvalues[1]
+           println("Doesnt return same  m01")
+           println(delta_mass[1] - eigenvalues[1])
+        end
+
+        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])
+           println("Doesnt return same  m02")
+           println(delta_mass[2] - (eigenvalues[2]-eigenvalues[1]))
+        end
+        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])
+           println("Doesnt return same  m03")
+           println(delta_mass[3] - (eigenvalues[3]-eigenvalues[1]))
+        end
+
+        for i in 2:N_int
+            delta_mass[3*i-2] = eigenvalues[i]- m1_T^2
+            delta_mass[3*i-1] = eigenvalues[i] - m2_T^2
+            delta_mass[3*i] =  eigenvalues[i] - m3_T^2
+        end
+        
+       
+        h = delta_mass
+        
+       
+        #println(N_int)
+    
+
+        #=for α in 1:3
+            for β in 1:3
+                # Place Usector[α] * U[α,β] in the (α,β) strided block
+                FinalUmatrix[α:3:end, β:3:end] .= Usector[α] .* U[α, β]
+            end
+        end=#
+    
+            
+        return FinalUmatrix, h
+    end
+
+end
+
+
+
+
+
+function get_matrices(cfg::NND)
+
+   function get_Nnaturalness(params::NamedTuple)
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]      
+        
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        ) 
+
+        m1, m2, m3 = get_abs_masses(params)
+
+        # Convert masses to the correct type (three flavours masses)
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        
+       masses_sq=Vector{T}(undef, 3*N_int)
+       masses_sq[1]=m1_T^2
+       masses_sq[2]=m2_T^2
+       masses_sq[3]=m3_T^2
+
+        # I assume lambdaH=10^13eV, lambda_higgs=0.2
+        overall_factor= T(N_dual * 0.2 /(1e26))
+
+        gamma= Vector{T}(undef, 3)
+        
+
+        gamma[1] = m1_T^2*overall_factor
+        gamma[2] = m2_T^2*overall_factor
+        gamma[3] = m3_T^2*overall_factor
+
+        
+        for i in 1:3
+            if gamma[i]==Inf || gamma[i]==-Inf || isnan(gamma[i])
+               gamma[i] = zero(T)
+            end
+        end
+       
+        #construction of the eigenvalues from the formula
+
+        for i in 2:N_int  
+            eig_val_T = T(2*i + params[:r])
+
+            masses_sq[3*i-2] =sqrt(gamma[1]*eig_val_T/overall_factor)
+            masses_sq[3*i-1] =sqrt(gamma[2]*eig_val_T/overall_factor)
+            masses_sq[3*i] = sqrt(gamma[3]*eig_val_T/overall_factor)
+        end
+
+       #construction of the mass squared matrix
+
+       M=Diagonal(masses_sq)
+
+       println(size(M))
+
+       #multiplication with the PMNS matrix
+        U = get_PMNS(params)
+        bigU = kron(I(N_int), U)
+        bigU_adj = kron(I(N_int), adjoint(U))
+        M_matrix = bigU * M * bigU_adj
+
+        M_squared = M_matrix*adjoint(M_matrix)
+
+        eigenvalues, FinalUmatrix = eigen(M_squared)
+
+
+        delta_mass = Vector{T}(undef, 3*N_int)
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+
+        if delta_mass[1] != eigenvalues[1]
+           println("Doesnt return same  m01")
+           println(delta_mass[1] - eigenvalues[1])
+        end
+
+        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])
+           println("Doesnt return same  m02")
+           println(delta_mass[2] - (eigenvalues[2]-eigenvalues[1]))
+        end
+        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])
+           println("Doesnt return same  m03")
+           println(delta_mass[3] - (eigenvalues[3]-eigenvalues[1]))
+        end
+
+        for i in 2:N_int
+            delta_mass[3*i-2] = eigenvalues[i]- m1_T^2
+            delta_mass[3*i-1] = eigenvalues[i] - m2_T^2
+            delta_mass[3*i] =  eigenvalues[i] - m3_T^2
+        end
+        
+       
+        h = delta_mass
+        
+       
+        #println(N_int)
+    
+
+        #=for α in 1:3
+            for β in 1:3
+                # Place Usector[α] * U[α,β] in the (α,β) strided block
+                FinalUmatrix[α:3:end, β:3:end] .= Usector[α] .* U[α, β]
+            end
+        end=#
+    
+            
+        return FinalUmatrix, h
+    end
+
+end
+
+
+
+
+function get_matrices(cfg::NNM)
+
+   function get_Nnaturalness(params::NamedTuple)
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]      
+        
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        ) 
+
+        m1, m2, m3 = get_abs_masses(params)
+
+        # Convert masses to the correct type (three flavours masses)
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+
+        # I assume lambdaH=10^13eV, lambda_higgs=0.2
+        overall_factor= T(N_dual * 0.2 /(1e24))
+
+        gamma= Vector{T}(undef, 3)
+        eigenvalues= Vector{Vector{T}}(undef, 3)
+        Usector= Vector{Matrix{T}}(undef, 3)
+
+        gamma[1] = m1_T^2*overall_factor
+        gamma[2] = m2_T^2*overall_factor
+        gamma[3] = m3_T^2*overall_factor
+        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
+        for i in 1:3
+            if gamma[i]==Inf || gamma[i]==-Inf || isnan(gamma[i])
+               gamma[i] = zero(T)
+            end
+        end
+
+        matrix = zeros(T, N_int, N_int)
+
+        for k in 1:3   
+            for i in 1:N_int
+                for j in 1:N_int 
+                    sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+                    sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
+                    
+                    if i == j
+                        matrix[i, j] = sqrt_i * sqrt_j * (gamma[k]+one(T))
+                    else
+                        matrix[i, j] = sqrt_i * sqrt_j*(one(T))
+                    end    
+                end
+            end
+
+         eigenvalues[k], Usector[k] = eigen(Symmetric(matrix))
+       
+        end
+        
+        delta_mass = Vector{T}(undef, 3*N_int)
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+        
+        for i in 2:N_int
+            delta_mass[3*i-2] =N_dual*  eigenvalues[1][i]* m1_T^2  - m1_T^2
+            delta_mass[3*i-1] = N_dual* eigenvalues[2][i]* m2_T^2- m1_T^2
+            delta_mass[3*i] = N_dual* eigenvalues[3][i]* m3_T^2 - m1_T^2
+        end
+        
+        h = delta_mass
+        U = get_PMNS(params)
+
+            # Most efficient version using strided assignment
+        FinalUmatrix = zeros(Complex{T}, 3*N_int, 3*N_int)
+
+        for α in 1:3
+            for β in 1:3
+
+                FinalUmatrix[α:3:end, β:3:end] .= Usector[α] .* U[α, β]
+            end
+        end
+    
+            
+        return FinalUmatrix, h, Usector
+    end
+
+end
+
 
 
 
@@ -1076,7 +1426,7 @@ function get_matrices(cfg::Darkdim_cas)
         aaMM = Hermitian(conj(transpose(aM)) * aM)
   
         h, U = eigen(aaMM)
-        h = h / (params.Darkdim_radius^2 * umev^2) 
+        h = h / (params.Darkdim_radius^2 * umev^2)
         return U, h
     end
 end
