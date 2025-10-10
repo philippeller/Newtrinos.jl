@@ -828,9 +828,9 @@ end
 
 
 
-function get_matrices_diff(cfg::NND)
+function get_matrices(cfg::NND)
 
-   function get_Nnaturalness_diff(params::NamedTuple)
+   function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]      
@@ -861,9 +861,9 @@ function get_matrices_diff(cfg::NND)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = m1_T^2*overall_factor
-        gamma[2] = m2_T^2*overall_factor
-        gamma[3] = m3_T^2*overall_factor
+        gamma[1] = sqrt(m1_T^2*overall_factor)
+        gamma[2] = sqrt(m2_T^2*overall_factor)
+        gamma[3] = sqrt(m3_T^2*overall_factor)
 
         #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
 
@@ -873,61 +873,96 @@ function get_matrices_diff(cfg::NND)
             end
         end
 
-         
-        matrix= Vector{Matrix{T}}(undef, 3)
+        #construction of the sectors
 
-        for k in 1:3
-            matrix[k] = zeros(T, N_int, N_int)
-            for i in 1:N_int
-                for j in 1:N_int 
-                    sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-                    sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
-                    
-                    if i == j
-                        matrix[k][i, j] = sqrt_i * sqrt_j * (gamma[k]+one(T)/overall_factor)
-                    else
-                        matrix[k][i, j] = sqrt_i * sqrt_j*(one(T)/overall_factor)
-                    end
+        matrix=zeros(T, N_int,N_int)
+
+        for i in 1:N_int
+
+            for j in 1:N_int
+
+                sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
+                
+                if i == j
+                    matrix[i, j] = N_dual*sqrt_i * sqrt_j 
+                else
+                    matrix[i, j] =N_dual*sqrt_i * sqrt_j 
                 end
             end
-       
         end
+
+        #construction of the gamma matrix
+
+        M_gamma=zeros(T,3,3)
+        
+        
+        for i in 1:3
+            for j in 1:3
+                if i==j
+                   M_gamma[i,j]=((gamma[i]^2)/N_dual + one(T))
+                else
+                   M_gamma[i,j]=((gamma[i]*gamma[j])/N_dual+ one(T))
+                end
+            end
+        end
+    
+        # PMNS matrix and multiplication
 
         U = get_PMNS(params)
 
-            
-        M_matrix = zeros(Complex{T}, 3*N_int, 3*N_int)
 
-        cols=hcat([kron(matrix[j][:,i],U[:,j]) for i in 1:N_int for j in 1:3 ])
-        M_matrix=reduce(hcat,cols)
+        # Initialize the full matrix
+        M_matrix = zeros(T, 3*N_int, 3*N_int)
 
-        eigenvalues, FinalUmatrix = eigen(M_matrix)
+        ones_3x3 = ones(T, 3, 3)
 
+        for i in 1:N_int
+            for j in 1:N_int
+                
+                if i == j
+                    block = M_gamma  # Diagonal blocks: use M_gamma
+                else
+                    block = ones_3x3  # Off-diagonal blocks: use ones
+                end
+                
+                # Place the scaled block in the appropriate position
+                M_matrix[3*(i-1)+1:3*i, 3*(j-1)+1:3*j] = matrix[i,j] * block
+            end
+        end
 
+        #cols=hcat([kron(matrix[j][:,i],U[:,j]) for i in 1:N_int for j in 1:3 ])
+        #M_matrix=reduce(hcat,cols)
+
+        eigenvalues, V = eigen(Hermitian(M_matrix))
+        bigU = kron(ones(N_int, N_int), U)
+
+        FinalUmatrix = V.*bigU
 
         delta_mass = Vector{T}(undef, 3*N_int)
         delta_mass[1] = zero(T)
         delta_mass[2] = T(params.Δm²₂₁)
         delta_mass[3] = T(params.Δm²₃₁)
 
-        if delta_mass[1] != eigenvalues[1]
+        if delta_mass[1] != eigenvalues[1]*(m1_T^2/gamma[1]^2)- m1_T^2
            println("Doesnt return same  m01")
-           println(delta_mass[1] - eigenvalues[1])
+           println((delta_mass[1] - eigenvalues[1]*(m1_T^2/gamma[1]^2)+ m1_T^2))
         end
 
-        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])
+        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])*(m2_T^2/gamma[2]^2)- m2_T^2
            println("Doesnt return same  m02")
-           println(delta_mass[2] - (eigenvalues[2]-eigenvalues[1]))
+           println((delta_mass[2] -(eigenvalues[2]-eigenvalues[1])*(m2_T^2/gamma[2]^2)+ m2_T^2))
         end
-        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])
+
+        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])*(m3_T^2/gamma[3]^2)- m3_T^2
            println("Doesnt return same  m03")
-           println(delta_mass[3] - (eigenvalues[3]-eigenvalues[1]))
+           println((delta_mass[3] - (eigenvalues[3]-eigenvalues[1])*(m3_T^2/gamma[3]^2)+ m3_T^2))
         end
 
         for i in 2:N_int
-            delta_mass[3*i-2] = eigenvalues[i]- m1_T^2
-            delta_mass[3*i-1] = eigenvalues[i] - m2_T^2
-            delta_mass[3*i] =  eigenvalues[i] - m3_T^2
+            delta_mass[3*i-2] = eigenvalues[3*i-2]*(m1_T^2/gamma[1]^2)- m1_T^2
+            delta_mass[3*i-1] = eigenvalues[3*i-1]*(m2_T^2/gamma[2]^2)- m2_T^2
+            delta_mass[3*i] =  eigenvalues[3*i]*(m3_T^2/gamma[3]^2) - m3_T^2
         end
         
        
@@ -954,9 +989,9 @@ end
 
 
 
-function get_matrices(cfg::NND)
+function get_matrices_diag(cfg::NND)
 
-   function get_Nnaturalness(params::NamedTuple)
+   function get_Nnaturalness_diag(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]      
@@ -1021,8 +1056,8 @@ function get_matrices(cfg::NND)
 
        #multiplication with the PMNS matrix
         U = get_PMNS(params)
-        bigU = kron(I(N_int), U)
-        bigU_adj = kron(I(N_int), adjoint(U))
+        bigU =  similar(U, 3*N_int, 3*N_int)
+        bigU_adj = adjoint(bigU)
         M_matrix = bigU * M * bigU_adj
 
         M_squared = M_matrix*adjoint(M_matrix)
@@ -1071,103 +1106,6 @@ function get_matrices(cfg::NND)
     
             
         return FinalUmatrix, h
-    end
-
-end
-
-
-
-
-function get_matrices(cfg::NNM)
-
-   function get_Nnaturalness(params::NamedTuple)
-        
-        N_int = round(Int, ForwardDiff.value(params[:N])) 
-        N_dual = params[:N]      
-        
-        
-        T = promote_type(
-            typeof(params[:N]), 
-            typeof(params[:m₀]),
-            typeof(params[:r]), 
-            typeof(params[:Δm²₂₁]), 
-            typeof(params[:Δm²₃₁]),
-            typeof(params[:δCP]),
-            typeof(params[:θ₁₂]),
-            typeof(params[:θ₁₃]),
-            typeof(params[:θ₂₃])
-        ) 
-
-        m1, m2, m3 = get_abs_masses(params)
-
-        # Convert masses to the correct type (three flavours masses)
-        m1_T = T(m1)
-        m2_T = T(m2) 
-        m3_T = T(m3)
-
-        # I assume lambdaH=10^13eV, lambda_higgs=0.2
-        overall_factor= T(N_dual * 0.2 /(1e24))
-
-        gamma= Vector{T}(undef, 3)
-        eigenvalues= Vector{Vector{T}}(undef, 3)
-        Usector= Vector{Matrix{T}}(undef, 3)
-
-        gamma[1] = m1_T^2*overall_factor
-        gamma[2] = m2_T^2*overall_factor
-        gamma[3] = m3_T^2*overall_factor
-        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
-        for i in 1:3
-            if gamma[i]==Inf || gamma[i]==-Inf || isnan(gamma[i])
-               gamma[i] = zero(T)
-            end
-        end
-
-        matrix = zeros(T, N_int, N_int)
-
-        for k in 1:3   
-            for i in 1:N_int
-                for j in 1:N_int 
-                    sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-                    sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
-                    
-                    if i == j
-                        matrix[i, j] = sqrt_i * sqrt_j * (gamma[k]+one(T))
-                    else
-                        matrix[i, j] = sqrt_i * sqrt_j*(one(T))
-                    end    
-                end
-            end
-
-         eigenvalues[k], Usector[k] = eigen(Symmetric(matrix))
-       
-        end
-        
-        delta_mass = Vector{T}(undef, 3*N_int)
-        delta_mass[1] = zero(T)
-        delta_mass[2] = T(params.Δm²₂₁)
-        delta_mass[3] = T(params.Δm²₃₁)
-        
-        for i in 2:N_int
-            delta_mass[3*i-2] =N_dual*  eigenvalues[1][i]* m1_T^2  - m1_T^2
-            delta_mass[3*i-1] = N_dual* eigenvalues[2][i]* m2_T^2- m1_T^2
-            delta_mass[3*i] = N_dual* eigenvalues[3][i]* m3_T^2 - m1_T^2
-        end
-        
-        h = delta_mass
-        U = get_PMNS(params)
-
-            # Most efficient version using strided assignment
-        FinalUmatrix = zeros(Complex{T}, 3*N_int, 3*N_int)
-
-        for α in 1:3
-            for β in 1:3
-
-                FinalUmatrix[α:3:end, β:3:end] .= Usector[α] .* U[α, β]
-            end
-        end
-    
-            
-        return FinalUmatrix, h, Usector
     end
 
 end
