@@ -856,14 +856,14 @@ function get_matrices(cfg::NND)
         m3_T = T(m3)
         
         # I assume lambdaH=10^13eV, lambda_higgs=0.2
-        overall_factor= T(N_dual * 0.2 /(1e26))
+        factor= T( (1e26)/N_dual * 0.2)
 
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = sqrt(m1_T^2*overall_factor)
-        gamma[2] = sqrt(m2_T^2*overall_factor)
-        gamma[3] = sqrt(m3_T^2*overall_factor)
+        gamma[1] = sqrt(m1_T^2)#sqrt(m1_T^2/factor)
+        gamma[2] = sqrt(m2_T^2)#sqrt(m2_T^2/factor)
+        gamma[3] = sqrt(m3_T^2)#sqrt(m3_T^2/factor)
 
         #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
 
@@ -876,18 +876,19 @@ function get_matrices(cfg::NND)
         #construction of the sectors
 
         matrix=zeros(T, N_int,N_int)
-
+        squared= Vector{T}(undef, N_int)
         for i in 1:N_int
 
             for j in 1:N_int
 
                 sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
-                
+                squared[i]= sqrt_i
+
                 if i == j
-                    matrix[i, j] = N_dual*sqrt_i * sqrt_j 
+                    matrix[i, j] = (N_dual*sqrt_i * sqrt_j) *(m1_T^2)
                 else
-                    matrix[i, j] =N_dual*sqrt_i * sqrt_j 
+                    matrix[i, j] = (N_dual*sqrt_i * sqrt_j) *(m1_T^2)
                 end
             end
         end
@@ -895,8 +896,30 @@ function get_matrices(cfg::NND)
         #construction of the gamma matrix
 
         M_gamma=zeros(T,3,3)
+
+        for i in 1:3
+            for j in 1:3
+                if i==j
+                   M_gamma[i,j]=((gamma[i]^2))
+                else
+                   M_gamma[i,j]=((gamma[i]*gamma[j]))
+                end
+            end
+        end 
+
+        M_factors=Diagonal(squared.^2)
+
+        M_gamma_factor=kron(M_factors,M_gamma)
+
+        ones_3x3 = ones(T, 3, 3)
+
+        M_sector_part = kron(matrix, ones_3x3)
+
+
+        M_matrix=M_sector_part.+M_gamma_factor
+
         
-        
+        #=
         for i in 1:3
             for j in 1:3
                 if i==j
@@ -905,17 +928,16 @@ function get_matrices(cfg::NND)
                    M_gamma[i,j]=((gamma[i]*gamma[j])/N_dual+ one(T))
                 end
             end
-        end
+        end =#
     
-        # PMNS matrix and multiplication
+        # PMNS matrix 
 
         U = get_PMNS(params)
 
 
         # Initialize the full matrix
-        M_matrix = zeros(T, 3*N_int, 3*N_int)
-
-        ones_3x3 = ones(T, 3, 3)
+       
+        #=ones_3x3 = ones(T, 3, 3)
 
         for i in 1:N_int
             for j in 1:N_int
@@ -930,54 +952,52 @@ function get_matrices(cfg::NND)
                 M_matrix[3*(i-1)+1:3*i, 3*(j-1)+1:3*j] = matrix[i,j] * block
             end
         end
+        =#
 
-        #cols=hcat([kron(matrix[j][:,i],U[:,j]) for i in 1:N_int for j in 1:3 ])
-        #M_matrix=reduce(hcat,cols)
+        #M_matrix = kron(matrix, M_gamma)
 
-        eigenvalues, V = eigen(Hermitian(M_matrix))
-        bigU = kron(ones(N_int, N_int), U)
+       # second idea
+       bigU = kron(I(N_int), U) 
+       bigU_adj = adjoint(bigU)
+       M_flavors= bigU * M_matrix * bigU_adj
 
-        FinalUmatrix = V.*bigU
+       eigenvalues, FinalUmatrix = eigen(Hermitian(M_flavors))
+
+        #eigenvalues, V = eigen(Hermitian(M_matrix))
+        
+        # bigU = kron(ones(N_int, N_int), U)
+        #FinalUmatrix = V.*bigU
 
         delta_mass = Vector{T}(undef, 3*N_int)
         delta_mass[1] = zero(T)
         delta_mass[2] = T(params.Δm²₂₁)
         delta_mass[3] = T(params.Δm²₃₁)
 
-        if delta_mass[1] != eigenvalues[1]*(m1_T^2/gamma[1]^2)- m1_T^2
+        if delta_mass[1] != eigenvalues[1]*(m1_T^2)- m1_T^2
            println("Doesnt return same  m01")
-           println((delta_mass[1] - eigenvalues[1]*(m1_T^2/gamma[1]^2)+ m1_T^2))
+           println((delta_mass[1] - eigenvalues[1]*(m1_T^2) + m1_T^2))
         end
 
-        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])*(m2_T^2/gamma[2]^2)- m2_T^2
+        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])*(m2_T^2)- m2_T^2
            println("Doesnt return same  m02")
-           println((delta_mass[2] -(eigenvalues[2]-eigenvalues[1])*(m2_T^2/gamma[2]^2)+ m2_T^2))
+           println((delta_mass[2] -(eigenvalues[2]-eigenvalues[1])*(m2_T^2)+ m2_T^2))
         end
 
-        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])*(m3_T^2/gamma[3]^2)- m3_T^2
+        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])*(m3_T^2)- m3_T^2
            println("Doesnt return same  m03")
-           println((delta_mass[3] - (eigenvalues[3]-eigenvalues[1])*(m3_T^2/gamma[3]^2)+ m3_T^2))
+           println((delta_mass[3] - (eigenvalues[3]-eigenvalues[1])*(m3_T^2)+ m3_T^2))
         end
 
         for i in 2:N_int
-            delta_mass[3*i-2] = eigenvalues[3*i-2]*(m1_T^2/gamma[1]^2)- m1_T^2
-            delta_mass[3*i-1] = eigenvalues[3*i-1]*(m2_T^2/gamma[2]^2)- m2_T^2
-            delta_mass[3*i] =  eigenvalues[3*i]*(m3_T^2/gamma[3]^2) - m3_T^2
+            delta_mass[3*i-2] = eigenvalues[3*i-2]- m1_T^2
+            delta_mass[3*i-1] = eigenvalues[3*i-1]- m2_T^2
+            delta_mass[3*i] =  eigenvalues[3*i]- m3_T^2
         end
         
        
         h = delta_mass
         
-       
-        #println(N_int)
-    
-
-        #=for α in 1:3
-            for β in 1:3
-                # Place Usector[α] * U[α,β] in the (α,β) strided block
-                FinalUmatrix[α:3:end, β:3:end] .= Usector[α] .* U[α, β]
-            end
-        end=#
+        
     
             
         return FinalUmatrix, h
