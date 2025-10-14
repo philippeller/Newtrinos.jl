@@ -246,7 +246,7 @@ function get_priors(cfg::NND)    #'New'
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-3),ftype(2)) #LogUniform(ftype(1e-3),ftype(1))
     priors[:N] = Uniform(ftype(40),ftype(80))
-    priors[:r] = Uniform(ftype(0),ftype(1))
+    priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
 end
@@ -861,17 +861,12 @@ function get_matrices(cfg::NND)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = sqrt(m1_T^2/params[:r])
-        gamma[2] = sqrt(m2_T^2/params[:r])
-        gamma[3] = sqrt(m3_T^2/params[:r])
+        gamma[1] = sqrt(m1_T^2)
+        gamma[2] = sqrt(m2_T^2)
+        gamma[3] = sqrt(m3_T^2)
 
         #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
 
-        for i in 1:3
-            if gamma[i]==Inf || gamma[i]==-Inf || isnan(gamma[i])
-               gamma[i] = zero(T)
-            end
-        end
 
         #construction of the sectors
 
@@ -886,7 +881,7 @@ function get_matrices(cfg::NND)
 
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
-                matrix[i, j] = (N_dual*sqrt_i * sqrt_j)*gamma[1]^2 #*(m1_T^2)
+                matrix[i, j] = (N_dual*sqrt_i * sqrt_j)*(m1_T^2)
 
             end
         end
@@ -898,7 +893,7 @@ function get_matrices(cfg::NND)
         for i in 1:3
             for j in 1:3
                 if i==j
-                   M_gamma[i,j]=((gamma[i]^2))/N_dual 
+                   M_gamma[i,j]=(gamma[i]^2)/(N_dual)
                 else
                    M_gamma[i,j]=0 #((gamma[i]*gamma[j]))
                 end
