@@ -243,10 +243,11 @@ function get_neutrinomass(cfg=NNM)
 
         func=  Newtrinos.osc.get_matrices(cfg)
 
-        final, h, V = func(params)
+        #final, h, V = func(params)
+        final, h= func(params)
         
         x_e = U[1,:]
-        x_1 = V[1,:]
+        #x_1 = V[1,:]
 
         masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
 
