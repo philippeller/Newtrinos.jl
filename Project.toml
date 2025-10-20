@@ -1,7 +1,7 @@
 name = "Newtrinos"
 uuid = "5b289081-bab5-45e8-97fc-86872f1653a0"
-authors = ["Philipp Eller"]
 version = "0.0.1"
+authors = ["Philipp Eller"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -67,7 +67,7 @@ ADTypes = "1.14.0"
 Accessors = "0.1.42"
 ArgParse = "1.2.0"
 ArraysOfArrays = "0.6.5"
-AutoDiffOperators = "0.2.1"
+AutoDiffOperators = "0.2.1, 0.3"
 BAT = "3.3.4, 4"
 Bessels = "0.2.8"
 Bijections = "0.1, 0.2"
