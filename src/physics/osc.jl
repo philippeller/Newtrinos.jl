@@ -230,50 +230,6 @@ end
 
 
    
-function get_params(cfg::NND)  #'New'
-    std = get_params(cfg.three_flavour)
-    params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
-    params[:N] = ftype(100)
-    params[:r] = ftype(1)
-
-    
-    NamedTuple(params)
-end
-
-function get_priors(cfg::NND)    #'New'
-    std = get_priors(cfg.three_flavour)
-    priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-3),ftype(2)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(40))
-    priors[:r] = Uniform(ftype(1e-8),ftype(1))
-
-    NamedTuple(priors)
-end
-
-
-   
-function get_params(cfg::NNM)  #'New'
-    std = get_params(cfg.three_flavour)
-    params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
-    params[:N] = ftype(20)
-    params[:r] = ftype(1)
-    
-    NamedTuple(params)
-end
-
-function get_priors(cfg::NNM)    #'New'
-    std = get_priors(cfg.three_flavour)
-    priors = OrderedDict(pairs(std))
-    priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-7),ftype(0.3)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(1),ftype(40))
-    priors[:r] = Uniform(ftype(1e-8),ftype(1.5))
-
-    NamedTuple(priors)
-end
-
 function get_PMNS(params)
     T = typeof(params.θ₂₃)
     U1 = SMatrix{3,3}(one(T), zero(T), zero(T), zero(T), cos(params.θ₂₃), -sin(params.θ₂₃), zero(T), sin(params.θ₂₃), cos(params.θ₂₃))
@@ -829,6 +785,50 @@ function get_matrices_old(cfg::NNM)
 end
 
 
+function get_params(cfg::NND)  #'New'
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:m₀] = ftype(0.01)
+    params[:N] = ftype(10)
+    params[:r] = ftype(1)
+
+    
+    NamedTuple(params)
+end
+
+function get_priors(cfg::NND)    #'New'
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:m₀] = Uniform(ftype(1e-8),ftype(0.3)) #LogUniform(ftype(1e-3),ftype(1))
+    priors[:N] = Uniform(ftype(1),ftype(40))
+    priors[:r] = Uniform(ftype(1e-8),ftype(1))
+
+    NamedTuple(priors)
+end
+
+
+   
+function get_params(cfg::NNM)  #'New'
+    std = get_params(cfg.three_flavour)
+    params = OrderedDict(pairs(std))
+    params[:m₀] = ftype(0.1)
+    params[:N] = ftype(100)
+    params[:r] = ftype(1)
+    
+    NamedTuple(params)
+end
+
+function get_priors(cfg::NNM)    #'New'
+    std = get_priors(cfg.three_flavour)
+    priors = OrderedDict(pairs(std))
+    priors = OrderedDict{Symbol, Distribution}(pairs(std))
+    priors[:m₀] = Uniform(ftype(1e-7),ftype(0.03)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:N] = Uniform(ftype(1),ftype(40))
+    priors[:r] = Uniform(ftype(0),ftype(1))
+
+    NamedTuple(priors)
+end
+
 
 
 function get_matrices(cfg::NND)
@@ -837,7 +837,7 @@ function get_matrices(cfg::NND)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]      
-        
+        r=params[:r]
         
         T = promote_type(
             typeof(params[:N]), 
@@ -862,16 +862,24 @@ function get_matrices(cfg::NND)
         #factor= T( (1e26)/N_dual * 0.2)
 
         gamma= Vector{T}(undef, 3)
-
-        scale= m1_T^2/params[:r]
+        gamma_sq= Vector{T}(undef, 3)
+        scale= N_dual*m1_T^2
         
-        gamma[1] = sqrt(m1_T^2/params[:r])
-        gamma[2] =sqrt(m2_T^2/params[:r])
-        gamma[3] =sqrt(m3_T^2/params[:r])
+        gamma[1] = (m1_T^2/m1_T^2)/N_dual
+        gamma[2] =(m2_T^2/m1_T^2)/N_dual
+        gamma[3] =(m3_T^2/m1_T^2)/N_dual
 
-        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
+        gamma_sq[1]=gamma[1]^2
+        gamma_sq[2]=gamma[2]^2
+        gamma_sq[3]=gamma[3]^2
 
-     
+        println("Gamma values: ", gamma[1]/N_dual, ", ", gamma[2]/N_dual, ", ", gamma[3]/N_dual)
+        println("Gamma values: ", gamma[1]^2/N_dual^2, ", ", gamma[2]^2/N_dual^2, ", ", gamma[3]^2/N_dual^2)
+        println("m1 = $m1_T")
+        println("m2 = $m2_T")
+        println("m3 = $m3_T")
+       
+            
         #construction of the sectors
 
         matrix=zeros(T, N_int,N_int)
@@ -879,31 +887,24 @@ function get_matrices(cfg::NND)
         for i in 1:N_int
 
             sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-            squared[i]= sqrt_i
+            if i==1
+             squared[i]= 1
+            else
+             squared[i]=sqrt_i
+            end    
+
 
             for j in 1:N_int
-       
 
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
-
-                matrix[i, j] = (N_dual*sqrt_i * sqrt_j)*scale
-                
+           
+                matrix[i, j] = (N_dual*sqrt_i * sqrt_j)
+             
             end
         end
 
-        #construction of the gamma matrix
 
-        M_gamma=zeros(T,3,3)
-
-        for i in 1:3
-            for j in 1:3
-                if i==j
-                   M_gamma[i,j]=(gamma[i]^2)/N_dual
-                else
-                   M_gamma[i,j]=0 #((gamma[i]*gamma[j]))
-                end
-            end
-        end 
+        M_gamma = Diagonal(gamma )
 
         
         M_factors=Diagonal(squared.^2)
@@ -921,54 +922,75 @@ function get_matrices(cfg::NND)
 
 
         M_matrix=M_sector_part.+M_gamma_factor
-        
+                
+        norm_sector = opnorm(M_sector_part)  # Operator norm (largest singular value)
+        norm_gamma = opnorm(M_gamma_factor)
+
+        ratio = norm_gamma / norm_sector
+        println("Ratio ||M_gamma_factor|| / ||M_sector_part|| = $ratio")
         #eigenvalues, FinalUmatrix = eigen(Hermitian(M_matrix))
 
 
         
        # second idea
        bigU = kron(I(N_int), U) 
-       bigU_adj = adjoint(bigU)
+       bigU_adj=adjoint(bigU)
+       #bigU_adj = kron(I(N_int), adjoint(U) )
        M_flavors= bigU * M_matrix * bigU_adj
+      # M_flavors_hermitian = (M_flavors + adjoint(M_flavors)) / 2
+
 
        eigenvalues, FinalUmatrix = eigen(Hermitian(M_flavors))
-
+       #EIG=Diagonal(scale*eigenvalues[1:3])
+      # println(issorted(abs.(eigenvalues)))
         #eigenvalues, V = eigen(Hermitian(M_matrix))
         
         # bigU = kron(ones(N_int, N_int), U)
         #FinalUmatrix = V.*bigU=#
 
         delta_mass = Vector{T}(undef, 3*N_int)
-        delta_mass[1] = zero(T)
-        delta_mass[2] = T(params.Δm²₂₁)
-        delta_mass[3] = T(params.Δm²₃₁)
-
-        if delta_mass[1] != eigenvalues[1]- m1_T^2
+        delta_mass[1] =zero(T) #scale*eigenvalues[1]- m1_T^2 
+        delta_mass[2] = T(params.Δm²₂₁)#scale*eigenvalues[2]- scale*eigenvalues[1]#
+        delta_mass[3] = T(params.Δm²₃₁)#scale*eigenvalues[3]- scale*eigenvalues[1]
+        println(delta_mass[1])
+        println( delta_mass[2])
+        println(delta_mass[3])
+        #=
+        if  m1_T^2!= eigenvalues[1]*scale
            #println("Doesnt return same  m01")
-           #println((delta_mass[1] - eigenvalues[1] + m1_T^2))
+           println(m1_T^2-eigenvalues[1]*scale)
         end
 
-        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])- m2_T^2
+        if m2_T^2!= eigenvalues[2]*scale
            #println("Doesnt return same  m02")
-          # println((delta_mass[2] -(eigenvalues[2]-eigenvalues[1])+ m2_T^2))
+         #println(m2_T^2- eigenvalues[2]*scale)
         end
 
-        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])- m3_T^2
+        if m3_T^2!= eigenvalues[3]*scale
            #println("Doesnt return same  m03")
-           #println((delta_mass[3] - (eigenvalues[3]-eigenvalues[1])+ m3_T^2))
-        end
+          # println((m3_T^2-eigenvalues[3]*scale))
+        end =#
 
         for i in 2:N_int
-            delta_mass[3*i-2] =  eigenvalues[3*i-2]- m1_T^2
-            delta_mass[3*i-1] = eigenvalues[3*i-1]- m2_T^2
-            delta_mass[3*i] =  eigenvalues[3*i]- m3_T^2
+            delta_mass[3*i-2] = scale*eigenvalues[3*i-2]- m1_T^2
+            delta_mass[3*i-1] = scale*eigenvalues[3*i-1]- m2_T^2
+            delta_mass[3*i] =scale*eigenvalues[3*i]- m3_T^2
         end
         
        
         h = delta_mass
+       # println(issorted(abs.(h)))
         
+
+        H=Diagonal(h[1:N_int-3])
+
+        
+        #open("output_$r.txt", "a") do file
+           # println(file,"Gammma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3] )
+        #end
+
             
-        return FinalUmatrix, h
+        return FinalUmatrix, h # H, FinalUmatrix, h, norm_sector, norm_gamma, gamma, gamma_sq
     end
 
 end
@@ -1162,8 +1184,8 @@ function get_matrices(cfg::NNM)
 
         #println("h", h)
          
-       κ = cond(M_flavors)
-       println("Condition number: ", κ) 
+      # κ = cond(M_flavors)
+       #println("Condition number: ", κ) 
             
         return FinalUmatrix, h
     end
@@ -1171,7 +1193,110 @@ function get_matrices(cfg::NNM)
 end
 
 
+function get_matrices_easy(cfg::NNM)
 
+    function get_Nnaturalness_easy(params::NamedTuple)
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]                               
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        )
+        
+        # Get masses
+        m1, m2, m3 = get_abs_masses(params)
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        
+        # Define flavor-dependent perturbation strengths (dimensionless)
+        gamma = Vector{T}(undef, 3)
+        gamma[1] = one(T)           
+        gamma[2] = m2_T / m1_T      
+        gamma[3] = m3_T / m1_T      
+        
+        # === BUILD SECTOR MATRIX ONLY (N_int × N_int, well-conditioned) ===
+        # This is the unperturbed structure from the paper
+        matrix_sector = zeros(T, N_int, N_int)
+        
+        for i in 1:N_int  
+            for j in 1:N_int 
+                sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+                sqrt_j = sqrt(T(2*(j-1)) + T(params[:r]))
+                
+                # Off-diagonal: unperturbed coupling
+                matrix_sector[i, j] = sqrt_i * sqrt_j
+                
+                # Diagonal: add small perturbation term (same for all flavors at this stage)
+                if i == j
+                    matrix_sector[i, j] = matrix_sector[i, j] * (one(T) + one(T)/T(N_dual))
+                end
+            end
+        end
+        
+        # Diagonalize sector matrix only
+        eigvalues_sector, Usector = eigen(Symmetric(matrix_sector))
+        
+        println("Sector matrix condition number: ", cond(matrix_sector))
+        println("Sector eigenvalues: ", eigvalues_sector)
+        
+        # === APPLY FLAVOR STRUCTURE (post-diagonalization) ===
+        # Build mass-squared array with flavor-dependent corrections
+        
+        mass_squared = Vector{T}(undef, 3*N_int) 
+        delta_mass = Vector{T}(undef, 3*N_int)
+        
+        # First three elements: standard 3-flavor oscillations
+        mass_squared[1] = m1_T^2
+        mass_squared[2] = m2_T^2  
+        mass_squared[3] = m3_T^2
+        
+        delta_mass[1] = zero(T)
+        delta_mass[2] = T(params.Δm²₂₁)
+        delta_mass[3] = T(params.Δm²₃₁)
+        
+        # Tower modes (i ≥ 2): flavor-dependent structure
+        for i in 2:N_int  
+            eig_val_T = T(eigvalues_sector[i])
+            N_dual_T = T(N_dual)
+            
+            # Sector factor from perturbation theory: (2i + r)
+            sector_factor = T(2*(i-1)) + T(params[:r])
+            
+            # Base mass contribution (same for all flavors)
+            base_mass_sq = (N_dual_T * eig_val_T)^2 * m1_T^2
+            
+            # For each flavor α
+            for j in 1:3
+               
+                m_r_sq = [m1_T^2, m2_T^2, m3_T^2][j]
+                
+                mass_squared[3*i - 3 + j] = (N_dual_T * eig_val_T)^2 * m_r_sq + (gamma[j] - one(T)) * sector_factor * base_mass_sq
+                
+                delta_mass[3*i - 3 + j] = mass_squared[3*i - 3 + j] - m_r_sq
+            end
+        end
+        
+        h = delta_mass
+        
+        # === CONSTRUCT MIXING MATRIX ===
+        # Combine sector eigenvectors with PMNS mixing
+        U = get_PMNS(params)
+        FinalUmatrix = kron(Usector, U)
+        
+        return FinalUmatrix, h
+    end
+
+end
 
 
 function get_matrices_diag(cfg::NND)
@@ -1207,30 +1332,25 @@ function get_matrices_diag(cfg::NND)
        masses_sq[3]=m3_T^2
 
         # I assume lambdaH=10^13eV, lambda_higgs=0.2
-        overall_factor= T(N_dual * 0.2 /(1e26))
+        overall_factor= T(N_dual * 0.2 /(1e16))
 
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = m1_T^2*overall_factor
-        gamma[2] = m2_T^2*overall_factor
-        gamma[3] = m3_T^2*overall_factor
-
+        gamma[1] = m1_T^2*overall_factor#/m1_T^2
+        gamma[2] = m2_T^2*overall_factor#/m1_T^2
+        gamma[3] = m3_T^2*overall_factor#/m1_T^2
         
-        for i in 1:3
-            if gamma[i]==Inf || gamma[i]==-Inf || isnan(gamma[i])
-               gamma[i] = zero(T)
-            end
-        end
+      
        
         #construction of the eigenvalues from the formula
 
         for i in 2:N_int  
             eig_val_T = T(2*i + params[:r])
 
-            masses_sq[3*i-2] =sqrt(gamma[1]*eig_val_T/overall_factor)
-            masses_sq[3*i-1] =sqrt(gamma[2]*eig_val_T/overall_factor)
-            masses_sq[3*i] = sqrt(gamma[3]*eig_val_T/overall_factor)
+            masses_sq[3*i-2] =(1/N_dual)*gamma[1]*eig_val_T*m1_T^2/gamma[1]
+            masses_sq[3*i-1] =(1/N_dual)*gamma[2]*eig_val_T*m1_T^2/gamma[1]
+            masses_sq[3*i] =(1/N_dual)*gamma[3]*eig_val_T*m1_T^2/gamma[1]
         end
 
        #construction of the mass squared matrix
@@ -1241,13 +1361,13 @@ function get_matrices_diag(cfg::NND)
 
        #multiplication with the PMNS matrix
         U = get_PMNS(params)
-        bigU =  similar(U, 3*N_int, 3*N_int)
+        bigU = kron(I(N_int), U) #similar(U, 3*N_int, 3*N_int)
         bigU_adj = adjoint(bigU)
-        M_matrix = bigU * M * bigU_adj
+       
 
-        M_squared = M_matrix*adjoint(M_matrix)
+        M_total = bigU_adj* M* bigU
 
-        eigenvalues, FinalUmatrix = eigen(M_squared)
+        eigenvalues, FinalUmatrix = eigen(Hermitian(M_total))
 
 
         delta_mass = Vector{T}(undef, 3*N_int)
@@ -1255,24 +1375,24 @@ function get_matrices_diag(cfg::NND)
         delta_mass[2] = T(params.Δm²₂₁)
         delta_mass[3] = T(params.Δm²₃₁)
 
-        if delta_mass[1] != eigenvalues[1]
+        if delta_mass[1] !=eigenvalues[1]-m1_T^2
            println("Doesnt return same  m01")
-           println(delta_mass[1] - eigenvalues[1])
+           println(delta_mass[1] -eigenvalues[1]- m1_T^2)
         end
 
-        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1])
+        if delta_mass[2] != (eigenvalues[2]-eigenvalues[1]-m1_T^2)
            println("Doesnt return same  m02")
-           println(delta_mass[2] - (eigenvalues[2]-eigenvalues[1]))
+           println(delta_mass[2] - (eigenvalues[2]-eigenvalues[1]-m1_T^2))
         end
-        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1])
+        if delta_mass[3] != (eigenvalues[3]-eigenvalues[1]-m1_T^2)
            println("Doesnt return same  m03")
-           println(delta_mass[3] - (eigenvalues[3]-eigenvalues[1]))
+           println(delta_mass[3] - (eigenvalues[3]-eigenvalues[1]-m1_T^2))
         end
 
         for i in 2:N_int
             delta_mass[3*i-2] = eigenvalues[i]- m1_T^2
             delta_mass[3*i-1] = eigenvalues[i] - m2_T^2
-            delta_mass[3*i] =  eigenvalues[i] - m3_T^2
+            delta_mass[3*i] = eigenvalues[i] - m3_T^2
         end
         
        
