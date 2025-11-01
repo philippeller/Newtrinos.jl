@@ -8,8 +8,7 @@ using Distributions, StatsBase
 using FileIO
 using Base.Threads
 using CSV
-using DataFrames
-using Interpolations
+using BAT
 
 
 
@@ -243,7 +242,7 @@ function get_neutrinomass_old(cfg=NNM)
 
         func=  Newtrinos.osc.get_matrices(cfg)
 
-        #final, h, V = func(params)
+        final, h, V = func(params)
         final, h= func(params)
         
         x_e = U[1,:]
@@ -258,7 +257,8 @@ function get_neutrinomass_old(cfg=NNM)
         masses_NN_original[2] = masses_SM_sq[2]
         masses_NN_original[3] = masses_SM_sq[3]
         masses_NN = masses_NN_original
-            
+        
+        #=
         if any(masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
             # Find all indices where masses exceed threshold
             indices_above_threshold = findall(masses_NN_original .> 1e6)
@@ -288,15 +288,15 @@ function get_neutrinomass_old(cfg=NNM)
             sum_norm_col=Base.sum(abs.(xcol).^2)
             @assert isapprox(sum_norm, sum_norm_col)
 
-        end
+        end=#
 
         #PROBLEMATIC SUM!
-        sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
-        
+        #sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
+        sum=Float64(0.0)
         for i in 1:3
             squared_x_e = abs(x_e[i])^2
 
-            x_idx = 4 # Start at 4 for x_1
+            x_idx = 1 # Start at 1 for x_1
             delta_idx = 3+i # Start delta_masses_NN
 
             for j in 1:(N-3)
@@ -325,6 +325,96 @@ end
 
 function get_neutrinomass(cfg=NNM)
     function NeutrinoMassNND(params::NamedTuple)
+
+        U= Newtrinos.osc.get_PMNS(params)
+
+        N = round(Int,params[:N])
+
+        func=  Newtrinos.osc.get_matrices(cfg)
+
+        final, h, eigen, V_e, V_m, V_t = func(params)
+        #final, h= func(params)
+        masses_NN= eigen
+
+        x_e = U[1,:]
+        x_1_e = V_e[1,1: N]
+        x_1_m = V_m[1,1: N]
+        x_1_t = V_t[1,1: N]
+
+        #masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
+
+        #delta_masses_NN = h[1: 3*N]
+
+        #masses_NN_original = masses_SM_sq[1].+delta_masses_NN
+        #masses_NN_original[1] = masses_SM_sq[1]
+        #masses_NN_original[2] = masses_SM_sq[2]
+        #masses_NN_original[3] = masses_SM_sq[3]-
+        
+
+        if any(eigen .> 1e6)   #exclude the masses that exceed the treshold
+            # Find all indices where masses exceed threshold
+            #indices_above_threshold = findall(masses_NN_original .> 1e10)
+            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
+            
+            #println("Delta masses exceed threshold: $cancelled > 1e6")
+           
+           
+            masses_NN = eigen[eigen .<= 1e10] #keep only the ones inside the threshold
+            N=round(Int,length(masses_NN)/3) #reduce the N value accordingly
+            x_1_e = V_e[1:N,1: N]
+            x_1_m = V_m[1:N,1: N]
+            x_1_t = V_t[1:N,1: N]
+            #unitarity of the new matrix
+            #=
+            A_square = V[1:N, 1:N]
+            x_1=x_1[1:N]
+            # Make it unitary  (write normalization term)
+            #Q, R = qr(A_square)
+            U, S, V = svd(A_square)
+            U_clean = U*V'
+            V_unitary = U_clean
+
+            # Verify
+            @assert isapprox(V_unitary' * V_unitary, I)
+            xcol=V_unitary[:,1]
+            x_1=V_unitary[1,:]
+            sum_norm = Base.sum(abs.(x_1).^2)
+            sum_norm_col=Base.sum(abs.(xcol).^2)
+            @assert isapprox(sum_norm, sum_norm_col)=#
+
+        end
+
+        #PROBLEMATIC SUM!
+        #sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1_e[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1_t[1])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1_m[1])^2)
+        X=[x_1_e, x_1_m, x_1_t]
+        sum=Float64(0.0)
+        
+        for i in 1:3
+            squared_x_e = abs(x_e[i])^2
+
+            for j in 1:N
+             
+                mass = masses_NN[3*j-2]
+                integrand= squared_x_e * abs(X[i][j])^2 * mass
+                sum += integrand
+             
+            end
+
+        end
+   
+
+        return sum
+     
+    end
+    return NeutrinoMassNND
+end
+
+
+
+
+
+function get_neutrinomass_new(cfg=NNM)
+    function NeutrinoMassNND_new(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -379,12 +469,12 @@ function get_neutrinomass(cfg=NNM)
             V_unitary = U_clean
 
             # Verify
-            @assert isapprox(V_unitary' * V_unitary, I)
+            #@assert isapprox(V_unitary' * V_unitary, I)
             xcol=V_unitary[:,1]
             x_e=V_unitary[1,:]
             sum_norm = Base.sum(abs.(x_e).^2)
             sum_norm_col=Base.sum(abs.(xcol).^2)
-            @assert isapprox(sum_norm, sum_norm_col)
+            #@assert isapprox(sum_norm, sum_norm_col)
            
             
             N_new=round(Int,length(masses_NN))
@@ -448,8 +538,13 @@ function get_forward_model_correct(physics, assets)
     
         cfg = Newtrinos.osc.NNM()
         predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
+        #predicted_value = sqrt(predicted_value)
         #println("Predicted m_nu: ", predicted_value)
-        return Normal(predicted_value, 0.15)
+        #=
+        if predicted_value <= assets.observed 
+           predicted_value=assets.observed
+        end=#
+        return  Normal(predicted_value, 0.15) #Normal(predicted_value, 0.15)
        
 
     end
