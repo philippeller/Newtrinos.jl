@@ -698,9 +698,9 @@ function get_matrices_old(cfg::NND)
 end
 
 
-function get_matrices_old(cfg::NNM)
+function get_matrices(cfg::NNM)
 
-   function get_Nnaturalness_old(params::NamedTuple)
+   function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]                               
@@ -779,7 +779,7 @@ function get_matrices_old(cfg::NNM)
         U = get_PMNS(params)
         FinalUmatrix = kron(Usector, U)
         
-        return FinalUmatrix, h, Usector
+        return FinalUmatrix, h, mass_squared #Usector
     end
 
 end
@@ -811,7 +811,7 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
+    params[:m₀] = ftype(0.01)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     
@@ -994,9 +994,9 @@ end
 
 
 
-function get_matrices_ok(cfg::NNM)
+function get_matrices_3N(cfg::NNM)
 
-   function get_Nnaturalness_ok(params::NamedTuple)
+   function get_Nnaturalness_3N(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]      
@@ -1213,7 +1213,7 @@ function get_matrices_ok(cfg::NNM)
         κ = cond(M_flavors)
         println("Condition number: ", κ)
 
-        return FinalUmatrix, h# EIG, FinalUmatrix, h, norm_sector, norm_gamma, gamma, gamma_sq  #
+        return FinalUmatrix, h,EIG#FinalUmatrix, h, norm_sector, norm_gamma, gamma, gamma_sq  #
     end
 
 end
@@ -1221,9 +1221,9 @@ end
 
 
 
-function get_matrices(cfg::NNM)
+function get_matrices_final(cfg::NNM)
 
-   function get_Nnaturalness(params::NamedTuple)
+   function get_Nnaturalness_final(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]      

@@ -2,7 +2,6 @@
 module katrin
 
 import ..Newtrinos
-
 using LinearAlgebra, Statistics
 using Distributions, StatsBase
 using FileIO
@@ -359,7 +358,7 @@ function get_neutrinomass(cfg=NNM)
             #println("Delta masses exceed threshold: $cancelled > 1e6")
            
            
-            masses_NN = eigen[eigen .<= 1e10] #keep only the ones inside the threshold
+            masses_NN = eigen[eigen .<= 1e6] #keep only the ones inside the threshold
             N=round(Int,length(masses_NN)/3) #reduce the N value accordingly
             x_1_e = V_e[1:N,1: N]
             x_1_m = V_m[1:N,1: N]
@@ -391,13 +390,13 @@ function get_neutrinomass(cfg=NNM)
         
         for i in 1:3
             squared_x_e = abs(x_e[i])^2
-
+            k=i
             for j in 1:N
-             
-                mass = masses_NN[3*j-2]
+
+                mass = masses_NN[k]
                 integrand= squared_x_e * abs(X[i][j])^2 * mass
                 sum += integrand
-             
+                k += 3
             end
 
         end
@@ -544,13 +543,24 @@ function get_forward_model_correct(physics, assets)
         if predicted_value <= assets.observed 
            predicted_value=assets.observed
         end=#
-        return  Normal(predicted_value, 0.15) #Normal(predicted_value, 0.15)
+        return  Normal(predicted_value, 0.13) #Normal(predicted_value, 0.15)
        
 
     end
     return forward_model
 end
 
+function comparing_masses(physics,experiments, params)
+
+
+    cfg = Newtrinos.osc.NNM()
+    predicted_value =get_neutrinomass(cfg)(params)
+    observed= experiments.katrin.assets.observed
+    dist_observed= Normal(observed, 0.13)
+    twosigma_level= quantile(dist_observed, 0.9772)
+
+    return predicted_value, twosigma_level
+end    
 
 
 function create_katrin_likelihood_posteriors(experiments,params)
