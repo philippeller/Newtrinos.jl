@@ -153,15 +153,20 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior);
     
     # Find best fit values (indices of maximum log_posterior)
-    best_idx = argmin(dLLH)  # Minimum dLLH corresponds to maximum log_posterior
-    best_fit_x = result.axes[1][best_idx[1]]
-    best_fit_y = result.axes[2][best_idx[2]]
-    
+    best_idx = argmin(dLLH)
+    # Minimum dLLH corresponds to maximum log_posterior
+    best_fit = []
+    for i in length(result.axes)
+
+      push!(best_fit, result.axes[i][best_idx[i]])
+    end
+
     f = Figure()
     ax = Axis(f[1, 1], 
-        xlabel = String(keys(result.axes)[1]), 
-        ylabel = String(keys(result.axes)[2]), 
+        xlabel = String(keys(result.axes)[1]) , 
+        ylabel = String(keys(result.axes)[2]) , #* " (eV)"
         title = title,
+        #yscale = log10,
         xminorticksvisible = true, 
         xminorgridvisible = true, 
         yminorticksvisible = true, 
@@ -181,7 +186,7 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
         color=:black)
     
     # Add best fit point
-    scatter!(ax, [best_fit_x], [best_fit_y], color=:red, markersize=8, marker=:star5, label="Best Fit")
+    #scatter!(ax, [best_fit_x], [best_fit_y], color=:red, markersize=8, marker=:star5, label="Best Fit")
     
     # Add simple text legend for confidence levels
     Legend(f[1, 2], 
@@ -198,7 +203,10 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     var1_name = String(keys(result.axes)[1])
     var2_name = String(keys(result.axes)[2])
 
-    text_content = "Best Fit Values:\n$(var1_name) = $(round(best_fit_x, digits=6))\n$(var2_name) = $(round(best_fit_y, digits=6))"
+    #=text_content = "Best Fit Values:\n"
+    for i in 1:length(best_fit)
+        text_content *= "$(var1_name) = $(round(best_fit[i], digits=6))\n"
+    end=#
 
     # Get axis ranges for absolute positioning
     x_min, x_max = extrema(result.axes[1])
@@ -207,13 +215,14 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     # Position text in data coordinates (top-right corner)
     text_x = x_min + 0.7 * (x_max - x_min)  # 70% from left
     text_y = y_max - 0.02 * (y_max - y_min)  # 2% from top
-    
+   
+    #=
     text!(ax, text_content,
         position = (text_x, text_y),
         align = (:left, :top),
         fontsize = 12,
         color = :black
-    )
+    )=#
     
     f
 end
