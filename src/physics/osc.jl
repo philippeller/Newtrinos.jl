@@ -822,8 +822,8 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-6),ftype(0.5)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(1),ftype(40))
+    priors[:m₀] = Uniform(ftype(1e-5),ftype(0.2)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:N] = Uniform(ftype(1),ftype(100))
     priors[:r] = Uniform(ftype(0),ftype(1))
 
     NamedTuple(priors)
