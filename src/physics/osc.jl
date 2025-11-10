@@ -779,7 +779,7 @@ function get_matrices_old(cfg::NNM)
         U = get_PMNS(params)
         FinalUmatrix = kron(Usector, U)
         
-        return FinalUmatrix, h, mass_squared #Usector
+        return FinalUmatrix, h, Usector, mass_squared 
     end
 
 end
@@ -811,7 +811,7 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.01)
+    params[:m₀] = ftype(1e-6)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     
@@ -822,8 +822,8 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-5),ftype(0.2)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:m₀] = Uniform(ftype(1e-10),ftype(0.1)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:N] = Uniform(ftype(1),ftype(200))
     priors[:r] = Uniform(ftype(0),ftype(1))
 
     NamedTuple(priors)

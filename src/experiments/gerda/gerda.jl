@@ -242,7 +242,33 @@ function get_neutrinomass(cfg=NNM)
     return NeutrinoMassNNM
 end
 
+function mixing_angles(params::NamedTuple,cfg=NNM)
 
+    U = Newtrinos.osc.get_PMNS(params)
+    N = round(Int, params[:N])
+
+    func = Newtrinos.osc.get_matrices(cfg)
+    #final, h, V, eigen= func(params)
+    final, h, eigen, V_e, V_m, V_t = func(params)
+
+
+    x_e = U[1, :]
+    x_1_e = V_e[1, 1:N]
+    x_1_m = V_m[1, 1:N]
+    x_1_t = V_t[1, 1:N]
+
+    angles_e=abs.(x_e[1]*x_1_e)
+    angles_m=abs.(x_e[2]*x_1_m)
+    angles_t=abs.(x_e[3]*x_1_t)
+
+
+    mass_e = eigen[1:3:end]      
+    mass_m = eigen[2:3:end]   
+    mass_t = eigen[3:3:end]      
+
+    return mass_e, mass_m, mass_t ,angles_e, angles_m, angles_t
+
+end    
 
 
 
