@@ -229,7 +229,7 @@ function get_neutrinomass(cfg=NNM)
             for j in 1:N[i]
 
                 mass = masses_NN[i][j]
-                integrand= abs((X[i][j].*(x_e[i]))^2 * sqrt(mass))
+                integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)
                 sum += integrand
             end
 

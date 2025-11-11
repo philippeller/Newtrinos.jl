@@ -937,7 +937,7 @@ function get_matrices_3N(cfg::NND)
        bigU_adj=adjoint(bigU)
        #bigU_adj = kron(I(N_int), adjoint(U) )
        M_flavors= bigU * M_matrix * bigU_adj
-      # M_flavors_hermitian = (M_flavors + adjoint(M_flavors)) / 2
+       #M_flavors_hermitian = (M_flavors + adjoint(M_flavors)) / 2
 
 
        eigenvalues, FinalUmatrix = eigen(Hermitian(M_flavors))
@@ -1149,7 +1149,7 @@ function get_matrices(cfg::NND)
 
 
 
-        return FinalUmatrix, h#, eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
+        return FinalUmatrix, h #, eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
     end
 
 end
@@ -2030,4 +2030,161 @@ function get_matrices(cfg::Darkdim_cas)
         return U, h
     end
 end
+
+
+
+
+
+
+
+function get_perturbation(cfg::NNM)
+
+   function get_perturb_NN(params::NamedTuple)
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]      
+        
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        ) 
+
+        m1, m2, m3 = get_abs_masses(params)
+
+        # Convert masses to the correct type (three flavours masses)
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        
+    
+        gamma= Vector{T}(undef, 3)
+        
+
+        gamma[1] = (m1_T/m1_T)/N_dual
+        gamma[2] = (m2_T/m1_T)/N_dual
+        gamma[3] = (m3_T/m1_T)/N_dual
+
+        scale =N_dual*m1_T
+
+        gamma_sq = Vector{T}(undef, 3)
+        gamma_sq[1]=gamma[1]^2
+        gamma_sq[2]=gamma[2]^2
+        gamma_sq[3]=gamma[3]^2
+
+
+        #construction of the sectors
+
+        matrix_e=zeros(T, N_int,N_int)
+        matrix_m=zeros(T, N_int,N_int)
+        matrix_t=zeros(T, N_int,N_int)
+
+
+        for i in 1:N_int
+            
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+            squared= one(T)
+            
+            if i!=1
+             squared=sqrt_i^2
+            end    
+           
+            for j in 1:N_int
+                
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
+
+                if i == j
+                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
+                else
+                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                end
+            end
+        end
+
+        
+        matrix_e0=zeros(T, N_int,N_int)
+        matrix_m0=zeros(T, N_int,N_int)
+        matrix_t0=zeros(T, N_int,N_int)
+
+
+        for i in 1:N_int
+            
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+            squared= one(T)
+            
+            if i!=1
+             squared=sqrt_i^2
+            end    
+           
+            for j in 1:N_int
+                
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
+
+                matrix_e0[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                matrix_m0[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                matrix_t0[i, j] = (N_dual)*sqrt_i * sqrt_j 
+        
+            end
+        end
+
+
+        
+        P_e=zeros(T, N_int,N_int)
+        P_m=zeros(T, N_int,N_int)
+        P_t=zeros(T, N_int,N_int)
+
+
+        for i in 1:N_int
+            
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+            squared= one(T)
+            
+            if i!=1
+             squared=sqrt_i^2
+            end    
+           
+            for j in 1:N_int
+                
+
+                if i == j
+                    P_e[i, j] =  squared*gamma[1]
+                    P_m[i, j] = squared*gamma[2]
+                    P_t[i, j] =   squared*gamma[3]
+                
+                end
+            end
+        end
+
+
+        ratio_e=100*norm(matrix_e .- matrix_e0) / norm(matrix_e0 )#opnorm(matrix_e.-matrix_e0)/opnorm(matrix_e0)
+        ratio_m=100*norm(matrix_m .- matrix_m0) / norm(matrix_m0 )#opnorm(matrix_m.-matrix_m0)/opnorm(matrix_m0)
+        ratio_t=100*norm(matrix_t.- matrix_t0) / norm(matrix_t0 )#opnorm(matrix_t.-matrix_t0)/opnorm(matrix_t0)
+
+        ratio_Pe=opnorm(matrix_e0)/opnorm(P_e)
+        ratio_Pm=opnorm(matrix_m0)/opnorm(P_m)
+        ratio_Pt=opnorm(matrix_t0)/opnorm(P_t)
+
+
+
+        return ratio_e, ratio_m, ratio_t,ratio_Pe, ratio_Pm, ratio_Pt #EIG,FinalUmatrix, h, gamma, gamma_sq  #
+    end
+
 end
+
+end
+
+
+
+
+
