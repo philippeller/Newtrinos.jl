@@ -822,8 +822,8 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-10),ftype(0.1)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(1),ftype(200))
+    priors[:m₀] = Uniform(ftype(1e-4),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:N] = Uniform(ftype(1),ftype(40))
     priors[:r] = Uniform(ftype(0),ftype(1))
 
     NamedTuple(priors)
@@ -2171,9 +2171,9 @@ function get_perturbation(cfg::NNM)
         ratio_m=100*norm(matrix_m .- matrix_m0) / norm(matrix_m0 )#opnorm(matrix_m.-matrix_m0)/opnorm(matrix_m0)
         ratio_t=100*norm(matrix_t.- matrix_t0) / norm(matrix_t0 )#opnorm(matrix_t.-matrix_t0)/opnorm(matrix_t0)
 
-        ratio_Pe=opnorm(matrix_e0)/opnorm(P_e)
-        ratio_Pm=opnorm(matrix_m0)/opnorm(P_m)
-        ratio_Pt=opnorm(matrix_t0)/opnorm(P_t)
+        ratio_Pe=opnorm(P_e)/opnorm(matrix_e0)
+        ratio_Pm=opnorm(P_m)/opnorm(matrix_m0)
+        ratio_Pt=opnorm(P_t)/opnorm(matrix_t0)
 
 
 

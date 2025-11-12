@@ -163,9 +163,10 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
 
     f = Figure()
     ax = Axis(f[1, 1], 
-        xlabel = String(keys(result.axes)[1]) , 
-        ylabel = String(keys(result.axes)[2]), #* " (eV)",
+        xlabel = String(keys(result.axes)[1]) * " (eV)", 
+        ylabel = String(keys(result.axes)[2]), 
         title = title,
+        xscale= log10,
        # yscale = log10,
         xminorticksvisible = true, 
         xminorgridvisible = true, 
