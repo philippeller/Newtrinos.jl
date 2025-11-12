@@ -811,7 +811,8 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(1e-6)
+    #params[:scale]=ftype(1)
+    params[:m₀] = ftype(0.01)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     
@@ -822,8 +823,9 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-4),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(1),ftype(40))
+    #params[:scale]=Uniform(ftype(1e-6),ftype(100))
+    priors[:m₀] = Uniform(ftype(1e-6),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:N] = Uniform(ftype(1),ftype(100))
     priors[:r] = Uniform(ftype(0),ftype(1))
 
     NamedTuple(priors)
@@ -1390,7 +1392,8 @@ function get_matrices(cfg::NNM)
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
-        N_dual = params[:N]      
+        N_dual = params[:N]    
+        m0= params[:m₀]
         
         
         T = promote_type(
@@ -1416,11 +1419,11 @@ function get_matrices(cfg::NNM)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = (m1_T/m1_T)/N_dual
-        gamma[2] = (m2_T/m1_T)/N_dual
-        gamma[3] = (m3_T/m1_T)/N_dual
+        gamma[1] = (m1_T/m0)/N_dual
+        gamma[2] = (m2_T/m0)/N_dual
+        gamma[3] = (m3_T/m0)/N_dual
 
-        scale =N_dual*m1_T
+        scale =N_dual*m0
 
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
@@ -2043,7 +2046,7 @@ function get_perturbation(cfg::NNM)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]      
-        
+        m0= params[:m₀]
         
         T = promote_type(
             typeof(params[:N]), 
@@ -2068,12 +2071,11 @@ function get_perturbation(cfg::NNM)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = (m1_T/m1_T)/N_dual
-        gamma[2] = (m2_T/m1_T)/N_dual
-        gamma[3] = (m3_T/m1_T)/N_dual
+        gamma[1] = (m1_T/m0)/N_dual
+        gamma[2] = (m2_T/m0)/N_dual
+        gamma[3] = (m3_T/m0)/N_dual
 
-        scale =N_dual*m1_T
-
+        scale =N_dual*m0
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
         gamma_sq[2]=gamma[2]^2

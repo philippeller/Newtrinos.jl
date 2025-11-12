@@ -148,7 +148,7 @@ end =#
     f
 end =#
 
-function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results")
+function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results", log=0, mass=0)
 
     dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior);
     
@@ -162,17 +162,50 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     end
 
     f = Figure()
-    ax = Axis(f[1, 1], 
-        xlabel = String(keys(result.axes)[1]) * " (eV)", 
-        ylabel = String(keys(result.axes)[2]), 
+
+    # Build kwargs conditionally
+    kwargs = (
+        xlabel = String(keys(result.axes)[1]),
+        ylabel = String(keys(result.axes)[2]),
         title = title,
-        xscale= log10,
-       # yscale = log10,
         xminorticksvisible = true, 
         xminorgridvisible = true, 
         yminorticksvisible = true, 
         yminorgridvisible = true
     )
+
+    if log == 1
+        kwargs = merge(kwargs, (xscale = log10,))
+    end
+    
+    if mass== 1 
+       kwargs=merge(kwargs, (xlabel = String(keys(result.axes)[1])* " (eV)",))
+    end    
+
+    if log == 2
+        kwargs = merge(kwargs, (yscale = log10,))
+    end
+    
+    if mass== 2
+       kwargs=merge(kwargs, (ylabel = String(keys(result.axes)[2])* " (eV)",))
+    end    
+
+
+    ax= Axis(f[1,1];kwargs...)
+    #=
+    ax = Axis(f[1, 1], 
+        xlabel = String(keys(result.axes)[1]),#* " (eV)", 
+        ylabel = String(keys(result.axes)[2]),#* " (eV)", 
+        title = title,
+        if log!=false
+                 xscale= log10,
+        end 
+        #yscale = log10,
+        xminorticksvisible = true, 
+        xminorgridvisible = true, 
+        yminorticksvisible = true, 
+        yminorgridvisible = true
+    )=#
     
     # Contour levels for 1σ, 2σ, 3σ
     levels = quantile(Chisq(2), 1 .- 2*ccdf(Normal(), 1:3))
@@ -216,7 +249,7 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     # Position text in data coordinates (top-right corner)
     text_x = x_min + 0.7 * (x_max - x_min)  # 70% from left
     text_y = y_max - 0.02 * (y_max - y_min)  # 2% from top
-   
+    
     #=
     text!(ax, text_content,
         position = (text_x, text_y),
