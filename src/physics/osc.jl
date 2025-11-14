@@ -788,7 +788,7 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.01)
+    params[:m₀] = ftype(0.001)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
 
@@ -812,7 +812,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     #params[:scale]=ftype(1)
-    params[:m₀] = ftype(0.01)
+    params[:m₀] = ftype(0.001)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     
@@ -1000,7 +1000,9 @@ function get_matrices(cfg::NND)
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
-        N_dual = params[:N]      
+        N_dual = params[:N]   
+        m0= params[:m₀]
+           
         
         
         T = promote_type(
@@ -1026,24 +1028,16 @@ function get_matrices(cfg::NND)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = (m1_T^2/m1_T^2)/N_dual
-        gamma[2] =(m2_T^2/m1_T^2)/N_dual
-        gamma[3] =(m3_T^2/m1_T^2)/N_dual
-        scale= N_dual*m1_T^2
+        gamma[1] = (m1_T^2/m0^2)/N_dual
+        gamma[2] =(m2_T^2/m0^2)/N_dual
+        gamma[3] =(m3_T^2/m0^2)/N_dual
+        scale= N_dual*m0^2
 
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
         gamma_sq[2]=gamma[2]^2
         gamma_sq[3]=gamma[3]^2
 
-        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
-        #println("Gamma values: ", gamma_sq[1], ", ", gamma_sq[2], ", ", gamma_sq[3])
-        #println("m1 = $m1_T")
-        #println("m2 = $m2_T")
-        #println("m3 = $m3_T")
-        #println("scale", scale)
-
-        #construction of the sectors
 
         matrix_e=zeros(T, N_int,N_int)
         matrix_m=zeros(T, N_int,N_int)
@@ -2040,7 +2034,7 @@ end
 
 
 
-function get_perturbation(cfg::NNM)
+function get_perturbation(cfg::NND)
 
    function get_perturb_NN(params::NamedTuple)
         
@@ -2179,7 +2173,7 @@ function get_perturbation(cfg::NNM)
 
 
 
-        return ratio_e, ratio_m, ratio_t,ratio_Pe, ratio_Pm, ratio_Pt #EIG,FinalUmatrix, h, gamma, gamma_sq  #
+        return ratio_e, ratio_m, ratio_t,ratio_Pe, ratio_Pm, ratio_Pt, gamma, gamma_sq#EIG,FinalUmatrix, h, gamma, gamma_sq  #
     end
 
 end

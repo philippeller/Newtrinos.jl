@@ -28,6 +28,12 @@ using PairPlots
 
 export plot
 
+my_theme = Theme(
+    palette = (color = [:darkgreen, :green, :lightgreen, :darkgreen, :blue],),
+    fontsize = 12,
+)
+set_theme!(my_theme)
+
 function quantile_plot(ax, vals, weight, levels; nbins=10, cmap=:heat, rev=true)
     edges = LinRange(minimum(vals), maximum(vals), nbins)
     h = fit(Histogram, vals, weights(weight), edges)
@@ -211,28 +217,27 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     levels = quantile(Chisq(2), 1 .- 2*ccdf(Normal(), 1:3))
     
     # Create contourf with purple colormap
-    cf = contourf!(ax, result.axes[1], result.axes[2], dLLH, 
+    #=cf = contourf!(ax, result.axes[1], result.axes[2], dLLH, 
         levels=[0; levels], 
-        colormap=(Reverse(:Purples), 0.6))
+        colormap=(Reverse(:Purples), 0.6))=#
     
     contour!(ax, result.axes[1], result.axes[2], dLLH, 
         levels=levels, 
-        color=:black)
+        color=[:lightgreen, :green,:darkgreen], linewidth=2)
     
     # Add best fit point
     #scatter!(ax, [best_fit_x], [best_fit_y], color=:red, markersize=8, marker=:star5, label="Best Fit")
     
     # Add simple text legend for confidence levels
     Legend(f[1, 2], 
-        [LineElement(color = :"#5D3A8C", linewidth = 3),
-         LineElement(color = :"#9370DB", linewidth = 3),
-         LineElement(color = :"#E6D5F5", linewidth = 3),
-         MarkerElement(color = :red, marker = :star5, markersize = 8)],
-        ["1σ", "2σ", "3σ", "Best Fit"],
-        framevisible = false,
-        labelsize = 11,
-        rowgap = 5)
-    
+        [LineElement(color=:lightgreen, linewidth=3),
+        LineElement(color=:green, linewidth=3),
+        LineElement(color=:darkgreen, linewidth=3)],
+        ["1σ", "2σ", "3σ"],
+        framevisible=false,
+        labelsize=11,
+        rowgap=5)
+        
     # Create text with best fit values using absolute positioning
     var1_name = String(keys(result.axes)[1])
     var2_name = String(keys(result.axes)[2])
