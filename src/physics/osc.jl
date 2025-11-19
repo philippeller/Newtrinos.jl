@@ -1454,13 +1454,13 @@ function get_matrices(cfg::NNM)
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
                 if i == j
-                    matrix_e[i, j] = sqrt_i * sqrt_j  + squared*gamma[1]
-                    matrix_m[i, j] = sqrt_i * sqrt_j  + squared*gamma[2]
-                    matrix_t[i, j] =sqrt_i * sqrt_j  + squared*gamma[3]
+                    matrix_e[i, j] =(1/N_dual)* sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] =(1/N_dual)* sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
                 else
-                    matrix_e[i, j] =sqrt_i * sqrt_j 
-                    matrix_m[i, j] = sqrt_i * sqrt_j 
-                    matrix_t[i, j] = sqrt_i * sqrt_j 
+                    matrix_e[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
+                    matrix_m[i, j] =(1/N_dual)* sqrt_i * sqrt_j 
+                    matrix_t[i, j] = (1/N_dual)*sqrt_i * sqrt_j 
                 end
             end
         end
