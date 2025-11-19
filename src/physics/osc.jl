@@ -788,8 +788,8 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.001)
-    params[:N] = ftype(100)
+    params[:m₀] = ftype(0.01)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
 
     
@@ -800,8 +800,8 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-8),ftype(0.3)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(40))
-    priors[:r] = Uniform(ftype(1e-8),ftype(1))
+    priors[:N] = Uniform(ftype(1),ftype(100))
+    priors[:r] = Uniform(ftype(0),ftype(1))
 
     NamedTuple(priors)
 end
@@ -812,7 +812,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     #params[:scale]=ftype(1)
-    params[:m₀] = ftype(0.001)
+    params[:m₀] = ftype(0.01)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     
@@ -1031,7 +1031,7 @@ function get_matrices(cfg::NND)
         gamma[1] = (m1_T^2/m0^2)/N_dual
         gamma[2] =(m2_T^2/m0^2)/N_dual
         gamma[3] =(m3_T^2/m0^2)/N_dual
-        scale= N_dual*m0^2
+        scale=N_dual*m0^2
 
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
@@ -1060,13 +1060,13 @@ function get_matrices(cfg::NND)
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
                 if i == j
-                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[1]
-                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
-                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
+                    matrix_e[i, j] =sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] =sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] =sqrt_i * sqrt_j  + squared*gamma[3]
                 else
-                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                    matrix_e[i, j] =sqrt_i * sqrt_j 
+                    matrix_m[i, j] =sqrt_i * sqrt_j 
+                    matrix_t[i, j] =sqrt_i * sqrt_j 
                 end
             end
         end
@@ -1454,13 +1454,13 @@ function get_matrices(cfg::NNM)
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
                 if i == j
-                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[1]
-                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
-                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
+                    matrix_e[i, j] = sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] = sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] =sqrt_i * sqrt_j  + squared*gamma[3]
                 else
-                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                    matrix_e[i, j] =sqrt_i * sqrt_j 
+                    matrix_m[i, j] = sqrt_i * sqrt_j 
+                    matrix_t[i, j] = sqrt_i * sqrt_j 
                 end
             end
         end
@@ -1541,7 +1541,7 @@ function get_matrices(cfg::NNM)
 
 
 
-        return FinalUmatrix, h, eigenvalues, V_e, V_m, V_t#EIG,FinalUmatrix, h, gamma, gamma_sq  #
+        return FinalUmatrix, h#, eigenvalues, V_e, V_m, V_t#EIG,FinalUmatrix, h, gamma, gamma_sq  #
     end
 
 end
