@@ -325,6 +325,7 @@ end
 function get_neutrinomass(cfg=NNM)
     function NeutrinoMassNND(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
+  
         N = round(Int, params[:N])
 
         func = Newtrinos.osc.get_matrices(cfg)
@@ -383,7 +384,7 @@ function get_neutrinomass(cfg=NNM)
 end
 
 
-function mixing_angles(params::NamedTuple,cfg=NNM)
+function mixing_angles(params::NamedTuple,cfg=NND)
 
     U = Newtrinos.osc.get_PMNS(params)
     N = round(Int, params[:N])

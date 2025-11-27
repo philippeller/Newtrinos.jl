@@ -72,7 +72,7 @@ struct SI <: InteractionModel end
 
 abstract type FlavourModel end
 @kwdef struct ThreeFlavour <: FlavourModel 
-    ordering::Symbol = :NO                     # ordering 
+    ordering::Symbol = :IO                     # ordering 
 end
 @kwdef struct ThreeFlavourXYCP <: FlavourModel
     three_flavour::ThreeFlavour = ThreeFlavour()
@@ -800,8 +800,8 @@ end
 function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-8),ftype(0.3)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(1),ftype(50))
+    priors[:m₀] = Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
+    priors[:N] = Uniform(ftype(2),ftype(200))
     priors[:r] = Uniform(ftype(0),ftype(1))
     priors[:eps] = Uniform(ftype(1.0),ftype(2.0))
 
@@ -826,9 +826,9 @@ function get_priors(cfg::NNM)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     #params[:scale]=Uniform(ftype(1e-6),ftype(100))
-    priors[:m₀] = Uniform(ftype(1e-2),ftype(0.1)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(1),ftype(200))
-    priors[:r] = Uniform(ftype(0),ftype(1))
+    priors[:m₀] = Uniform(ftype(1e-6),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:N] = Uniform(ftype(2),ftype(200))
+    priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
 end
@@ -1159,7 +1159,6 @@ function get_matrices(cfg::NND)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]   
-        m0= params[:m₀]
         r=params[:r]  
         
         eps=1+(1/N_dual) #params[:eps]#
@@ -1242,12 +1241,12 @@ function get_matrices(cfg::NND)
        eigenvalues= Vector{T}(undef, 3*N_int)
      
         for i in 1:N_int
-            eigenvalues[3*i-2] =(eigenvalues_e[i])
-            eigenvalues[3*i-1] =(eigenvalues_m[i])
-            eigenvalues[3*i] = (eigenvalues_t[i])
+            eigenvalues[3*i-2] =(eigenvalues_e[i])*scale_1
+            eigenvalues[3*i-1] =(eigenvalues_m[i])*scale_2
+            eigenvalues[3*i] = (eigenvalues_t[i])*scale_3
         end
 
-        EIG=Diagonal(eigenvalues[1: 3*N_int-3])
+        #EIG=Diagonal(eigenvalues[1: 3*N_int-3])
 
 
         Vmatrix = zeros(T, 3*N_int, 3*N_int)
@@ -1319,7 +1318,7 @@ function get_matrices(cfg::NND)
 
 
 
-        return FinalUmatrix, h #, eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
+        return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
     end
 
 end
@@ -1355,14 +1354,14 @@ function get_matrices(cfg::NNM)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        eps=10#1+(1/N_dual)
+        eps=1+(1/N_dual)
 
         factor=(eps-1) * 2^(1/(N_dual-1))
 
         if r>=0.0
-            scale_1= (m1_T ^2)/(r*factor)
-            scale_2= (m2_T ^2)/(r*factor)
-            scale_3= (m3_T ^2)/(r*factor)
+            scale_1= (m1_T)/(r*factor)
+            scale_2= (m2_T)/(r*factor)
+            scale_3= (m3_T)/(r*factor)
         end
 
        
