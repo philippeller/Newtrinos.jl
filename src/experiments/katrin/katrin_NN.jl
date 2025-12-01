@@ -322,7 +322,7 @@ end
 
 
 
-function get_neutrinomass(cfg=NNM)
+function get_neutrinomass(cfg=NND)
     function NeutrinoMassNND(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -342,7 +342,7 @@ function get_neutrinomass(cfg=NNM)
         N_e = length(mass_e)
         N_m = length(mass_m)
         N_t = length(mass_t)
-
+        
         if any(mass_e .> 1e6) 
             mass_e = mass_e[mass_e .<= 1e6]
             N_e = length(mass_e)
@@ -360,7 +360,7 @@ function get_neutrinomass(cfg=NNM)
             N_t = length(mass_t)
             x_1_t = V_t[1, 1:N_t]
         end
-
+     
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
 
@@ -384,7 +384,7 @@ function get_neutrinomass(cfg=NNM)
 end
 
 
-function mixing_angles(params::NamedTuple,cfg=NND)
+function mixing_angles(params::NamedTuple,cfg=NNM)
 
     U = Newtrinos.osc.get_PMNS(params)
     N = round(Int, params[:N])
@@ -536,7 +536,7 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NNM()
+        cfg = Newtrinos.osc.NND()
         predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         #predicted_value = sqrt(predicted_value)
         #println("Predicted m_nu: ", predicted_value)
@@ -554,7 +554,7 @@ end
 function comparing_masses(physics,experiments, params)
 
 
-    cfg = Newtrinos.osc.NNM()
+    cfg = Newtrinos.osc.NND()
     predicted_value =get_neutrinomass(cfg)(params)
     observed= experiments.katrin.assets.observed
     dist_observed= Normal(observed, 0.13)

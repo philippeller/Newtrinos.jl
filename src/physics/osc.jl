@@ -72,7 +72,7 @@ struct SI <: InteractionModel end
 
 abstract type FlavourModel end
 @kwdef struct ThreeFlavour <: FlavourModel 
-    ordering::Symbol = :IO                     # ordering 
+    ordering::Symbol = :NO                     # ordering 
 end
 @kwdef struct ThreeFlavourXYCP <: FlavourModel
     three_flavour::ThreeFlavour = ThreeFlavour()
@@ -827,7 +827,7 @@ function get_priors(cfg::NNM)    #'New'
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     #params[:scale]=Uniform(ftype(1e-6),ftype(100))
     priors[:m₀] = Uniform(ftype(1e-6),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(2),ftype(200))
+    priors[:N] = Uniform(ftype(2),ftype(600))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
 
     NamedTuple(priors)
