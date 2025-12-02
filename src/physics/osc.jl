@@ -801,7 +801,7 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(2),ftype(200))
+    priors[:N] = Uniform(ftype(2),ftype(40))
     priors[:r] = Uniform(ftype(0),ftype(1))
     priors[:eps] = Uniform(ftype(1.0),ftype(2.0))
 
@@ -815,8 +815,9 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
     #params[:scale]=ftype(1)
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(100)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
+    params[:eps] = ftype(1.01)
     
     NamedTuple(params)
 end
@@ -825,10 +826,10 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    #params[:scale]=Uniform(ftype(1e-6),ftype(100))
     priors[:m₀] = Uniform(ftype(1e-6),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(2),ftype(600))
+    priors[:N] = Uniform(ftype(2),ftype(40))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
+    priors[:eps] = Uniform(ftype(1.000000001),ftype(1.1))
 
     NamedTuple(priors)
 end
@@ -1161,7 +1162,7 @@ function get_matrices(cfg::NND)
         N_dual = params[:N]   
         r=params[:r]  
         
-        eps=1+(1/N_dual) #params[:eps]#
+        eps=params[:eps]#1+(1/N_dual) #
         
         
         T = promote_type(
@@ -1354,7 +1355,7 @@ function get_matrices(cfg::NNM)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        eps=1+(1/N_dual)
+        eps=params[:eps]#1+(1/N_dual)
 
         factor=(eps-1) * 2^(1/(N_dual-1))
 
