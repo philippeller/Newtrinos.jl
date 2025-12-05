@@ -789,9 +789,9 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(100)
+    params[:N] = ftype(40)
     params[:r] = ftype(1)
-    params[:eps] = ftype(1.01)
+    params[:η] = ftype(1.01)
 
     
     NamedTuple(params)
@@ -801,9 +801,9 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(2),ftype(40))
-    priors[:r] = Uniform(ftype(0),ftype(1))
-    priors[:eps] = Uniform(ftype(1.0),ftype(2.0))
+    priors[:N] = Uniform(ftype(2),ftype(100))
+    priors[:r] = Uniform(ftype(1e-8),ftype(1))
+    priors[:η] = Uniform(ftype(1.1),ftype(100))
 
     NamedTuple(priors)
 end
@@ -817,7 +817,7 @@ function get_params(cfg::NNM)  #'New'
     params[:m₀] = ftype(0.01)
     params[:N] = ftype(20)
     params[:r] = ftype(1)
-    params[:eps] = ftype(1.01)
+    params[:η] = ftype(1.1)
     
     NamedTuple(params)
 end
@@ -826,10 +826,10 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = Uniform(ftype(1e-6),ftype(1)) #Uniform(ftype(1e-7),ftype(2)) 
+    priors[:m₀] = Uniform(ftype(1e-6),ftype(0.4)) #Uniform(ftype(1e-7),ftype(2)) 
     priors[:N] = Uniform(ftype(2),ftype(40))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
-    priors[:eps] = Uniform(ftype(1.000000001),ftype(1.1))
+    priors[:η] = Uniform(ftype(1.000000001),ftype(1.1))
 
     NamedTuple(priors)
 end
@@ -1162,7 +1162,7 @@ function get_matrices(cfg::NND)
         N_dual = params[:N]   
         r=params[:r]  
         
-        eps=params[:eps]#1+(1/N_dual) #
+        η=1+(1/N_dual) #params[:η]#
         
         
         T = promote_type(
@@ -1184,7 +1184,7 @@ function get_matrices(cfg::NND)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        factor=(eps-1) * 2^(1/(N_dual-1))
+        factor=(η-1) * 2^(1/(N_dual-1))
 
         if r>=0.0
             scale_1= (m1_T ^2)/(r*factor)
@@ -1212,9 +1212,9 @@ function get_matrices(cfg::NND)
                 
                 if i == j
 
-                    matrix_e[i, j] =sqrt_i * sqrt_j *eps
-                    matrix_m[i, j] =sqrt_i * sqrt_j *eps
-                    matrix_t[i, j] =sqrt_i * sqrt_j *eps
+                    matrix_e[i, j] =sqrt_i * sqrt_j *η
+                    matrix_m[i, j] =sqrt_i * sqrt_j *η
+                    matrix_t[i, j] =sqrt_i * sqrt_j *η
                 else
                     matrix_e[i, j] =sqrt_i * sqrt_j 
                     matrix_m[i, j] =sqrt_i * sqrt_j 
@@ -1355,9 +1355,9 @@ function get_matrices(cfg::NNM)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        eps=params[:eps]#1+(1/N_dual)
+        η=params[:η]#1+(1/N_dual)
 
-        factor=(eps-1) * 2^(1/(N_dual-1))
+        factor=(η-1) * 2^(1/(N_dual-1))
 
         if r>=0.0
             scale_1= (m1_T)/(r*factor)
@@ -1384,9 +1384,9 @@ function get_matrices(cfg::NNM)
                 
                 if i == j
 
-                    matrix_e[i, j] =sqrt_i * sqrt_j *eps
-                    matrix_m[i, j] =sqrt_i * sqrt_j *eps
-                    matrix_t[i, j] =sqrt_i * sqrt_j *eps
+                    matrix_e[i, j] =sqrt_i * sqrt_j *η
+                    matrix_m[i, j] =sqrt_i * sqrt_j *η
+                    matrix_t[i, j] =sqrt_i * sqrt_j *η
                 else
                     matrix_e[i, j] =sqrt_i * sqrt_j 
                     matrix_m[i, j] =sqrt_i * sqrt_j 

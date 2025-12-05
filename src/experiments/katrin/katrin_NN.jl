@@ -322,8 +322,8 @@ end
 
 
 
-function get_neutrinomass(cfg=NND)
-    function NeutrinoMassNND(params::NamedTuple)
+function get_neutrinomass(cfg=NNM)
+    function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
         N = round(Int, params[:N])
@@ -380,7 +380,7 @@ function get_neutrinomass(cfg=NND)
         return sum
             
     end
-    return NeutrinoMassNND
+    return NeutrinoMassNN
 end
 
 
@@ -536,7 +536,7 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NND()
+        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:IO))
         predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         #predicted_value = sqrt(predicted_value)
         #println("Predicted m_nu: ", predicted_value)
@@ -554,7 +554,7 @@ end
 function comparing_masses(physics,experiments, params)
 
 
-    cfg = Newtrinos.osc.NND()
+    cfg = Newtrinos.osc.NNM()
     predicted_value =get_neutrinomass(cfg)(params)
     observed= experiments.katrin.assets.observed
     dist_observed= Normal(observed, 0.13)
