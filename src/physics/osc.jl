@@ -801,7 +801,7 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = Uniform(ftype(2),ftype(100))
+    priors[:N] = DiscreteUniform(ftype(2),ftype(40))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
     priors[:η] = Uniform(ftype(1.1),ftype(100))
 
@@ -827,7 +827,7 @@ function get_priors(cfg::NNM)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = Uniform(ftype(1e-6),ftype(0.4)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = Uniform(ftype(2),ftype(40))
+    priors[:N] = DiscreteUniform(ftype(2),ftype(40))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
     priors[:η] = Uniform(ftype(1.000000001),ftype(1.1))
 
@@ -998,7 +998,7 @@ end
 
 
 
-function get_matrices_perturbation(cfg::NND)
+function get_matrices(cfg::NND) #_perturbation
 
    function get_Nnaturalness(params::NamedTuple)
         
@@ -1031,10 +1031,10 @@ function get_matrices_perturbation(cfg::NND)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = (m1_T^2/m0^2)/N_dual
-        gamma[2] =(m2_T^2/m0^2)/N_dual
-        gamma[3] =(m3_T^2/m0^2)/N_dual
-        scale=N_dual*m0^2
+        gamma[1] = (m1_T^2/m0^2)#/N_dual
+        gamma[2] =(m2_T^2/m0^2)#/N_dual
+        gamma[3] =(m3_T^2/m0^2)#/N_dual
+        scale=m0^2/params[:r] #N_dual*m0^2
 
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
@@ -1063,13 +1063,13 @@ function get_matrices_perturbation(cfg::NND)
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
                 if i == j
-                    matrix_e[i, j] =sqrt_i * sqrt_j  + squared*gamma[1]
-                    matrix_m[i, j] =sqrt_i * sqrt_j  + squared*gamma[2]
-                    matrix_t[i, j] =sqrt_i * sqrt_j  + squared*gamma[3]
+                    matrix_e[i, j] =(1-N_dual*gamma[1])*sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] =(1-N_dual*gamma[2])*sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] =(1-N_dual*gamma[3])*sqrt_i * sqrt_j  + squared*gamma[3]
                 else
-                    matrix_e[i, j] =sqrt_i * sqrt_j 
-                    matrix_m[i, j] =sqrt_i * sqrt_j 
-                    matrix_t[i, j] =sqrt_i * sqrt_j 
+                    matrix_e[i, j] =(1-N_dual*gamma[1])*sqrt_i * sqrt_j 
+                    matrix_m[i, j] =(1-N_dual*gamma[2])*sqrt_i * sqrt_j 
+                    matrix_t[i, j] =(1-N_dual*gamma[3])*sqrt_i * sqrt_j 
                 end
             end
         end
@@ -1132,8 +1132,8 @@ function get_matrices_perturbation(cfg::NND)
 
         for i in 2:N_int
             delta_mass[3*i-2] =(scale)*(eigenvalues_e[i])- m1_T^2
-            delta_mass[3*i-1] =(scale)*(eigenvalues_m[i])- m2_T^2
-            delta_mass[3*i] = (scale)*(eigenvalues_t[i])- m3_T^2
+            delta_mass[3*i-1] =(scale)*(eigenvalues_m[i])- m1_T^2
+            delta_mass[3*i] = (scale)*(eigenvalues_t[i])- m1_T^2
         end
         
         #println(delta_mass)
@@ -1154,7 +1154,7 @@ function get_matrices_perturbation(cfg::NND)
 end
 
 
-function get_matrices(cfg::NND)
+function get_matrices_full(cfg::NND)
 
    function get_Nnaturalness(params::NamedTuple)
         
@@ -1162,7 +1162,7 @@ function get_matrices(cfg::NND)
         N_dual = params[:N]   
         r=params[:r]  
         
-        η=1+(1/N_dual) #params[:η]#
+        η=1+N_dual#1+(1/N_dual) #params[:η]#
         
         
         T = promote_type(
@@ -1329,6 +1329,8 @@ end
 function get_matrices(cfg::NNM)
 
    function get_Nnaturalness(params::NamedTuple)
+
+        #@time begin
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]   
@@ -1355,7 +1357,7 @@ function get_matrices(cfg::NNM)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        η=params[:η]#1+(1/N_dual)
+        η=1+N_dual#params[:η]#1+(1/N_dual)
 
         factor=(η-1) * 2^(1/(N_dual-1))
 
@@ -1480,9 +1482,7 @@ function get_matrices(cfg::NNM)
         #H=Diagonal(h[1:N_int-3])
                 
 
-        #println("det(M_flavors) = ", det(matrix_e))
-        #println("cond(M_flavors) = ", cond(matrix_e))
-
+        #end #time block
 
 
         return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  

@@ -21,6 +21,9 @@ using FunctionChains
 using Accessors
 using Logging
 using ProgressMeter
+
+using Base.Threads
+using Statistics
 using ..Newtrinos
 
 adsel = AutoForwardDiff()
@@ -46,10 +49,10 @@ end
 function find_mle(likelihood, prior, params)
     
     try
-
+        
         adsel = AutoForwardDiff()
         set_batcontext(ad = adsel)
-        
+
         posterior = PosteriorMeasure(likelihood, prior)
 
         #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS()))
@@ -66,7 +69,7 @@ function find_mle(likelihood, prior, params)
 
         @info msg
         # THIS ONE WORKS:
-        res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
+        res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-4, maxiters=200)))
         #res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), ))
 
         # This one also works, and IS thread safe:
@@ -184,12 +187,19 @@ function find_mle_cached(likelihood, prior, params, cache_dir)
 end
 
 function _profile(likelihood, scanpoints, params, cache_dir)
+    
     results = Array{Any}(undef, size(scanpoints))
     llhs = Array{Any}(undef, size(scanpoints))
     log_posteriors = Array{Any}(undef, size(scanpoints))
 
     @showprogress Threads.@threads for i in eachindex(scanpoints)
-        opt_result = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+        if i == 1 || i == div(length(scanpoints), 2)  # First and middle points
+            println("\n--- Point $i ---")
+            @time opt_result = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+        else
+            opt_result = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+        end
+        
         llhs[i] = opt_result[1]
         log_posteriors[i] = opt_result[2]
         results[i] = opt_result[3]
@@ -200,7 +210,6 @@ function _profile(likelihood, scanpoints, params, cache_dir)
     NamedTuple(s)
 end
 
-"Run Profile llh scan"
 function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing)
 
     #check if there is actually any variable to be profiled over, or if they all or just Numbers
@@ -222,13 +231,14 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing)
 
 end
 
+
 "Run simple llh scan"
 function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
+    
     vars = collect(keys(vars_to_scan))
     values = [quantile(priors[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
     mesh = collect(IterTools.product(values...))
-    scanpoints = Array{Any}(undef, size(mesh))
-
+    
     function make_params(vals)
         p = deepcopy(params)
         for i in 1:length(vars_to_scan)
@@ -237,26 +247,40 @@ function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
         return p
     end
 
-    for i in eachindex(mesh)
-        scanpoints[i] = make_params(mesh[i])
-    end
-
-    llhs = Array{Any}(undef, size(scanpoints))
+    println("Number of threads: $(nthreads())")
+    println("Total points to compute: $(length(mesh))")
+    
+    llhs = Array{Any}(undef, size(mesh))
     if gradient_map
-        grads = Array{Any}(undef, size(scanpoints))
+        grads = Array{Any}(undef, size(mesh))
     end
+    
+    times_per_point = Float64[]
 
-    @showprogress Threads.@threads for i in eachindex(scanpoints)
-        p = scanpoints[i]
+    @showprogress Threads.@threads for i in eachindex(mesh)
+        t_start = time()
+        p = make_params(mesh[i])
         llhs[i] = logdensityof(likelihood, p)
         if gradient_map
-            grads[i] = ForwardDiff.gradient(x -> logdensityof(likelihood, x),  p)
+            grads[i] = ForwardDiff.gradient(x -> logdensityof(likelihood, x), p)
         end
+        t_elapsed = time() - t_start
+        push!(times_per_point, t_elapsed)
     end
 
-    s = OrderedDict{Symbol, Array}(key=>Fill(params[key], size(mesh)) for key in setdiff(keys(params), keys(vars_to_scan)))
+   
+    println("TIMING STATISTICS:")
+    println("  Min time per point: $(round(minimum(times_per_point)*1000, digits=1)) ms")
+    println("  Max time per point: $(round(maximum(times_per_point)*1000, digits=1)) ms")
+    println("  Mean time per point: $(round(mean(times_per_point)*1000, digits=1)) ms")
+    println("  Median time per point: $(round(median(times_per_point)*1000, digits=1)) ms")
+    println("TOTAL TIME:")
+    println("  Total seconds: $(round(sum(times_per_point), digits=2))")
+    println("  Total minutes: $(round(sum(times_per_point)/60, digits=2))")
+
+    s = OrderedDict{Symbol, Array}(key => Fill(params[key], size(mesh)) for key in setdiff(keys(params), keys(vars_to_scan)))
     if gradient_map
-        g = OrderedDict(Symbol(key, "_grad")=>[x[key] for x in grads] for key in keys(first(grads)))
+        g = OrderedDict(Symbol(key, "_grad") => [x[key] for x in grads] for key in keys(first(grads)))
         s = merge(s, g)
     end
     s[:llh] = llhs
@@ -266,6 +290,7 @@ function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
     axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
     result = NewtrinosResult(axes=axes, values=res)
     
+    return result
 end
 
 function bestfit(result::NewtrinosResult)
