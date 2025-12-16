@@ -342,7 +342,7 @@ function get_neutrinomass(cfg=NNM)
         N_e = length(mass_e)
         N_m = length(mass_m)
         N_t = length(mass_t)
-        
+    
         if any(mass_e .> 1e6) 
             mass_e = mass_e[mass_e .<= 1e6]
             N_e = length(mass_e)
@@ -536,7 +536,7 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:IO))
+        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
         predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         #predicted_value = sqrt(predicted_value)
         #println("Predicted m_nu: ", predicted_value)

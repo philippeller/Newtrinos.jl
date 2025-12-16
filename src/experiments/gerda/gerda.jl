@@ -42,8 +42,8 @@ function get_assets(physics; datadir = @__DIR__)
 
     assets = (
 
-        observed = 1e28, #0.9*1e26, #gerda 
-        # 1*1e28, #legend 1000
+        observed =0.9 *1e26, #gerda 
+        # 1*1e28,, # #legend 1000
         
     )
     return assets
@@ -172,7 +172,78 @@ end
 
 
 
-function get_neutrinomass(cfg=NNM)
+function get_neutrinomass_STD(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO)))
+    function NeutrinoMassNNM_STD(params::NamedTuple)
+
+        
+
+        U= Newtrinos.osc.get_PMNS(params)
+
+        N = round(Int,params[:N])
+
+        func=  Newtrinos.osc.get_matrices(cfg)
+
+        final, h, eigen, V_e, V_m, V_t = func(params)
+        #final, h= func(params)
+        masses_NN= eigen
+
+        x_e = U[1,:]
+        x_1_e = V_e[1,1: N]
+        x_1_m = V_m[1,1: N]
+        x_1_t = V_t[1,1: N]
+
+        mass_e = eigen[1:3:end]      
+        mass_m = eigen[2:3:end]   
+        mass_t = eigen[3:3:end]      
+        N_e = length(mass_e)
+        N_m = length(mass_m)
+        N_t = length(mass_t)
+
+        #=if any(mass_e .> 1e12) 
+            mass_e = mass_e[mass_e .<= 1e12]
+            N_e = length(mass_e)
+            x_1_e = V_e[1, 1:N_e]
+        end
+
+        if any(mass_m .> 1e12) 
+            mass_m = mass_m[mass_m .<= 1e6]
+            N_m = length(mass_m)
+            x_1_m = V_m[1, 1:N_m]
+        end
+
+        if any(mass_t .> 1e12) 
+            mass_t = mass_t[mass_t .<= 1e12]
+            N_t = length(mass_t)
+            x_1_t = V_t[1, 1:N_t]
+        end=#
+
+        N = [N_e, N_m, N_t]
+        masses_NN = [mass_e, mass_m, mass_t]
+
+        X=[x_1_e, x_1_m, x_1_t]
+        sum=Float64(0.0)
+        
+        for i in 1:3
+            
+            
+            for j in 1:N[i]
+
+                mass = masses_NN[i][j]
+                integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)
+                sum += integrand
+            end
+
+        end
+   
+
+        return sum
+     
+    end
+    return NeutrinoMassNNM
+end
+
+
+function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO)))
     function NeutrinoMassNNM(params::NamedTuple)
 
         
@@ -199,23 +270,6 @@ function get_neutrinomass(cfg=NNM)
         N_m = length(mass_m)
         N_t = length(mass_t)
 
-        if any(mass_e .> 1e6) 
-            mass_e = mass_e[mass_e .<= 1e6]
-            N_e = length(mass_e)
-            x_1_e = V_e[1, 1:N_e]
-        end
-
-        if any(mass_m .> 1e6) 
-            mass_m = mass_m[mass_m .<= 1e6]
-            N_m = length(mass_m)
-            x_1_m = V_m[1, 1:N_m]
-        end
-
-        if any(mass_t .> 1e6) 
-            mass_t = mass_t[mass_t .<= 1e6]
-            N_t = length(mass_t)
-            x_1_t = V_t[1, 1:N_t]
-        end
 
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
@@ -229,7 +283,22 @@ function get_neutrinomass(cfg=NNM)
             for j in 1:N[i]
 
                 mass = masses_NN[i][j]
-                integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)
+                m_e=0.511*(1e6)
+                m_p=938.27*(1e6)
+
+                factor=(194/5.28)*m_e*m_p
+
+                if mass>= 1e8 && mass <= 1e12
+                    integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)*factor/(factor + mass)*0.7
+
+
+                elseif mass> 1e12    
+                 integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)*factor/(factor + mass)*1
+                else
+                    integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)
+                end
+
+                
                 sum += integrand
             end
 
@@ -257,9 +326,9 @@ function mixing_angles(params::NamedTuple,cfg=NNM)
     x_1_m = V_m[1, 1:N]
     x_1_t = V_t[1, 1:N]
 
-    angles_e=abs.(x_e[1]*x_1_e)
-    angles_m=abs.(x_e[2]*x_1_m)
-    angles_t=abs.(x_e[3]*x_1_t)
+    angles_e=abs.(x_1_e)#abs.(x_e[1]*x_1_e)
+    angles_m=abs.(x_1_m)#abs.(x_e[2]*x_1_m)
+    angles_t=abs.(x_1_t)#abs.(x_e[3]*x_1_t)
 
 
     mass_e = eigen[1:3:end]      
@@ -319,8 +388,8 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NNM()
-        observed = 1e28#legend 200
+        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
+        observed =0.9 * 1e26 #gerda  1e28#
         #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         fun=get_halftime()
         predicted_value_T=fun(params)
@@ -328,7 +397,7 @@ function get_forward_model_correct(physics, assets)
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma= 0.01*1e28#0.1*1e28 #
+        sigma= 0.1*1e26 #0.01*1e26#
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)
