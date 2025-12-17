@@ -23,7 +23,7 @@ import ..Newtrinos
     plot::Function
 end
 
-function configure(; datadir = @__DIR__)
+function configure(; datadir = @__DIR__, use_flux_data::Bool = false, ff_model::Symbol = :helm, ff_kwargs::NamedTuple = (;))
     # Load assets for the experiment
     assets = get_assets(datadir)
 
@@ -31,14 +31,16 @@ function configure(; datadir = @__DIR__)
     sns_flux = Newtrinos.sns_flux.configure(
         exposure = assets.exposure,
         distance = assets.distance,
-        use_data = false,
+        use_data = use_flux_data,
     )
 
-    # Configure the CEvNS cross-section module
+    # Configure the CEvNS cross-section module (pass FF choice through configure)
     cevns_xsec = Newtrinos.cevns_xsec.configure(
         assets.isotopes,
         assets.er_centers .* 1e-3,  # Convert keVnr to MeVnr
-        sns_flux.assets.E,  # Pass the energy grid from the SNS flux assets
+        sns_flux.assets.E;          # Pass the energy grid from the SNS flux assets
+        ff_model = ff_model,
+        ff_kwargs = ff_kwargs,
     )
 
     # Combine SNS flux and CEvNS cross-section into the physics NamedTuple

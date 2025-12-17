@@ -24,14 +24,14 @@ import ..Newtrinos
     plot::Function
 end
 
-function configure(; datadir = @__DIR__)
+function configure(; datadir = @__DIR__, use_flux_data::Bool = true, ff_model::Symbol = :helm, ff_kwargs::NamedTuple = (;))
     assets = get_assets(datadir)
 
     # Configure the SNS flux module
     sns_flux = Newtrinos.sns_flux.configure(
         exposure = assets.exposure,
         distance = assets.distance,
-        use_data = true,
+        use_data = use_flux_data,
     )
 
     # Reconfigure assets with data loaded from sns_flux
@@ -41,10 +41,12 @@ function configure(; datadir = @__DIR__)
     cevns_xsec = Newtrinos.cevns_xsec.configure(
         assets.isotopes,
         assets.er_centers .* 1e-3, # Convert keV to MeV
-        sns_flux.assets.E,  # Pass the energy grid from the SNS flux assets
+        sns_flux.assets.E;         # Pass the energy grid from the SNS flux assets
+        ff_model = ff_model,
+        ff_kwargs = ff_kwargs,
     )
+
     @info "Configured COHERENT CsI module."
-    # Combine SNS flux and CEvNS cross-section into the physics NamedTuple
     physics = (;sns_flux = sns_flux, cevns_xsec = cevns_xsec)
 
     return COHERENT_CSI(
@@ -98,7 +100,7 @@ function get_assets(datadir = @__DIR__, sns_flux = nothing)
     isotopes = [
         (fraction=0.49, mass=123.8e3, Z=55, N=78, Rn_key=:Rn_Cs, Rn_nom=5.7242),  # Cs-133
         (fraction=0.51, mass=118.21e3, Z=53, N=74, Rn_key=:Rn_I, Rn_nom=5.7242)   # I-127
-    ]  # List of isotopes with [fraction, Nuclear mass (GeV), Z, N=A-Z, Rn_key, Rn_nom (fm)]
+    ]  # List of isotopes with [fraction, Nuclear mass (MeV), Z, N=A-Z, Rn_key, Rn_nom (fm)]
     Nt = 2 * (14.6 / 0.25981) * 6.023e+23
     light_yield = 13.35  # PE/keVee
     resolution = [0.0749, 9.56]  # a/Eee and b*Eee
