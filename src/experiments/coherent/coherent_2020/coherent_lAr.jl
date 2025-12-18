@@ -25,13 +25,19 @@ end
 
 function configure(; datadir = @__DIR__, use_flux_data::Bool = false, ff_model::Symbol = :helm, ff_kwargs::NamedTuple = (;))
     # Load assets for the experiment
-    assets = get_assets(datadir)
-
+    assets = get_assets(datadir, use_flux_data)
+    if use_flux_data
+        dt = diff(assets.timing_centers)
+        time_edges = vcat(assets.timing_centers .- dt[1]/2, assets.timing_centers[end] + dt[end]/2)
+    else
+        time_edges = nothing
+    end
     # Configure the SNS flux module
     sns_flux = Newtrinos.sns_flux.configure(
         exposure = assets.exposure,
         distance = assets.distance,
         use_data = use_flux_data,
+        tbins = time_edges === nothing ? nothing : time_edges .* 1e3,  # Convert to ns if not nothing
     )
 
     # Configure the CEvNS cross-section module (pass FF choice through configure)
@@ -84,7 +90,7 @@ function get_priors(ss_bkg_nom, pbrn_nom, delbrn_nom)
         )
 end
 
-function get_assets(datadir = @__DIR__)
+function get_assets(datadir = @__DIR__,use_flux_data::Bool = false)
     @info "Loading coherent lAr data"
 
 
@@ -159,6 +165,7 @@ function get_assets(datadir = @__DIR__)
         ss_bkg_nom,
         distance,
         exposure,
+        use_flux_data,
     )
 end
 
@@ -252,48 +259,80 @@ function get_expected(params, physics, assets)
 
     # Get the differential cross-section for all isotopes
     diff_xsec_dict = physics.cevns_xsec.diff_xsec(params)
+
     # Convert recoil energies from keV → MeV
     er_edges_MeV   = assets.er_edges .* 1e-3
     er_centers_MeV = assets.er_centers .* 1e-3
     dEr_MeV        = diff(er_edges_MeV)
-    n_Er   = length(er_centers_MeV)
+    n_Er           = length(er_centers_MeV)
 
-    flux_folded_rate = zeros(eltype(first(values(diff_xsec_dict))), n_Er)
+    # Allocate folded rate:
+    # - if assets.use_flux_data == true: (n_Er, n_time)
+    # - else: (n_Er,)
+    first_rate_matrix = first(values(diff_xsec_dict))
+    T = eltype(first_rate_matrix)
+    if assets.use_flux_data
+        n_time = size(flux.total_flux, 2)
+        flux_folded_rate = zeros(T, n_Er, n_time)
+        for iso in assets.isotopes
+            rate_matrix = diff_xsec_dict[iso.Rn_key]      # (n_Er, n_Eν)
+            folded_rate = rate_matrix * flux.total_flux    # (n_Er, n_time)
+            flux_folded_rate .+= iso.fraction .* folded_rate
+        end
+        int_rate = params.coherent_lar_mass .* assets.Nt .* flux_folded_rate .* dEr_MeV  # (n_Er, n_time)
+        predicted_counts = response_matrix * int_rate                                  # (n_out, n_time)
 
-    # --- Step 4: Flux folding (sum over E_ν for each isotope)
-    for iso in assets.isotopes
-        rate_matrix = diff_xsec_dict[iso.Rn_key]     # (n_Er, n_Eν)
-        folded_rate = rate_matrix * flux.total_flux   # (n_Er,)
-        flux_folded_rate .+= iso.fraction .* folded_rate
-    end
+        # Step 2 (use_flux_data): only break further into F90 (time already resolved)
+        f90_pdf = assets.f90_pdf
+        n_out_bins  = size(predicted_counts, 1)
+        n_f90_bins  = length(f90_pdf)
+        n_time_bins = size(predicted_counts, 2)
 
-    int_rate = params.coherent_lar_mass .* assets.Nt .* flux_folded_rate .* dEr_MeV  # Integrate over E_ν and scale
-    predicted_counts = response_matrix * int_rate
+        expanded_counts = similar(predicted_counts, n_out_bins * n_f90_bins * n_time_bins)
 
-    # Step 2: Break the 1D predicted counts into f90-bin and time-bin counts
-    f90_pdf = assets.f90_pdf  # Normalized f90 PDF
-    timing_pdf = assets.timing_pdf  # Normalized timing PDF
-
-    n_out_bins = length(predicted_counts)  # Number of out_center bins
-    n_f90_bins = length(f90_pdf)  # Number of f90 bins
-    n_time_bins = length(timing_pdf)  # Number of time bins
-
-    # Initialize the final array with the same type as `predicted_counts`
-    expanded_counts = similar(predicted_counts, n_out_bins * n_f90_bins * n_time_bins)
-
-    # Loop over each out_center bin and distribute counts
-    idx = 1
-    for i in 1:n_out_bins
-        for j in 1:n_f90_bins
-            for k in 1:n_time_bins
-                # Compute the weight for each bin
-                expanded_counts[idx] = predicted_counts[i] * f90_pdf[j] * timing_pdf[k]
-                idx += 1
+        idx = 1
+        for i in 1:n_out_bins
+            for j in 1:n_f90_bins
+                for k in 1:n_time_bins
+                    expanded_counts[idx] = predicted_counts[i, k] * f90_pdf[j]
+                    idx += 1
+                end
             end
         end
-    end
 
-    return expanded_counts
+        return expanded_counts
+    else
+        flux_folded_rate = zeros(T, n_Er)
+        for iso in assets.isotopes
+            rate_matrix = diff_xsec_dict[iso.Rn_key]      # (n_Er, n_Eν)
+            folded_rate = rate_matrix * flux.total_flux    # (n_Er,)
+            flux_folded_rate .+= iso.fraction .* folded_rate
+        end
+        int_rate = params.coherent_lar_mass .* assets.Nt .* flux_folded_rate .* dEr_MeV  # (n_Er,)
+        predicted_counts = response_matrix * int_rate                                     # (n_out,)
+
+        # Step 2 (no flux time data): break into f90-bin AND time-bin using PDFs (existing behavior)
+        f90_pdf = assets.f90_pdf
+        timing_pdf = assets.timing_pdf
+
+        n_out_bins = length(predicted_counts)
+        n_f90_bins = length(f90_pdf)
+        n_time_bins = length(timing_pdf)
+
+        expanded_counts = similar(predicted_counts, n_out_bins * n_f90_bins * n_time_bins)
+
+        idx = 1
+        for i in 1:n_out_bins
+            for j in 1:n_f90_bins
+                for k in 1:n_time_bins
+                    expanded_counts[idx] = predicted_counts[i] * f90_pdf[j] * timing_pdf[k]
+                    idx += 1
+                end
+            end
+        end
+
+        return expanded_counts
+    end
 end
 
 function get_backgrounds(params, assets)

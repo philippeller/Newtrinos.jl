@@ -22,12 +22,11 @@ const ep = (mpi^2 - mmu^2) / (2*mpi)
 
 function configure(; 
         exposure, distance, 
-        ecut= mmu/2., E_bin_width=0.5, tcut=6000.0,
+        ecut= mmu/2., E_bin_width=0.5, tcut=6000.0, tbins=Nothing,
         use_data=true, flux_folder=joinpath(@__DIR__, "..", "experiments", "coherent", "coherent_2020", "csi", "snsFlux2D_CSV"), 
         beam_power=1.4, proton_energy=1.0)
     # Call get_assets and assign the result to `assets`
-    assets = get_assets(; use_data, exposure, distance, beam_power, proton_energy, flux_folder, ecut, E_bin_width, tcut)
-
+    assets = get_assets(; use_data, exposure, distance, beam_power, proton_energy, flux_folder, ecut, E_bin_width, tcut, tbins)
     # Return the configured SNSFlux object
     return SNSFlux(
         params = get_params(use_data),
@@ -63,11 +62,11 @@ end
 
 function get_assets(; use_data, exposure, distance,
                         beam_power, proton_energy,
-                        flux_folder, ecut, E_bin_width, tcut)
+                        flux_folder, ecut, E_bin_width, tcut, tbins)
     if use_data
         #@info "Loading SNS Flux data"
         # Function to read and rebin flux data from CSV files
-        function read_flux_data(file_path, ecut, tcut)
+        function read_flux_data(file_path)
             # Read CSV; first column = energy, remaining columns = flux values
             data = CSV.read(file_path, DataFrame; header=true, normalizenames=false)
 
@@ -98,6 +97,21 @@ function get_assets(; use_data, exposure, distance,
             # Scale weights by bin widths (area-normalized)
             weights .*= dE .* dt'
             
+            if tbins !== Nothing
+                # Use provided time bins
+                time_edges = tbins
+                n_time_bins = length(time_edges) - 1
+                # Rebin weights into provided time bins
+                rebinned_weights = zeros(size(weights, 1), n_time_bins)
+                for i in 1:n_time_bins
+                    # Find indices of original time bins whose centers fall within new bin edges
+                    idx = findall(c -> c >= time_edges[i] && c < time_edges[i+1], time_centers)
+                    if !isempty(idx)
+                        rebinned_weights[:, i] = sum(weights[:, idx], dims=2)[:, 1]
+                    end
+                end
+                return (energy_centers, time_edges, rebinned_weights)
+            end
             # Number of desired log-spaced time bins
             n_log_bins = 8
             t_start = 500.0
@@ -128,10 +142,10 @@ function get_assets(; use_data, exposure, distance,
         file_path_e_bar = joinpath(flux_folder, "convolved_energy_time_of_anti_nu_e.csv")
 
         # Load flux data for each component
-        E_mu, T_mu, flux_mu = read_flux_data(file_path_mu, ecut, tcut)
-        E_e, T_e, flux_e = read_flux_data(file_path_e, ecut, tcut)
-        E_mu_bar, T_mu_bar, flux_mu_bar = read_flux_data(file_path_mu_bar, ecut, tcut)
-        E_e_bar, T_e_bar, flux_e_bar = read_flux_data(file_path_e_bar, ecut, tcut)
+        E_mu, T_mu, flux_mu = read_flux_data(file_path_mu)
+        E_e, T_e, flux_e = read_flux_data(file_path_e)
+        E_mu_bar, T_mu_bar, flux_mu_bar = read_flux_data(file_path_mu_bar)
+        E_e_bar, T_e_bar, flux_e_bar = read_flux_data(file_path_e_bar)
 
         # Store the loaded data as assets
         assets = (;
