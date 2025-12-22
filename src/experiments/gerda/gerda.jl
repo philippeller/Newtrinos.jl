@@ -172,8 +172,8 @@ end
 
 
 
-function get_neutrinomass_STD(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO)))
-    function NeutrinoMassNNM_STD(params::NamedTuple)
+function get_neutrinomassSTD(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO)))
+    function NeutrinoMassNNM(params::NamedTuple)
 
         
 

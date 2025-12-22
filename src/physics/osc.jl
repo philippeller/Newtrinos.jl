@@ -788,7 +788,7 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
+    params[:m₀] = ftype(0.01)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     params[:η] = ftype(99)
@@ -998,7 +998,7 @@ end
 
 
 
-function get_matrices_perturbation(cfg::NND) #_perturbation
+function get_matrices(cfg::NND) #_perturbation
 
    function get_Nnaturalness(params::NamedTuple)
         
@@ -1034,9 +1034,9 @@ function get_matrices_perturbation(cfg::NND) #_perturbation
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = m1_T^2/scale
-        gamma[2] = m2_T^2/scale
-        gamma[3] = m3_T^2/scale
+        gamma[1] = m1_T^2/scale#*params[:r]
+        gamma[2] = m2_T^2/scale#*params[:r]
+        gamma[3] = m3_T^2/scale#*params[:r]
 
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
@@ -1155,7 +1155,7 @@ function get_matrices_perturbation(cfg::NND) #_perturbation
 end
 
 
-function get_matrices(cfg::NND)
+function get_matricesfull(cfg::NND)
 
    function get_Nnaturalness(params::NamedTuple)
         
@@ -1327,9 +1327,9 @@ end
 
 
 
-function get_matrices_FULL(cfg::NNM)
+function get_matrices(cfg::NNM)
 
-   function get_Nnaturalness_full(params::NamedTuple)
+   function get_Nnaturalness(params::NamedTuple)
 
         #@time begin
         
@@ -1721,8 +1721,7 @@ end
 
 
 
-function get_matrices(cfg::NNM) #_perturbation
-
+function get_matrices_perturbation(cfg::NNM) #
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
@@ -1753,9 +1752,9 @@ function get_matrices(cfg::NNM) #_perturbation
         gamma= Vector{T}(undef, 3)
         
         scale =N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
-        gamma[1] = m1_T/scale
-        gamma[2] = m2_T/scale
-        gamma[3] = m3_T/scale
+        gamma[1] = m1_T/scale#*params[:r]
+        gamma[2] = m2_T/scale#*params[:r]
+        gamma[3] = m3_T/scale#*params[:r]
 
         
 
