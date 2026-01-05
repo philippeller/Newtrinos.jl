@@ -998,7 +998,7 @@ end
 
 
 
-function get_matrices(cfg::NND) #_perturbation
+function get_matrices_p(cfg::NND) #_perturbation
 
    function get_Nnaturalness(params::NamedTuple)
         
@@ -1034,9 +1034,9 @@ function get_matrices(cfg::NND) #_perturbation
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = m1_T^2/scale#*params[:r]
-        gamma[2] = m2_T^2/scale#*params[:r]
-        gamma[3] = m3_T^2/scale#*params[:r]
+        gamma[1] = m1_T^2/(scale*params[:r])#m1_T^2/m0^2#scale#*params[:r]
+        gamma[2] = m2_T^2/(scale*params[:r])#scale#*params[:r]
+        gamma[3] = m3_T^2/(scale*params[:r])#scale#*params[:r]
 
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
@@ -1053,11 +1053,11 @@ function get_matrices(cfg::NND) #_perturbation
         for i in 1:N_int
             
             sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-            squared= one(T)
+            squared=sqrt_i^2 #one(T)
             
-            if i!=1
+            #=if i!=1
              squared=sqrt_i^2
-            end    
+            end =#   
            
             for j in 1:N_int
                 
@@ -1125,16 +1125,19 @@ function get_matrices(cfg::NND) #_perturbation
         #println("FinalUmatrix size: ", size(FinalUmatrix))
 
         delta_mass = Vector{T}(undef, 3*N_int)
-        delta_mass[1] =(scale)*(eigenvalues_e[1])- m1_T^2 #zero(T)
-        delta_mass[2] =(scale)*(eigenvalues_m[1])- (scale)*(eigenvalues_e[1]) #T(params.Δm²₂₁)#
-        delta_mass[3] = (scale)*(eigenvalues_t[1])- (scale)*(eigenvalues_e[1]) #T(params.Δm²₃₁)#
-
+        #delta_mass[1] =zero(T)#(scale)*(eigenvalues_e[1])- m1_T^2 
+        #delta_mass[2] =T(params.Δm²₂₁)#(scale)*(eigenvalues_m[1])- (scale)*(eigenvalues_e[1]) #
+        #delta_mass[3] = T(params.Δm²₃₁)#(scale)*(eigenvalues_t[1])- (scale)*(eigenvalues_e[1]) #
+      
+        delta_mass[1] =(scale)*(eigenvalues_e[1])- (scale)*(eigenvalues_e[1])#m1_T^2 
+        delta_mass[2] =(scale)*(eigenvalues_m[1])- (scale)*(eigenvalues_e[1]) #
+        delta_mass[3] =(scale)*(eigenvalues_t[1])- (scale)*(eigenvalues_e[1]) #
         
 
         for i in 2:N_int
-            delta_mass[3*i-2] =(scale)*(eigenvalues_e[i])- m1_T^2
-            delta_mass[3*i-1] =(scale)*(eigenvalues_m[i])- m1_T^2
-            delta_mass[3*i] = (scale)*(eigenvalues_t[i])- m1_T^2
+            delta_mass[3*i-2] =(scale)*(eigenvalues_e[i])- (scale)*(eigenvalues_e[1])
+            delta_mass[3*i-1] =(scale)*(eigenvalues_m[i])- (scale)*(eigenvalues_e[1])
+            delta_mass[3*i] = (scale)*(eigenvalues_t[i])- (scale)*(eigenvalues_e[1])
         end
         
         #println(delta_mass)
@@ -1155,7 +1158,7 @@ function get_matrices(cfg::NND) #_perturbation
 end
 
 
-function get_matricesfull(cfg::NND)
+function get_matrices(cfg::NND) #full
 
    function get_Nnaturalness(params::NamedTuple)
         
@@ -1291,7 +1294,7 @@ function get_matricesfull(cfg::NND)
             #println("First three delta masses set to: ", delta_mass[1], ", ", delta_mass[2], ", ", delta_mass[3])
         else
 
-            delta_mass[1] =(eigenvalues_e[1])*scale_1- m1_T^2 #zero(T)
+            delta_mass[1] =(eigenvalues_e[1])*scale_1-  (eigenvalues_e[1])*scale_1#m1_T^2 #zero(T)
             delta_mass[2] =(eigenvalues_m[1])*scale_2- (eigenvalues_e[1])*scale_1 #T(params.Δm²₂₁)#
             delta_mass[3] =(eigenvalues_t[1])*scale_3- (eigenvalues_e[1])*scale_1 #T(params.Δm²₃₁)#
         
@@ -1301,9 +1304,9 @@ function get_matricesfull(cfg::NND)
             
         
             for i in 2:N_int
-                delta_mass[3*i-2] =(eigenvalues_e[i])*scale_1- m1_T^2
-                delta_mass[3*i-1] =(eigenvalues_m[i])*scale_2- m1_T^2
-                delta_mass[3*i] = (eigenvalues_t[i])*scale_3- m1_T^2
+                delta_mass[3*i-2] =(eigenvalues_e[i])*scale_1-  (eigenvalues_e[1])*scale_1#m1_T^2
+                delta_mass[3*i-1] =(eigenvalues_m[i])*scale_2- (eigenvalues_e[1])*scale_1#m1_T^2
+                delta_mass[3*i] = (eigenvalues_t[i])*scale_3- (eigenvalues_e[1])*scale_1#m1_T^2
             end
 
         end
@@ -1358,7 +1361,7 @@ function get_matrices(cfg::NNM)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        η=1+(1/N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
+        η=1+(N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
 
         factor=(η-1) * 2^(1/(N_dual-1))
 
