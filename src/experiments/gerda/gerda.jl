@@ -349,7 +349,7 @@ function get_halftime(cfg= Newtrinos.osc.NNM())
      
      Gg=3.37*(1e-15) #2.363*( 1e-15) #yr^-1
      g_a=1.27#1.25
-     M_sq=(5.551)^2
+     M_sq=(5.28)^2
      m_e=0.511*(1e6)
 
     

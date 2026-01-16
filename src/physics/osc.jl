@@ -814,7 +814,7 @@ function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     #params[:scale]=ftype(1)
-    params[:m₀] = ftype(0.1)
+    params[:m₀] = ftype(0.01)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     params[:η] = ftype(1.1)
@@ -1165,9 +1165,17 @@ function get_matrices(cfg::NND) #full
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]   
         r=params[:r]  
+        m0= params[:m₀]
+        Lambda= 1e4*1e9  #cutoff scale eV
+        l=0.05#higgs coupling
+
+        b=1/(N_dual)^4 #choice of b
         
-        η=1+(1/N_dual)#
+
+
+        η=1+ (m0^2*l*N_dual)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
         
+        println("Eta value: ", η)
         
         T = promote_type(
             typeof(params[:N]), 
@@ -1330,7 +1338,7 @@ end
 
 
 
-function get_matrices(cfg::NNM)
+function get_matrices(cfg::NNM) #full
 
    function get_Nnaturalness(params::NamedTuple)
 
@@ -1340,6 +1348,16 @@ function get_matrices(cfg::NNM)
         N_dual = params[:N]   
     
         r=params[:r]   
+
+        m0= params[:m₀]
+        Lambda= 1e4*1e9 #cutoff scale eV
+        l=0.05#higgs coupling
+        ms=100*1e9 #rehaton mass eV
+        b=1/sqrt(N_dual) #choice of b
+        
+
+
+        η=1+(m0*l*N_dual*ms)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
         
         
         T = promote_type(
@@ -1361,7 +1379,7 @@ function get_matrices(cfg::NNM)
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        η=1+(N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
+        η=1+(1/N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
 
         factor=(η-1) * 2^(1/(N_dual-1))
 
@@ -1463,7 +1481,7 @@ function get_matrices(cfg::NNM)
             #println("First three delta masses set to: ", delta_mass[1], ", ", delta_mass[2], ", ", delta_mass[3])
         else
 
-            delta_mass[1] =((eigenvalues_e[1])*scale_1)^2- m1_T^2 #zero(T)
+            delta_mass[1] =((eigenvalues_e[1])*scale_1)^2-((eigenvalues_e[1])*scale_1)^2#((eigenvalues_e[1])*scale_1)^2- m1_T^2 #zero(T)
             delta_mass[2] =((eigenvalues_m[1])*scale_2)^2- ((eigenvalues_e[1])*scale_1)^2 #T(params.Δm²₂₁)#
             delta_mass[3] =((eigenvalues_t[1])*scale_3)^2- ((eigenvalues_e[1])*scale_1)^2 #T(params.Δm²₃₁)#
         
@@ -1473,9 +1491,9 @@ function get_matrices(cfg::NNM)
             
         
             for i in 2:N_int
-                delta_mass[3*i-2] =((eigenvalues_e[i])*scale_1)^2- m1_T^2
-                delta_mass[3*i-1] =((eigenvalues_m[i])*scale_2)^2- m1_T^2
-                delta_mass[3*i] = ((eigenvalues_t[i])*scale_3)^2- m1_T^2
+                delta_mass[3*i-2] =((eigenvalues_e[i])*scale_1)^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
+                delta_mass[3*i-1] =((eigenvalues_m[i])*scale_2)^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
+                delta_mass[3*i] = ((eigenvalues_t[i])*scale_3)^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
             end
 
         end
@@ -1724,7 +1742,7 @@ end
 
 
 
-function get_matrices_perturbation(cfg::NNM) #
+function get_matrices_p(cfg::NNM) #perturbation
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
@@ -1755,9 +1773,9 @@ function get_matrices_perturbation(cfg::NNM) #
         gamma= Vector{T}(undef, 3)
         
         scale =N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
-        gamma[1] = m1_T/scale#*params[:r]
-        gamma[2] = m2_T/scale#*params[:r]
-        gamma[3] = m3_T/scale#*params[:r]
+        gamma[1] = m1_T/scale*params[:r]
+        gamma[2] = m2_T/scale*params[:r]
+        gamma[3] = m3_T/scale*params[:r]
 
         
 
@@ -1785,11 +1803,11 @@ function get_matrices_perturbation(cfg::NNM) #
         for i in 1:N_int
             
             sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-            squared= one(T)
+            squared= sqrt_i^2 #one(T)
             
-            if i!=1
+            #=if i!=1
              squared=sqrt_i^2
-            end    
+            end    =#
            
             for j in 1:N_int
                 
@@ -1857,7 +1875,7 @@ function get_matrices_perturbation(cfg::NNM) #
         #println("FinalUmatrix size: ", size(FinalUmatrix))
 
         delta_mass = Vector{T}(undef, 3*N_int)
-        delta_mass[1] =(scale^2)*(eigenvalues_e[1])^2- m1_T^2 #zero(T)
+        delta_mass[1] =(scale^2)*(eigenvalues_e[1])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2 #zero(T)
         delta_mass[2] =(scale^2)*(eigenvalues_m[1])^2- (scale^2)*(eigenvalues_e[1])^2 #T(params.Δm²₂₁)#
         delta_mass[3] = (scale^2)*(eigenvalues_t[1])^2- (scale^2)*(eigenvalues_e[1])^2 #T(params.Δm²₃₁)#
 
@@ -1866,9 +1884,9 @@ function get_matrices_perturbation(cfg::NNM) #
         
 
         for i in 2:N_int
-            delta_mass[3*i-2] =(scale^2)*(eigenvalues_e[i])^2- m1_T^2
-            delta_mass[3*i-1] =(scale^2)*(eigenvalues_m[i])^2- m1_T^2
-            delta_mass[3*i] = (scale^2)*(eigenvalues_t[i])^2- m1_T^2
+            delta_mass[3*i-2] =(scale^2)*(eigenvalues_e[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
+            delta_mass[3*i-1] =(scale^2)*(eigenvalues_m[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
+            delta_mass[3*i] = (scale^2)*(eigenvalues_t[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
         end
         
         #println(delta_mass)
