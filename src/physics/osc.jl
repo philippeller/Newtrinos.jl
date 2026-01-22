@@ -788,7 +788,7 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.01)
+    params[:m₀] = ftype(0.1)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
     params[:η] = ftype(99)
@@ -1005,7 +1005,14 @@ function get_matrices_p(cfg::NND) #_perturbation
         N_int = round(Int, ForwardDiff.value(params[:N])) 
         N_dual = params[:N]   
         m0= params[:m₀]
-           
+ 
+        r=params[:r]  
+      
+        Lambda= 1e4*1e9  #cutoff scale eV
+        l=0.05#higgs coupling
+
+        dif= (m0^2*l*N_dual)/(Lambda^2*r) 
+       
         
         
         T = promote_type(
@@ -1028,7 +1035,7 @@ function get_matrices_p(cfg::NND) #_perturbation
         m3_T = T(m3)
         
         
-        scale=N_dual*m0^2/params[:r] #N_dual*m0^2
+        scale= dif *m0^2/r #N_dual*m0^2/params[:r] 
 
     
         gamma= Vector{T}(undef, 3)
@@ -1169,13 +1176,13 @@ function get_matrices(cfg::NND) #full
         Lambda= 1e4*1e9  #cutoff scale eV
         l=0.05#higgs coupling
 
-        b=1/(N_dual)^4 #choice of b
+        b=1/sqrt(N_dual) #choice of b
         
 
 
         η=1+ (m0^2*l*N_dual)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
         
-        println("Eta value: ", η)
+        #println("Eta value: ", η)
         
         T = promote_type(
             typeof(params[:N]), 
@@ -1353,11 +1360,12 @@ function get_matrices(cfg::NNM) #full
         Lambda= 1e4*1e9 #cutoff scale eV
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
-        b=1/sqrt(N_dual) #choice of b
-        
-
-
-        η=1+(m0*l*N_dual*ms)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
+       
+        η=1+(1/N_dual)
+        b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
+       
+        #b=1/sqrt(N_dual) #choice of b 
+        #η=1+(m0*l*N_dual*ms)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
         
         
         T = promote_type(
@@ -1379,7 +1387,7 @@ function get_matrices(cfg::NNM) #full
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        η=1+(1/N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
+        #η=1+(1/N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
 
         factor=(η-1) * 2^(1/(N_dual-1))
 
@@ -1513,6 +1521,180 @@ function get_matrices(cfg::NNM) #full
 end
 
 
+
+
+function get_matrice_p(cfg::NNM) #perturbation
+   function get_Nnaturalness(params::NamedTuple)
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]    
+        m0= params[:m₀]
+ 
+        r=params[:r]  
+      
+        Lambda= 1e4*1e9  #cutoff scale eV
+        l=0.05#higgs coupling
+        ms=100*1e9 #rehaton mass eV
+
+        dif= (m0*l*N_dual*ms)/(Lambda^2*r) 
+       
+        
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        ) 
+
+        m1, m2, m3 = get_abs_masses(params)
+
+        # Convert masses to the correct type (three flavours masses)
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        
+    
+        gamma= Vector{T}(undef, 3)
+        
+        scale = dif * m0 / r #N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
+        gamma[1] = m1_T/scale*params[:r]
+        gamma[2] = m2_T/scale*params[:r]
+        gamma[3] = m3_T/scale*params[:r]
+
+        
+
+        gamma_sq = Vector{T}(undef, 3)
+        gamma_sq[1]=gamma[1]^2
+        gamma_sq[2]=gamma[2]^2
+        gamma_sq[3]=gamma[3]^2
+
+        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
+        #println("Gamma values: ", gamma_sq[1], ", ", gamma_sq[2], ", ", gamma_sq[3])
+        #println("m1 = $m1_T")
+        #println("m2 = $m2_T")
+        #println("m3 = $m3_T")
+        #println("scale", scale)
+
+        #construction of the sectors
+
+        matrix_e=zeros(T, N_int,N_int)
+        matrix_m=zeros(T, N_int,N_int)
+        matrix_t=zeros(T, N_int,N_int)
+
+      
+    
+
+        for i in 1:N_int
+            
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+            squared= sqrt_i^2 #one(T)
+            
+            #=if i!=1
+             squared=sqrt_i^2
+            end    =#
+           
+            for j in 1:N_int
+                
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
+
+                if i == j
+                    matrix_e[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
+                else
+                    matrix_e[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
+                    matrix_m[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
+                    matrix_t[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
+                end
+            end
+        end
+
+        
+    
+        # PMNS matrix 
+
+        U = get_PMNS(params)
+
+       eigenvalues_e, V_e = eigen(Hermitian(matrix_e))
+       eigenvalues_m, V_m = eigen(Hermitian(matrix_m))
+       eigenvalues_t, V_t = eigen(Hermitian(matrix_t))
+      
+       #print("Final M", Hermitian(M_flavors))
+
+       #eigenvalues, FinalUmatrix = eigen(Hermitian(M_flavors))
+       eigenvalues= Vector{T}(undef, 3*N_int)
+     
+        for i in 1:N_int
+            eigenvalues[3*i-2] =(scale^2)*(eigenvalues_e[i])^2
+            eigenvalues[3*i-1] =(scale^2)*(eigenvalues_m[i])^2
+            eigenvalues[3*i] = (scale^2)*(eigenvalues_t[i])^2
+        end
+
+        EIG=Diagonal(eigenvalues[1: 3*N_int-3])
+
+
+        Vmatrix = zeros(T, 3*N_int, 3*N_int)
+
+        col = 1
+        for i in 1:N_int  # For each eigenvector index i
+            # Column for electron eigenvector i
+            Vmatrix[1:3:3*N_int, col] = V_e[:, i]
+            col += 1
+            
+            # Column for muon eigenvector i
+            Vmatrix[2:3:3*N_int, col] = V_m[:, i]
+            col += 1
+            
+            # Column for tau eigenvector i
+            Vmatrix[3:3:3*N_int, col] = V_t[:, i]
+            col += 1
+        end
+        
+        #println("Vmatrix size: ", size(Vmatrix))
+
+        bigU = kron(Matrix{T}(I, N_int, N_int), U)
+
+        FinalUmatrix = bigU * Vmatrix
+
+        #println("FinalUmatrix size: ", size(FinalUmatrix))
+
+        delta_mass = Vector{T}(undef, 3*N_int)
+        delta_mass[1] =(scale^2)*(eigenvalues_e[1])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2 #zero(T)
+        delta_mass[2] =(scale^2)*(eigenvalues_m[1])^2- (scale^2)*(eigenvalues_e[1])^2 #T(params.Δm²₂₁)#
+        delta_mass[3] = (scale^2)*(eigenvalues_t[1])^2- (scale^2)*(eigenvalues_e[1])^2 #T(params.Δm²₃₁)#
+
+        
+       
+        
+
+        for i in 2:N_int
+            delta_mass[3*i-2] =(scale^2)*(eigenvalues_e[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
+            delta_mass[3*i-1] =(scale^2)*(eigenvalues_m[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
+            delta_mass[3*i] = (scale^2)*(eigenvalues_t[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
+        end
+        
+        #println(delta_mass)
+    
+        h = delta_mass
+        
+        H=Diagonal(h[1:N_int-3])
+                
+
+        #println("det(M_flavors) = ", det(matrix_e))
+        #println("cond(M_flavors) = ", cond(matrix_e))
+
+
+
+        return FinalUmatrix, h, eigenvalues, V_e, V_m, V_t#EIG,FinalUmatrix, h, gamma, gamma_sq  #
+    end
+
+end
 
 
 function get_matrices_3N(cfg::NNM)
@@ -1740,171 +1922,6 @@ function get_matrices_3N(cfg::NNM)
 end
 
 
-
-
-function get_matrices_p(cfg::NNM) #perturbation
-   function get_Nnaturalness(params::NamedTuple)
-        
-        N_int = round(Int, ForwardDiff.value(params[:N])) 
-        N_dual = params[:N]    
-        m0= params[:m₀]
-        
-        
-        T = promote_type(
-            typeof(params[:N]), 
-            typeof(params[:m₀]),
-            typeof(params[:r]), 
-            typeof(params[:Δm²₂₁]), 
-            typeof(params[:Δm²₃₁]),
-            typeof(params[:δCP]),
-            typeof(params[:θ₁₂]),
-            typeof(params[:θ₁₃]),
-            typeof(params[:θ₂₃])
-        ) 
-
-        m1, m2, m3 = get_abs_masses(params)
-
-        # Convert masses to the correct type (three flavours masses)
-        m1_T = T(m1)
-        m2_T = T(m2) 
-        m3_T = T(m3)
-        
-    
-        gamma= Vector{T}(undef, 3)
-        
-        scale =N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
-        gamma[1] = m1_T/scale*params[:r]
-        gamma[2] = m2_T/scale*params[:r]
-        gamma[3] = m3_T/scale*params[:r]
-
-        
-
-        gamma_sq = Vector{T}(undef, 3)
-        gamma_sq[1]=gamma[1]^2
-        gamma_sq[2]=gamma[2]^2
-        gamma_sq[3]=gamma[3]^2
-
-        #println("Gamma values: ", gamma[1], ", ", gamma[2], ", ", gamma[3])
-        #println("Gamma values: ", gamma_sq[1], ", ", gamma_sq[2], ", ", gamma_sq[3])
-        #println("m1 = $m1_T")
-        #println("m2 = $m2_T")
-        #println("m3 = $m3_T")
-        #println("scale", scale)
-
-        #construction of the sectors
-
-        matrix_e=zeros(T, N_int,N_int)
-        matrix_m=zeros(T, N_int,N_int)
-        matrix_t=zeros(T, N_int,N_int)
-
-      
-    
-
-        for i in 1:N_int
-            
-            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
-            squared= sqrt_i^2 #one(T)
-            
-            #=if i!=1
-             squared=sqrt_i^2
-            end    =#
-           
-            for j in 1:N_int
-                
-                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
-
-                if i == j
-                    matrix_e[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[1]
-                    matrix_m[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
-                    matrix_t[i, j] =(1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
-                else
-                    matrix_e[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
-                    matrix_m[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
-                    matrix_t[i, j] =(1/N_dual)*sqrt_i * sqrt_j 
-                end
-            end
-        end
-
-        
-    
-        # PMNS matrix 
-
-        U = get_PMNS(params)
-
-       eigenvalues_e, V_e = eigen(Hermitian(matrix_e))
-       eigenvalues_m, V_m = eigen(Hermitian(matrix_m))
-       eigenvalues_t, V_t = eigen(Hermitian(matrix_t))
-      
-       #print("Final M", Hermitian(M_flavors))
-
-       #eigenvalues, FinalUmatrix = eigen(Hermitian(M_flavors))
-       eigenvalues= Vector{T}(undef, 3*N_int)
-     
-        for i in 1:N_int
-            eigenvalues[3*i-2] =(scale^2)*(eigenvalues_e[i])^2
-            eigenvalues[3*i-1] =(scale^2)*(eigenvalues_m[i])^2
-            eigenvalues[3*i] = (scale^2)*(eigenvalues_t[i])^2
-        end
-
-        EIG=Diagonal(eigenvalues[1: 3*N_int-3])
-
-
-        Vmatrix = zeros(T, 3*N_int, 3*N_int)
-
-        col = 1
-        for i in 1:N_int  # For each eigenvector index i
-            # Column for electron eigenvector i
-            Vmatrix[1:3:3*N_int, col] = V_e[:, i]
-            col += 1
-            
-            # Column for muon eigenvector i
-            Vmatrix[2:3:3*N_int, col] = V_m[:, i]
-            col += 1
-            
-            # Column for tau eigenvector i
-            Vmatrix[3:3:3*N_int, col] = V_t[:, i]
-            col += 1
-        end
-        
-        #println("Vmatrix size: ", size(Vmatrix))
-
-        bigU = kron(Matrix{T}(I, N_int, N_int), U)
-
-        FinalUmatrix = bigU * Vmatrix
-
-        #println("FinalUmatrix size: ", size(FinalUmatrix))
-
-        delta_mass = Vector{T}(undef, 3*N_int)
-        delta_mass[1] =(scale^2)*(eigenvalues_e[1])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2 #zero(T)
-        delta_mass[2] =(scale^2)*(eigenvalues_m[1])^2- (scale^2)*(eigenvalues_e[1])^2 #T(params.Δm²₂₁)#
-        delta_mass[3] = (scale^2)*(eigenvalues_t[1])^2- (scale^2)*(eigenvalues_e[1])^2 #T(params.Δm²₃₁)#
-
-        
-       
-        
-
-        for i in 2:N_int
-            delta_mass[3*i-2] =(scale^2)*(eigenvalues_e[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
-            delta_mass[3*i-1] =(scale^2)*(eigenvalues_m[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
-            delta_mass[3*i] = (scale^2)*(eigenvalues_t[i])^2- (scale^2)*(eigenvalues_e[1])^2 #m1_T^2
-        end
-        
-        #println(delta_mass)
-    
-        h = delta_mass
-        
-        H=Diagonal(h[1:N_int-3])
-                
-
-        #println("det(M_flavors) = ", det(matrix_e))
-        #println("cond(M_flavors) = ", cond(matrix_e))
-
-
-
-        return FinalUmatrix, h, eigenvalues, V_e, V_m, V_t#EIG,FinalUmatrix, h, gamma, gamma_sq  #
-    end
-
-end
 
 
 function get_matrices_easy(cfg::NNM)

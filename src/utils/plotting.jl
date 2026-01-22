@@ -154,7 +154,7 @@ end =#
     f
 end =#
 
-function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results", log=0, mass=0)
+#=function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results", log=0, mass=0)
 
     dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior);
     
@@ -262,6 +262,104 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
         fontsize = 12,
         color = :black
     )=#
+    
+    f
+end=#
+function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Results", log=0, mass=0, values_to_plot=nothing, log_colormap=false)
+    dLLH = 2 * (maximum(result.values.log_posterior) .- result.values.log_posterior)
+    
+    # Find best fit values
+    best_idx = argmin(dLLH)
+    best_fit = []
+    for i in 1:length(result.axes)
+        push!(best_fit, result.axes[i][best_idx[i]])
+    end
+    f = Figure(size=(800, 600))
+    
+    kwargs = (
+        xlabel = String(keys(result.axes)[1]),
+        ylabel = String(keys(result.axes)[2]),
+        title = title,
+        xminorticksvisible = true, 
+        xminorgridvisible = true, 
+        yminorticksvisible = true, 
+        yminorgridvisible = true
+    )
+    if log == 1
+        kwargs = merge(kwargs, (xscale = log10,))
+    end
+    if mass == 1 
+       kwargs = merge(kwargs, (xlabel = String(keys(result.axes)[1]) * " (eV)",))
+    end    
+    if log == 2
+        kwargs = merge(kwargs, (yscale = log10,))
+    end
+    if mass == 2
+       kwargs = merge(kwargs, (ylabel = String(keys(result.axes)[2]) * " (eV)",))
+    end    
+    ax = Axis(f[1,1]; kwargs...)
+    
+    is_likelihood = values_to_plot === nothing
+    if values_to_plot === nothing
+        values_to_plot = dLLH
+    end
+    
+    # Apply log to colormap if requested
+    plot_values = values_to_plot
+    colorbar_label = ""
+    if is_likelihood
+        if log_colormap
+            plot_values = log10.(values_to_plot)
+            colorbar_label = "log₁₀(dLLH)"
+        else
+            colorbar_label = "dLLH"
+        end
+    else
+        if log_colormap
+            plot_values = log10.(values_to_plot)
+            colorbar_label = "log₁₀(ΛH)  (GeV)"
+        else
+            colorbar_label = "ΛH  (GeV)"
+        end
+    end
+    
+    # Create heatmap
+    hm = heatmap!(ax, result.axes[1], result.axes[2], plot_values, 
+        colormap = Reverse(:Greens))
+    Colorbar(f[1, 2], hm, label=colorbar_label, width=15, labelsize=9, spinewidth=0, ticklabelsize=8)
+    
+    # If plotting likelihood, overlay confidence level contours
+    if is_likelihood
+        levels = quantile(Chisq(2), 1 .- 2*ccdf(Normal(), 1:3))
+        
+        # Plot contours with different line styles for each sigma level
+        contour!(ax, result.axes[1], result.axes[2], dLLH, 
+            levels=[levels[1]], 
+            color=:black, linewidth=3)
+        
+        contour!(ax, result.axes[1], result.axes[2], dLLH, 
+            levels=[levels[2]], 
+            color=:black, linewidth=2)
+        
+        contour!(ax, result.axes[1], result.axes[2], dLLH, 
+            levels=[levels[3]], 
+            color=:black, linewidth=2, linestyle=:dot)
+        
+        # Add legend in column 3 (to the right of colorbar)
+        Legend(f[1, 3],
+            [LineElement(color=:black, linewidth=3),
+             LineElement(color=:black, linewidth=2),
+             LineElement(color=:black, linewidth=2, linestyle=:dot)],
+            ["1σ", "2σ", "3σ"],
+            framevisible=true,
+            labelsize=10,
+            rowgap=5)
+    else
+        # For custom values, add contour line at lambda = 10^4
+        contour!(ax, result.axes[1], result.axes[2], values_to_plot, 
+            levels=[1e4], 
+            color=:red, linewidth=2.5, linestyle=:dash)
+    end
     
     f
 end

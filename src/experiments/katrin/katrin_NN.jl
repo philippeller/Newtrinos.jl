@@ -343,7 +343,7 @@ function get_neutrinomass(cfg=NNM)
         N_m = length(mass_m)
         N_t = length(mass_t)
     
-        if any(mass_e .> 1e6) 
+        #=if any(mass_e .> 1e6) 
             mass_e = mass_e[mass_e .<= 1e6]
             N_e = length(mass_e)
             x_1_e = V_e[1, 1:N_e]
@@ -359,7 +359,7 @@ function get_neutrinomass(cfg=NNM)
             mass_t = mass_t[mass_t .<= 1e6]
             N_t = length(mass_t)
             x_1_t = V_t[1, 1:N_t]
-        end
+        end=#
      
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
