@@ -343,23 +343,24 @@ function get_neutrinomass(cfg=NNM)
         N_m = length(mass_m)
         N_t = length(mass_t)
     
-        #=if any(mass_e .> 1e6) 
-            mass_e = mass_e[mass_e .<= 1e6]
+        cut=(1.8*1e3)^2
+       if any(mass_e .> cut) 
+            mass_e = mass_e[mass_e .<= cut]
             N_e = length(mass_e)
             x_1_e = V_e[1, 1:N_e]
         end
 
-        if any(mass_m .> 1e6) 
-            mass_m = mass_m[mass_m .<= 1e6]
+        if any(mass_m .> cut) 
+            mass_m = mass_m[mass_m .<= cut]
             N_m = length(mass_m)
             x_1_m = V_m[1, 1:N_m]
         end
 
-        if any(mass_t .> 1e6) 
-            mass_t = mass_t[mass_t .<= 1e6]
+        if any(mass_t .> cut) 
+            mass_t = mass_t[mass_t .<= cut]
             N_t = length(mass_t)
             x_1_t = V_t[1, 1:N_t]
-        end=#
+        end
      
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
@@ -376,7 +377,91 @@ function get_neutrinomass(cfg=NNM)
                 sum += integrand
             end
         end
+        
+       
+        return sum
+            
+    end
+    return NeutrinoMassNN
+end
 
+
+
+
+function get_neutrinomass_a(cfg=NNM)   #with analytical formula for eigenvalues
+    function NeutrinoMassNN(params::NamedTuple)
+        U = Newtrinos.osc.get_PMNS(params)
+  
+        N = round(Int, params[:N])
+
+        func = Newtrinos.osc.get_matrices(cfg)
+        final, h, eigen, V_e, V_m, V_t = func(params)
+
+        x_e = U[1, :]
+        x_1_e = V_e[1, 1:N]
+        x_1_m = V_m[1, 1:N]
+        x_1_t = V_t[1, 1:N]
+
+        r=params[:r]
+        m1,m2,m3=Newtrinos.osc.get_abs_masses(params)
+
+     
+        mass_e = []      
+        mass_m =[]  
+        mass_t =[]    
+         
+
+        for i in 1:N
+            eigenvalue_e =(2(i-1) + r)^2*m1^2/r^2
+
+            eigenvalue_mu=(2(i-1) + r)^2*m2^2/r^2
+
+            eigenvalue_t =(2(i-1) + r)^2*m3^2/r^2
+            push!(mass_e, eigenvalue_e)
+            push!(mass_m, eigenvalue_mu)
+            push!(mass_t, eigenvalue_t)
+        end
+        
+        N_e = length(mass_e)
+        N_m = length(mass_m)
+        N_t = length(mass_t)
+    
+        cut=(1.8*1e3)^2
+        if any(mass_e .> cut) 
+            mass_e = mass_e[mass_e .<= cut]
+            N_e = length(mass_e)
+            x_1_e = V_e[1, 1:N_e]
+        end
+
+        if any(mass_m .> cut) 
+            mass_m = mass_m[mass_m .<= cut]
+            N_m = length(mass_m)
+            x_1_m = V_m[1, 1:N_m]
+        end
+
+        if any(mass_t .> cut) 
+            mass_t = mass_t[mass_t .<= cut]
+            N_t = length(mass_t)
+            x_1_t = V_t[1, 1:N_t]
+        end
+     
+        N = [N_e, N_m, N_t]
+        masses_NN = [mass_e, mass_m, mass_t]
+
+        X = [x_1_e, x_1_m, x_1_t]
+        sum = Float64(0.0)
+
+        for i in 1:3
+            squared_x_e = abs(x_e[i])^2
+        
+            for j in 1:N[i]
+                mass = masses_NN[i][j]
+                integrand = squared_x_e * abs(X[i][j])^2 * mass
+                sum += integrand
+            end
+        end
+        
+       
         return sum
             
     end
@@ -557,7 +642,7 @@ function comparing_masses(physics,experiments, params)
     cfg = Newtrinos.osc.NNM()
     predicted_value =get_neutrinomass(cfg)(params)
     observed= experiments.katrin.assets.observed
-    dist_observed= Normal(observed, 0.13)
+    dist_observed= Normal(observed, 0.15)
     twosigma_level= quantile(dist_observed, 0.9772)
 
     return predicted_value, twosigma_level

@@ -42,7 +42,7 @@ function get_assets(physics; datadir = @__DIR__)
 
     assets = (
 
-        observed =0.9 *1e26, #gerda 
+        observed =1.8 *1e26, #gerda 
         # 1*1e28,, # #legend 1000
         
     )
@@ -262,10 +262,15 @@ function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(order
         x_1_e = V_e[1,1: N]
         x_1_m = V_m[1,1: N]
         x_1_t = V_t[1,1: N]
+        r=params[:r]
+        m1,m2,m3=Newtrinos.osc.get_abs_masses(params)
 
-        mass_e = eigen[1:3:end]      
+        mass_e =eigen[1:3:end]      
         mass_m = eigen[2:3:end]   
         mass_t = eigen[3:3:end]      
+
+       
+    
         N_e = length(mass_e)
         N_m = length(mass_m)
         N_t = length(mass_t)
@@ -376,7 +381,7 @@ function comparing_times(physics,experiments, params)
     cfg = Newtrinos.osc.NNM()
     predicted_value =get_halftime(cfg)(params)
     observed= experiments.gerda.assets.observed
-    dist_observed= Normal(observed, 0.01*1e26)
+    dist_observed= Normal(observed, 0.01*1e28)
     twosigma_level= quantile(dist_observed, 0.9772)
 
     return predicted_value, twosigma_level
@@ -389,7 +394,7 @@ function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
         cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
-        observed =0.9 * 1e26 #gerda  1e28#
+        observed =1.8* 1e26 #gerda  1e28#
         #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         fun=get_halftime()
         predicted_value_T=fun(params)
@@ -397,7 +402,7 @@ function get_forward_model_correct(physics, assets)
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma= 0.1*1e26 #0.01*1e26#
+        sigma= 0.1*1e26 #0.1*1e26 #0.01*1e26#
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)

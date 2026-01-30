@@ -283,7 +283,12 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
         xminorticksvisible = true, 
         xminorgridvisible = true, 
         yminorticksvisible = true, 
-        yminorgridvisible = true
+        yminorgridvisible = true,
+        titlesize = 20,           # Title font size
+        xlabelsize = 18,          # X-axis label font size
+        ylabelsize = 18,          # Y-axis label font size
+        xticklabelsize = 18,      # X-axis tick label font size
+        yticklabelsize = 18,      # Y-axis tick label font size
     )
     if log == 1
         kwargs = merge(kwargs, (xscale = log10,))
@@ -293,6 +298,9 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     end    
     if log == 2
         kwargs = merge(kwargs, (yscale = log10,))
+    end
+     if log == 3
+        kwargs = merge(kwargs, (xscale = log10, yscale = log10,))
     end
     if mass == 2
        kwargs = merge(kwargs, (ylabel = String(keys(result.axes)[2]) * " (eV)",))
@@ -326,7 +334,7 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
     # Create heatmap
     hm = heatmap!(ax, result.axes[1], result.axes[2], plot_values, 
         colormap = Reverse(:Greens))
-    Colorbar(f[1, 2], hm, label=colorbar_label, width=15, labelsize=9, spinewidth=0, ticklabelsize=8)
+    Colorbar(f[1, 2], hm, label=colorbar_label, width=15, labelsize=18, spinewidth=0, ticklabelsize=14)
     
     # If plotting likelihood, overlay confidence level contours
     if is_likelihood
@@ -352,7 +360,7 @@ function CairoMakie.plot(result::NewtrinosResult; title="Parameter Estimation Re
              LineElement(color=:black, linewidth=2, linestyle=:dot)],
             ["1σ", "2σ", "3σ"],
             framevisible=true,
-            labelsize=10,
+            labelsize=18,
             rowgap=5)
     else
         # For custom values, add contour line at lambda = 10^4

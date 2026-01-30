@@ -815,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
     #params[:scale]=ftype(1)
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(100)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     params[:η] = ftype(1.1)
     
@@ -1180,8 +1180,8 @@ function get_matrices(cfg::NND) #full
         
 
 
-        η=1+ (m0^2*l*N_dual)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
-        
+        #η=1+ (m0^2*l*N_dual)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
+        η=1+1/N_dual 
         #println("Eta value: ", η)
         
         T = promote_type(
@@ -1204,6 +1204,7 @@ function get_matrices(cfg::NND) #full
         m3_T = T(m3)
         
         factor=(η-1) * 2^(1/(N_dual-1))
+        factorN=0.5*(η-1)*(1+(N_dual/(η-1)))
 
         if r>=0.0
             scale_1= (m1_T ^2)/(r*factor)
@@ -1266,6 +1267,11 @@ function get_matrices(cfg::NND) #full
             eigenvalues[3*i] = (eigenvalues_t[i])*scale_3
         end
 
+        
+        eigenvalues[end-2] = eigenvalues[end-2]*(factor)/(factorN)
+        eigenvalues[end-1] =eigenvalues[end-1]*(factor)/(factorN)
+        eigenvalues[end] =  eigenvalues[end]*(factor)/(factorN)
+
         #EIG=Diagonal(eigenvalues[1: 3*N_int-3])
 
 
@@ -1322,7 +1328,15 @@ function get_matrices(cfg::NND) #full
                 delta_mass[3*i-2] =(eigenvalues_e[i])*scale_1-  (eigenvalues_e[1])*scale_1#m1_T^2
                 delta_mass[3*i-1] =(eigenvalues_m[i])*scale_2- (eigenvalues_e[1])*scale_1#m1_T^2
                 delta_mass[3*i] = (eigenvalues_t[i])*scale_3- (eigenvalues_e[1])*scale_1#m1_T^2
+
+                if i==N_int
+                    delta_mass[3*i-2] =((eigenvalues_e[i])*scale_1*(factor)/(factorN))- ((eigenvalues_e[1])*scale_1)#m1_T^2
+                    delta_mass[3*i-1] =((eigenvalues_m[i])*scale_2*(factor)/(factorN))- ((eigenvalues_e[1])*scale_1) #m1_T^2
+                    delta_mass[3*i] = ((eigenvalues_t[i])*scale_3*(factor)/(factorN))- ((eigenvalues_e[1])*scale_1) #m1_T^2
+                end    
             end
+
+            
 
         end
         
@@ -1361,7 +1375,7 @@ function get_matrices(cfg::NNM) #full
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
        
-        η=1+(1/N_dual)
+        η=1+(1/N_dual) # params[:η]
         b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
        
         #b=1/sqrt(N_dual) #choice of b 
@@ -1389,7 +1403,8 @@ function get_matrices(cfg::NNM) #full
         
         #η=1+(1/N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
 
-        factor=(η-1) * 2^(1/(N_dual-1))
+        factor= (1+(η-1)/N_dual)*(η-1)   #(η-1) * 2^(1/(N_dual-1))
+        factorN=factor #0.5*(η-1)*(1+(N_dual/(η-1)))
 
         if r>=0.0
             scale_1= (m1_T)/(r*factor)
@@ -1450,6 +1465,9 @@ function get_matrices(cfg::NNM) #full
             eigenvalues[3*i] = ((eigenvalues_t[i])*scale_3)^2
         end
 
+        eigenvalues[end-2] = eigenvalues[end-2]*(factor^2)/(factorN^2)
+        eigenvalues[end-1] = eigenvalues[end-1]*(factor^2)/(factorN^2)
+        eigenvalues[end] =  eigenvalues[end]*(factor^2)/(factorN^2)
         #EIG=Diagonal(eigenvalues[1: 3*N_int-3])
 
 
@@ -1502,11 +1520,17 @@ function get_matrices(cfg::NNM) #full
                 delta_mass[3*i-2] =((eigenvalues_e[i])*scale_1)^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
                 delta_mass[3*i-1] =((eigenvalues_m[i])*scale_2)^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
                 delta_mass[3*i] = ((eigenvalues_t[i])*scale_3)^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
+
+                if i==N_int
+                    delta_mass[3*i-2] =((eigenvalues_e[i])*scale_1*(factor)/(factorN))^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
+                    delta_mass[3*i-1] =((eigenvalues_m[i])*scale_2*(factor)/(factorN))^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
+                    delta_mass[3*i] = ((eigenvalues_t[i])*scale_3*(factor)/(factorN))^2- ((eigenvalues_e[1])*scale_1)^2 #m1_T^2
+                end    
             end
 
         end
         #println(delta_mass)
-    
+      
         h = delta_mass
         
         #H=Diagonal(h[1:N_int-3])
@@ -1514,6 +1538,7 @@ function get_matrices(cfg::NNM) #full
 
         #end #time block
 
+        
 
         return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
     end
@@ -1523,7 +1548,7 @@ end
 
 
 
-function get_matrice_p(cfg::NNM) #perturbation
+function get_matrices_p(cfg::NNM) #perturbation
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
@@ -1536,9 +1561,8 @@ function get_matrice_p(cfg::NNM) #perturbation
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
 
-        dif= (m0*l*N_dual*ms)/(Lambda^2*r) 
-       
-        
+        dif= N_dual #(m0*l*N_dual*ms)/(Lambda^2*r) 
+               
         
         T = promote_type(
             typeof(params[:N]), 
