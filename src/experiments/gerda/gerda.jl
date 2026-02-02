@@ -42,7 +42,7 @@ function get_assets(physics; datadir = @__DIR__)
 
     assets = (
 
-        observed =1.8 *1e26, #gerda 
+        observed =1 *1e28, #gerda 
         # 1*1e28,, # #legend 1000
         
     )
@@ -172,7 +172,7 @@ end
 
 
 
-function get_neutrinomassSTD(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO)))
+function get_neutrinomassSTD(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:IO)))
     function NeutrinoMassNNM(params::NamedTuple)
 
         
@@ -243,7 +243,7 @@ function get_neutrinomassSTD(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(or
 end
 
 
-function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO)))
+function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:IO)))
     function NeutrinoMassNNM(params::NamedTuple)
 
         
@@ -393,8 +393,8 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
-        observed =1.8* 1e26 #gerda  1e28#
+        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:IO))
+        observed =1* 1e28 #gerda  1e28#
         #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         fun=get_halftime()
         predicted_value_T=fun(params)
@@ -402,7 +402,7 @@ function get_forward_model_correct(physics, assets)
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma= 0.1*1e26 #0.1*1e26 #0.01*1e26#
+        sigma= 0.1*1e28 #0.1*1e26 #0.01*1e26#
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)

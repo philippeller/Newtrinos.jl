@@ -788,10 +788,10 @@ end
 function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    params[:m₀] = ftype(0.1)
+    params[:m₀] = ftype(0.01)
     params[:N] = ftype(100)
     params[:r] = ftype(1)
-    params[:η] = ftype(99)
+    params[:η] = ftype(1+1/params[:N])
 
     
     NamedTuple(params)
@@ -813,11 +813,11 @@ end
 function get_params(cfg::NNM)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
-    #params[:scale]=ftype(1)
+   
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(100)
     params[:r] = ftype(1)
-    params[:η] = ftype(1.1)
+    params[:η] = ftype(1+1/params[:N])
     
     NamedTuple(params)
 end
@@ -1203,8 +1203,8 @@ function get_matrices(cfg::NND) #full
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        factor=(η-1) * 2^(1/(N_dual-1))
-        factorN=0.5*(η-1)*(1+(N_dual/(η-1)))
+        factor=(η-1) * 2^(1/(N_dual-1)) 
+        factorN=factor      #0.5*(η-1)*(1+(N_dual/(η-1)))
 
         if r>=0.0
             scale_1= (m1_T ^2)/(r*factor)
@@ -1401,9 +1401,9 @@ function get_matrices(cfg::NNM) #full
         m2_T = T(m2) 
         m3_T = T(m3)
         
-        #η=1+(1/N_dual)#params[:η]#1+N_dual#1+(1/N_dual)
-
-        factor= (1+(η-1)/N_dual)*(η-1)   #(η-1) * 2^(1/(N_dual-1))
+        
+        factor=(η-1) * 2^(1/(N_dual-1)) #first method
+        #factor= (1+(η-1)/N_dual)*(η-1) #second methods
         factorN=factor #0.5*(η-1)*(1+(N_dual/(η-1)))
 
         if r>=0.0
