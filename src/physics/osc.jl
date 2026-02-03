@@ -815,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(100)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
     
@@ -1548,7 +1548,7 @@ end
 
 
 
-function get_matrices_p(cfg::NNM) #perturbation
+function get_matricesp(cfg::NNM) #perturbation
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
@@ -1586,7 +1586,7 @@ function get_matrices_p(cfg::NNM) #perturbation
     
         gamma= Vector{T}(undef, 3)
         
-        scale = dif * m0 / r #N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
+        scale = dif * m0 /(r*(2^(1/(N_dual-1)))) #N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
         gamma[1] = m1_T/scale*params[:r]
         gamma[2] = m2_T/scale*params[:r]
         gamma[3] = m3_T/scale*params[:r]
