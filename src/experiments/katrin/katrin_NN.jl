@@ -322,7 +322,7 @@ end
 
 
 
-function get_neutrinomass(cfg=NNM)
+function get_neutrinomass(cfg=NND)
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -335,6 +335,11 @@ function get_neutrinomass(cfg=NNM)
         x_1_e = V_e[1, 1:N]
         x_1_m = V_m[1, 1:N]
         x_1_t = V_t[1, 1:N]
+     
+
+        #norms = sqrt.( Base.sum(abs2, V_t; dims=1))  # 1 × N row vector
+        #println("Norms of V_t: ", norms)
+
 
         mass_e = eigen[1:3:end]      
         mass_m = eigen[2:3:end]   
@@ -345,22 +350,63 @@ function get_neutrinomass(cfg=NNM)
     
         cut=(1.8*1e3)^2
        if any(mass_e .> cut) 
-            mass_e = mass_e[mass_e .<= cut]
+           #=mass_e = mass_e[mass_e .<= cut]
+            N_e = length(mass_e)
+            x_1_e = V_e[1, 1:N_e]=#
+            
+            mask = mass_e .<= cut
+
+            mass_e = mass_e[mask]
+            V_e    = V_e[mask, mask]
+            norms = sqrt.(Base.sum(abs2, V_e; dims=1))
+            V_e .= V_e ./ reshape(norms, 1, :)
+
+
             N_e = length(mass_e)
             x_1_e = V_e[1, 1:N_e]
+
         end
 
         if any(mass_m .> cut) 
-            mass_m = mass_m[mass_m .<= cut]
+           #= mass_m = mass_m[mass_m .<= cut]
+            N_m = length(mass_m)
+            x_1_m = V_m[1, 1:N_m]=#
+            
+            mask = mass_m .<= cut
+
+            mass_m = mass_m[mask]
+            V_m    = V_m[mask, mask]
+            norms = sqrt.(Base.sum(abs2, V_m; dims=1))
+            V_m .= V_m ./ reshape(norms, 1, :)
+
+
             N_m = length(mass_m)
             x_1_m = V_m[1, 1:N_m]
+
         end
 
         if any(mass_t .> cut) 
+           #= println("Masses in tau exceed cut-off, applying filter.")
             mass_t = mass_t[mass_t .<= cut]
             N_t = length(mass_t)
+            x_1_t = V_t[1, 1:N_t]=#
+
+           
+            mask = mass_t .<= cut
+
+            mass_t = mass_t[mask]
+            V_t    = V_t[mask, mask]
+            norms = sqrt.(Base.sum(abs2, V_t; dims=1))
+            V_t .= V_t ./ reshape(norms, 1, :)
+
+            N_t = length(mass_t)
             x_1_t = V_t[1, 1:N_t]
+
         end
+
+        
+        #norms = sqrt.(Base.sum(abs2, V_t; dims=2))  # 1 × N row vector
+        #println("Norms of V_t: ", norms)
      
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
@@ -388,7 +434,7 @@ end
 
 
 
-function get_neutrinomass_a(cfg=NNM)   #with analytical formula for eigenvalues
+function get_neutrinomass_a(cfg=NND)   #with analytical formula for eigenvalues
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -469,7 +515,7 @@ function get_neutrinomass_a(cfg=NNM)   #with analytical formula for eigenvalues
 end
 
 
-function mixing_angles(params::NamedTuple,cfg=NNM)
+function mixing_angles(params::NamedTuple,cfg=NND)
 
     U = Newtrinos.osc.get_PMNS(params)
     N = round(Int, params[:N])
@@ -498,7 +544,7 @@ function mixing_angles(params::NamedTuple,cfg=NNM)
 end    
 
 
-function get_neutrinomass_new(cfg=NNM)
+function get_neutrinomass_new(cfg=NND)
     function NeutrinoMassNNM_new(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
@@ -621,7 +667,7 @@ end
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
     
-        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
+        cfg = Newtrinos.osc.NND(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
         predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
         #predicted_value = sqrt(predicted_value)
         #println("Predicted m_nu: ", predicted_value)
@@ -639,7 +685,7 @@ end
 function comparing_masses(physics,experiments, params)
 
 
-    cfg = Newtrinos.osc.NNM()
+    cfg = Newtrinos.osc.NND()
     predicted_value =get_neutrinomass(cfg)(params)
     observed= experiments.katrin.assets.observed
     dist_observed= Normal(observed, 0.15)

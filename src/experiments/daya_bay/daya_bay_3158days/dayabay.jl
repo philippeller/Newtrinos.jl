@@ -243,8 +243,8 @@ function get_plot_old(physics, assets)
 end
 
 
-function get_plot(physics, assets)
-    function plot(params, data=assets.observed)
+function get_plotN(physics, assets)
+    function plotN(params, data=assets.observed)
         N_values = [5, 10, 50, 100]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
         
@@ -295,8 +295,8 @@ function get_plot(physics, assets)
             xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
             
             ylims!(ax, 0, 60000)
-            
-            display(f)
+            display("image/png",f)
+          
             #save("/home/sofialon/Newtrinos.jl/profiled_plot/dayabay_data_NND_r_$r.png", f)
         end
         
@@ -325,9 +325,8 @@ function get_plot(physics, assets)
         
         xlims!(ax_comp, minimum(assets.energy_bins), maximum(assets.energy_bins))
         ylims!(ax_comp, 0, 60000)
-        
-        display(f_comp)
-        save("/home/sofialon/Newtrinos.jl/new_plots/dayabay_data_NND_r_comp.png", f_comp)
+        display("image/png",f_comp )
+        save("/home/sofialon/Newtrinos.jl/plots_fix/dayabay/dayabay_data_NND_N_comp.png", f_comp)
         
         # Generate ratio comparison plot
         f_ratio = Figure()
@@ -355,9 +354,8 @@ function get_plot(physics, assets)
         
         xlims!(ax_ratio, minimum(assets.energy_bins), maximum(assets.energy_bins))
         #ylims!(ax_ratio, 0.9, 1.1)
-        
-        display(f_ratio)
-        save("/home/sofialon/Newtrinos.jl/new_plots/dayabay_data_NND_N_diff.png", f_ratio)
+       
+        #save("/home/sofialon/Newtrinos.jl/new_plots/dayabay_data_NND_N_diff.png", f_ratio)
     end
     
 end
@@ -365,9 +363,9 @@ end
 
 
 
-function get_plot_r(physics, assets)
-    function plot_r(params, data=assets.observed)
-        r_values = [0, 0.25, 0.5, 1]
+function get_plot(physics, assets)
+    function plot(params, data=assets.observed)
+        r_values = [1e-8, 0.25, 0.5, 1]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
         
         # Calculate all means and variances first
@@ -418,7 +416,7 @@ function get_plot_r(physics, assets)
             
             ylims!(ax, 0, 60000)
             
-            display(f)
+            display("image/png",f)
             #save("/home/sofialon/Newtrinos.jl/profiled_plot/dayabay_data_NND_r_$r.png", f)
         end
         
@@ -448,8 +446,8 @@ function get_plot_r(physics, assets)
         xlims!(ax_comp, minimum(assets.energy_bins), maximum(assets.energy_bins))
         ylims!(ax_comp, 0, 60000)
         
-        display(f_comp)
-        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_comp.png", f_comp)
+        display("image/png",f_comp)
+       # save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_comp.png", f_comp)
         
         # Generate ratio comparison plot
         f_ratio = Figure()
@@ -477,8 +475,8 @@ function get_plot_r(physics, assets)
         xlims!(ax_ratio, minimum(assets.energy_bins), maximum(assets.energy_bins))
         #ylims!(ax_ratio, 0.9, 1.1)
         
-        display(f_ratio)
-        save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_diff.png", f_ratio)
+        display("image/png",f_ratio)
+        #save("/home/sofialon/Newtrinos.jl/natural plot/dayabay_data_NND_r_diff.png", f_ratio)
     end
     
 end

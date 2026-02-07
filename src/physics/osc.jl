@@ -815,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(100)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
     
@@ -1181,7 +1181,7 @@ function get_matrices(cfg::NND) #full
 
 
         #η=1+ (m0^2*l*N_dual)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
-        η=1+1/N_dual 
+        η=params[:η]
         #println("Eta value: ", η)
         
         T = promote_type(
@@ -1359,7 +1359,7 @@ end
 
 
 
-function get_matrices(cfg::NNM) #full
+function get_matricesf(cfg::NNM) #full
 
    function get_Nnaturalness(params::NamedTuple)
 
@@ -1375,8 +1375,8 @@ function get_matrices(cfg::NNM) #full
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
        
-        η=1+(1/N_dual) # params[:η]
-        b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
+        η= params[:η]
+        #b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
        
         #b=1/sqrt(N_dual) #choice of b 
         #η=1+(m0*l*N_dual*ms)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
@@ -1548,7 +1548,7 @@ end
 
 
 
-function get_matricesp(cfg::NNM) #perturbation
+function get_matrices(cfg::NNM) #perturbation
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
@@ -1561,7 +1561,7 @@ function get_matricesp(cfg::NNM) #perturbation
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
 
-        dif= N_dual #(m0*l*N_dual*ms)/(Lambda^2*r) 
+         
                
         
         T = promote_type(
@@ -1585,6 +1585,7 @@ function get_matricesp(cfg::NNM) #perturbation
         
     
         gamma= Vector{T}(undef, 3)
+        dif= N_dual #(m0*l*N_dual*ms)/(Lambda^2*r)
         
         scale = dif * m0 /(r*(2^(1/(N_dual-1)))) #N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
         gamma[1] = m1_T/scale*params[:r]
@@ -2466,11 +2467,15 @@ function get_perturbation(cfg::NNM)
         gamma= Vector{T}(undef, 3)
         
 
-        gamma[1] = (m1_T/m0)/N_dual
-        gamma[2] = (m2_T/m0)/N_dual
-        gamma[3] = (m3_T/m0)/N_dual
+        gamma= Vector{T}(undef, 3)
+        dif= N_dual #(m0*l*N_dual*ms)/(Lambda^2*r)
+        r=params[:r]
+        scale = dif * m0 /(r*(2^(1/(N_dual-1)))) #N_dual*m0 /params[:r]#10^7/N_dual#N_dual*m0
+        gamma[1] = m1_T/scale*params[:r]
+        gamma[2] = m2_T/scale*params[:r]
+        gamma[3] = m3_T/scale*params[:r]
 
-        scale =N_dual*m0
+      
         gamma_sq = Vector{T}(undef, 3)
         gamma_sq[1]=gamma[1]^2
         gamma_sq[2]=gamma[2]^2
@@ -2498,13 +2503,13 @@ function get_perturbation(cfg::NNM)
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
                 if i == j
-                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[1]
-                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
-                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j  + squared*gamma[3]
+                    matrix_e[i, j] =(1/N_dual)* sqrt_i * sqrt_j  + squared*gamma[1]
+                    matrix_m[i, j] = (1/N_dual)*sqrt_i * sqrt_j  + squared*gamma[2]
+                    matrix_t[i, j] =(1/N_dual)* sqrt_i * sqrt_j  + squared*gamma[3]
                 else
-                    matrix_e[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                    matrix_m[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                    matrix_t[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                    matrix_e[i, j] =(1/N_dual)* sqrt_i * sqrt_j 
+                    matrix_m[i, j] =(1/N_dual)* sqrt_i * sqrt_j 
+                    matrix_t[i, j] = (1/N_dual)* sqrt_i * sqrt_j 
                 end
             end
         end
@@ -2528,9 +2533,9 @@ function get_perturbation(cfg::NNM)
                 
                 sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
-                matrix_e0[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                matrix_m0[i, j] = (N_dual)*sqrt_i * sqrt_j 
-                matrix_t0[i, j] = (N_dual)*sqrt_i * sqrt_j 
+                matrix_e0[i, j] = (1/N_dual)* sqrt_i * sqrt_j 
+                matrix_m0[i, j] = (1/N_dual)* sqrt_i * sqrt_j 
+                matrix_t0[i, j] = (1/N_dual)* sqrt_i * sqrt_j 
         
             end
         end
