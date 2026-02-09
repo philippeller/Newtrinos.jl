@@ -108,7 +108,7 @@ function get_posterior_SM(params)
 
 end    
 
-# function to get m0 posterior from m_nu posterior in NNM-NNM
+# function to get m0 posterior from m_nu posterior in NND-NND
 
 
 function get_posterior_NN(params, cfg)
@@ -232,8 +232,8 @@ end
 
 
 
-function get_neutrinomass_old(cfg=NNM)
-    function NeutrinoMassNNM_old(params::NamedTuple)
+function get_neutrinomass_old(cfg=NND)
+    function NeutrinoMassNND_old(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -315,7 +315,7 @@ function get_neutrinomass_old(cfg=NNM)
         return sum
      
     end
-    return NeutrinoMassNNM
+    return NeutrinoMassNND
 end
 
 
@@ -545,7 +545,7 @@ end
 
 
 function get_neutrinomass_new(cfg=NND)
-    function NeutrinoMassNNM_new(params::NamedTuple)
+    function NeutrinoMassNND_new(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -628,7 +628,7 @@ function get_neutrinomass_new(cfg=NND)
 
      
     end
-    return NeutrinoMassNNM
+    return NeutrinoMassNND
 end
 
 

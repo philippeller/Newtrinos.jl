@@ -440,7 +440,7 @@ function get_plot(physics, assets)
         
         ax_comp.ylabel = "Counts"
         ax_comp.xlabel = "Eₚ (MeV)"
-        ax_comp.title = "Daya Bay - Comparison of All r Values - N=100"
+        ax_comp.title = "Daya Bay - Comparison of All r Values - N=20"
         axislegend(ax_comp, framevisible = false, position = :rt)
         
         xlims!(ax_comp, minimum(assets.energy_bins), maximum(assets.energy_bins))
@@ -469,7 +469,7 @@ function get_plot(physics, assets)
 
         ax_ratio.ylabel = "Data - Expected"
         ax_ratio.xlabel = "Eₚ (MeV)"
-        ax_ratio.title = "Daya Bay - Residues for All r Values - N=100"
+        ax_ratio.title = "Daya Bay - Residues for All r Values - N=20"
         axislegend(ax_ratio, framevisible = false, position = :rt)
         
         xlims!(ax_ratio, minimum(assets.energy_bins), maximum(assets.energy_bins))

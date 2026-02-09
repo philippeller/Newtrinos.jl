@@ -815,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(100)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
     
@@ -1375,7 +1375,7 @@ function get_matricesf(cfg::NNM) #full
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
        
-        η= params[:η]
+        η= 1+ 1/N_dual #params[:η]
         #b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
        
         #b=1/sqrt(N_dual) #choice of b 
