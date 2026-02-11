@@ -1359,7 +1359,7 @@ end
 
 
 
-function get_matricesf(cfg::NNM) #full
+function get_matrices(cfg::NNM) #full
 
    function get_Nnaturalness(params::NamedTuple)
 
@@ -1375,7 +1375,7 @@ function get_matricesf(cfg::NNM) #full
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
        
-        η= 1+ 1/N_dual #params[:η]
+        η=params[:η]
         #b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
        
         #b=1/sqrt(N_dual) #choice of b 
@@ -1548,7 +1548,7 @@ end
 
 
 
-function get_matrices(cfg::NNM) #perturbation
+function get_matricesp(cfg::NNM) #perturbation
    function get_Nnaturalness(params::NamedTuple)
         
         N_int = round(Int, ForwardDiff.value(params[:N])) 
