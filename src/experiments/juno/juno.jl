@@ -408,7 +408,7 @@ function get_plot(physics, assets)
 
         errorbars!(ax5, E_vis, residuals, ones(length(residuals)), color=:black)
         scatter!(ax5, E_vis, residuals, color=:black)
-
+        
         return fig
     end
 
