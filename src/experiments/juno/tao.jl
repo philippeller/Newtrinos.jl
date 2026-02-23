@@ -196,34 +196,33 @@ end
 
 
 function get_expected(params, physics, assets)
-    
-    E_vis_corr = collect(assets.E_bins_visible .* params.junotao_energy_scale)
+    # Pre-compute energy correction once (avoid collect, use direct array)
+    E_vis_corr = assets.E_bins_visible .* params.junotao_energy_scale
     bin_width_mev = step(assets.E_bins_visible)
     
+    # Compute oscillation probability and spectrum
     E_nu = assets.visible_to_neutrino_interp.(E_vis_corr)
     L_km = assets.reactors.Baseline_m ./ 1e3
     P_ee = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, 1, 1, 1]
     prob_weighted_flat = vec(sum(P_ee .* assets.reactors.Flux_Factor', dims=2))
     
-    unosc_counts_density = assets.no_osc_interp.(E_nu)
-    spectrum_before_smearing = (unosc_counts_density .* prob_weighted_flat) .* assets.LIVETIME_DAYS .* bin_width_mev
-
-    sigma_res_val = @. sqrt(params.tao_res_a^2 * abs(E_vis_corr) + params.tao_res_b^2 * E_vis_corr^2 + params.tao_res_c^2)
-    smeared_signal = smear(E_vis_corr, spectrum_before_smearing, sigma_res_val, width=200)
-
+    # Fused spectrum calculation before smearing
+    spectrum_before_smearing = assets.no_osc_interp.(E_nu) .* prob_weighted_flat .* assets.LIVETIME_DAYS .* bin_width_mev
+    
+    # Compute energy resolution and smear
+    sigma_res = @. sqrt(max(params.tao_res_a^2 * abs(E_vis_corr) + params.tao_res_b^2 * E_vis_corr^2 + params.tao_res_c^2, 1e-18))
+    smeared_signal = smear(E_vis_corr, spectrum_before_smearing, sigma_res, width=200)
+    
+    # Apply shape uncertainty and detection efficiency with fused operations
     Δshape_values = assets.shape_unc_interp.(E_vis_corr)
-    smeared_signal_with_shape = smeared_signal .* (1.0 .+ params.junotao_shape_eps .* Δshape_values)
+    final_signal_counts = @. smeared_signal * (1.0 + params.junotao_shape_eps * Δshape_values) * params.junotao_flux_scale * params.tao_detection_epsilon
     
-    final_signal_counts = smeared_signal_with_shape .* params.junotao_flux_scale .* params.tao_detection_epsilon
+    # Compute all backgrounds with fused operations
+    total_backgrounds = (@. assets.accidental_bkg_interp(E_vis_corr) * params.tao_accidental_norm * assets.LIVETIME_DAYS +
+                         assets.fast_neutron_bkg_interp(E_vis_corr) * params.tao_fast_neutron_norm * assets.LIVETIME_DAYS +
+                         assets.lihe_bkg_interp(E_vis_corr) * params.tao_lihe_norm * assets.LIVETIME_DAYS)
 
-    final_accidental_counts = (assets.accidental_bkg_interp.(E_vis_corr) .* params.tao_accidental_norm) .* assets.LIVETIME_DAYS
-    final_fast_neutron_counts = (assets.fast_neutron_bkg_interp.(E_vis_corr) .* params.tao_fast_neutron_norm) .* assets.LIVETIME_DAYS
-    final_lihe_counts = (assets.lihe_bkg_interp.(E_vis_corr) .* params.tao_lihe_norm) .* assets.LIVETIME_DAYS
-    
-    total_backgrounds = final_accidental_counts .+ final_fast_neutron_counts .+ final_lihe_counts
-    total_events = final_signal_counts .+ total_backgrounds
-
-    return max.(total_events, 0.0)
+    return max.(final_signal_counts .+ total_backgrounds, 0.0)
 end
 
 function get_forward_model(physics, assets)

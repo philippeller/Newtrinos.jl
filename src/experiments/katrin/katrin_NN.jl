@@ -666,16 +666,14 @@ end
 
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
-    
-        cfg = Newtrinos.osc.NND(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
-        predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
-        #predicted_value = sqrt(predicted_value)
-        #println("Predicted m_nu: ", predicted_value)
-        #=
-        if predicted_value <= assets.observed 
-           predicted_value=assets.observed
-        end=#
-        return  Normal(predicted_value, 0.13) #Normal(predicted_value, 0.15)
+        # Respect global config by using the flavour model provided in physics
+        cfg = physics.osc.cfg.flavour
+        predicted_value = get_neutrinomass(cfg)(params) # get_neutrinomass_SM(cfg)(params)
+        # If needed, constrain predicted_value relative to observed
+        # if predicted_value <= assets.observed
+        #    predicted_value = assets.observed
+        # end
+        return Normal(predicted_value, 0.13) #Normal(predicted_value, 0.15)
        
 
     end
@@ -683,10 +681,9 @@ function get_forward_model_correct(physics, assets)
 end
 
 function comparing_masses(physics,experiments, params)
-
-
-    cfg = Newtrinos.osc.NND()
-    predicted_value =get_neutrinomass(cfg)(params)
+    # Respect global config: use the flavour model from provided physics
+    cfg = physics.osc.cfg.flavour
+    predicted_value = get_neutrinomass(cfg)(params)
     observed= experiments.katrin.assets.observed
     dist_observed= Normal(observed, 0.15)
     twosigma_level= quantile(dist_observed, 0.9772)

@@ -378,13 +378,12 @@ end
 
 
 function comparing_times(physics,experiments, params)
-
-
-    cfg = Newtrinos.osc.NNM()
-    predicted_value =get_halftime(cfg)(params)
-    observed= experiments.gerda.assets.observed
-    dist_observed= Normal(observed, 0.01*1e28)
-    twosigma_level= quantile(dist_observed, 0.9772)
+    # Use the flavour model from the provided physics (respect the global config)
+    cfg = physics.osc.cfg.flavour
+    predicted_value = get_halftime(cfg)(params)
+    observed = experiments.gerda.assets.observed
+    dist_observed = Normal(observed, 0.01*1e28)
+    twosigma_level = quantile(dist_observed, 0.9772)
 
     return predicted_value, twosigma_level
 end    
@@ -394,17 +393,17 @@ end
 
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
-    
-        cfg = Newtrinos.osc.NNM(three_flavour=Newtrinos.osc.ThreeFlavour(ordering=:NO))
-        observed =1.8* 1e26 #gerda  1e28#
-        #predicted_value =get_neutrinomass(cfg)(params) #get_neutrinomass_SM(cfg)(params) 
-        fun=get_halftime()
-        predicted_value_T=fun(params)
+        # Use the flavour model provided in physics to respect model and ordering from config
+        cfg = physics.osc.cfg.flavour
+        observed = 1.8 * 1e26 # gerda
+        # Use the appropriate neutrinomass/halftime function for this flavour model
+        fun = get_halftime(cfg)
+        predicted_value_T = fun(params)
 
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma= 0.1*1e26 #0.1*1e26 #0.01*1e26#
+        sigma = 0.1*1e26 #0.1*1e26 #0.01*1e26#
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)

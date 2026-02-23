@@ -7,6 +7,7 @@ using ForwardDiff
 using BAT
 using Optimization
 using Optim
+using IterTools
 using DataStructures
 using ADTypes
 using AutoDiffOperators
@@ -141,21 +142,19 @@ end
 function generate_scanpoints(vars_to_scan, priors)
     vars = collect(keys(vars_to_scan))
     values = [quantile(priors[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
-    dims = Tuple(length(v) for v in values)
-    cartesian_indices = CartesianIndices(dims)
-    scanpoints = Array{Any}(undef, dims)
+    mesh = collect(IterTools.product(values...))
+    scanpoints = Array{Any}(undef, size(mesh))
 
     function make_prior(vals)
-        p = priors
+        p = deepcopy(priors)
         for i in 1:length(vars_to_scan)
             @reset p[vars[i]] = vals[i]
         end
         distprod(;p...)
     end
 
-    for ci in cartesian_indices
-        vals = ntuple(d -> values[d][ci[d]], length(dims))
-        scanpoints[ci] = make_prior(vals)
+    for i in eachindex(mesh)
+        scanpoints[i] = make_prior(mesh[i])
     end
 
     values, scanpoints
@@ -196,9 +195,9 @@ function _profile(likelihood, scanpoints, params, cache_dir)
     @showprogress Threads.@threads for i in eachindex(scanpoints)
         if i == 1 || i == div(length(scanpoints), 2)  # First and middle points
             println("\n--- Point $i ---")
-            @time opt_result = find_mle_cached(likelihood, scanpoints[i], params, cache_dir)
+            @time opt_result = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
         else
-            opt_result = find_mle_cached(likelihood, scanpoints[i], params, cache_dir)
+            opt_result = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
         end
         
         llhs[i] = opt_result[1]
@@ -229,8 +228,7 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing)
 
     axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
     result = NewtrinosResult(axes=axes, values=res)
-    
-    return result
+
 end
 
 
@@ -239,11 +237,10 @@ function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
     
     vars = collect(keys(vars_to_scan))
     values = [quantile(priors[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
-    dims = Tuple(length(v) for v in values)
-    cartesian_indices = CartesianIndices(dims)
+    mesh = collect(IterTools.product(values...))
     
     function make_params(vals)
-        p = params
+        p = deepcopy(params)
         for i in 1:length(vars_to_scan)
             @reset p[vars[i]] = vals[i]
         end
@@ -251,41 +248,27 @@ function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
     end
 
     println("Number of threads: $(nthreads())")
-    println("Total points to compute: $(length(cartesian_indices))")
+    println("Total points to compute: $(length(mesh))")
     
-    times_per_point = Array{Float64}(undef, dims)
-
-    # Probe one point to keep exact likelihood element type without forcing Float64.
-    first_ci = first(cartesian_indices)
-    first_vals = ntuple(d -> values[d][first_ci[d]], length(dims))
-    t_start = time()
-    p0 = make_params(first_vals)
-    first_llh = logdensityof(likelihood, p0)
-    t_elapsed = time() - t_start
-
-    llhs = Array{typeof(first_llh)}(undef, dims)
-    llhs[first_ci] = first_llh
-    times_per_point[first_ci] = t_elapsed
-
+    llhs = Array{Any}(undef, size(mesh))
     if gradient_map
-        grads = Array{Any}(undef, dims)
-        grads[first_ci] = ForwardDiff.gradient(x -> logdensityof(likelihood, x), p0)
+        grads = Array{Any}(undef, size(mesh))
     end
+    
+    times_per_point = Float64[]
 
-    # Full parallel processing - no chunking, no GC overhead
-    @showprogress Threads.@threads for lin_i in 2:length(cartesian_indices)
-        ci = cartesian_indices[lin_i]
-        vals = ntuple(d -> values[d][ci[d]], length(dims))
+    @showprogress Threads.@threads for i in eachindex(mesh)
         t_start = time()
-        p = make_params(vals)
-        llhs[ci] = logdensityof(likelihood, p)
+        p = make_params(mesh[i])
+        llhs[i] = logdensityof(likelihood, p)
         if gradient_map
-            grads[ci] = ForwardDiff.gradient(x -> logdensityof(likelihood, x), p)
+            grads[i] = ForwardDiff.gradient(x -> logdensityof(likelihood, x), p)
         end
         t_elapsed = time() - t_start
-        times_per_point[ci] = t_elapsed
+        push!(times_per_point, t_elapsed)
     end
 
+   
     println("TIMING STATISTICS:")
     println("  Min time per point: $(round(minimum(times_per_point)*1000, digits=1)) ms")
     println("  Max time per point: $(round(maximum(times_per_point)*1000, digits=1)) ms")
@@ -295,13 +278,13 @@ function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
     println("  Total seconds: $(round(sum(times_per_point), digits=2))")
     println("  Total minutes: $(round(sum(times_per_point)/60, digits=2))")
 
-    s = OrderedDict{Symbol, Array}(key => Fill(params[key], dims) for key in setdiff(keys(params), keys(vars_to_scan)))
+    s = OrderedDict{Symbol, Array}(key => Fill(params[key], size(mesh)) for key in setdiff(keys(params), keys(vars_to_scan)))
     if gradient_map
         g = OrderedDict(Symbol(key, "_grad") => [x[key] for x in grads] for key in keys(first(grads)))
         s = merge(s, g)
     end
     s[:llh] = llhs
-    s[:log_posterior] = s[:llh]  # Use reference instead of copying the array again
+    s[:log_posterior] = llhs
     res = NamedTuple(s)
 
     axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
@@ -445,3 +428,6 @@ function generate_asimov_data(experiments::NamedTuple, params::NamedTuple)
     return final_data 
 
 end
+
+
+

@@ -21,9 +21,9 @@ import ..Newtrinos
     plot::Function
 end
 
-function configure(physics; livetime_years = 6.0)
+function configure(physics; livetime_years = 6.0, Delta_E = 20e-3)
     physics = (;physics.osc)
-    assets = get_assets(physics, livetime_years)
+    assets = get_assets(physics, livetime_years, Delta_E)
     return JUNO(
         livetime_years = livetime_years,
         physics = physics,
@@ -83,7 +83,7 @@ end
 
 
 
-function get_assets(physics, livetime_years, datadir = @__DIR__)
+function get_assets(physics, livetime_years, Delta_E = 20e-3, datadir = @__DIR__)
     @info "Loading juno data"
 
     L_JUNO = 52.5   
@@ -96,7 +96,7 @@ function get_assets(physics, livetime_years, datadir = @__DIR__)
     nominal_livetime = 6.0
     LIVETIME_DAYS = livetime_years * 365
 
-    Delta_E = 20e-3   # 20 keV bins
+    # Delta_E parameter now passed in, default 20 keV bins
  
     GEO_SHAPE_UNC_FRACTION = 0.05 
 
@@ -282,54 +282,41 @@ end
 
 
 function get_expected(params, physics, assets)
-    
+    # Pre-compute energy correction once
     E_vis_corr = assets.E_bins_visible .* params.junotao_energy_scale
+    
+    # Compute all required physical quantities together
     E_nu = assets.visible_to_neutrino_interp.(E_vis_corr)
-
     L_km = assets.reactors.Baseline_m ./ 1e3
-    
-    P_ee = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, :, 1, 1] 
-    
+    P_ee = physics.osc.osc_prob(E_nu./1e3, L_km, params; anti=true)[:, :, 1, 1]
     prob_weighted_flat = vec(sum(P_ee .* assets.reactors.Flux_Factor', dims=2))
-
-    unosc_counts_at_E_nu = assets.no_osc_interp.(E_nu)
-
-    spectrum_before_reactor_shape_and_smearing = unosc_counts_at_E_nu .* prob_weighted_flat
-
+    
+    # Fused signal processing: combine unoscillated counts with oscillation probability and reactor shape
     Δshape_values_signal = assets.shape_unc_interp.(E_vis_corr)
-    spectrum_with_reactor_shape_sys = spectrum_before_reactor_shape_and_smearing .* (1.0 .+ params.junotao_shape_eps .* Δshape_values_signal)
-
-    current_res_a = params.juno_res_a
-    current_res_b = params.juno_res_b
-    current_res_c = params.juno_res_c
+    spectrum = assets.no_osc_interp.(E_nu) .* prob_weighted_flat .* (1.0 .+ params.junotao_shape_eps .* Δshape_values_signal)
     
-    sigma_res_val = @. sqrt(current_res_a^2 * abs(E_vis_corr) + current_res_b^2 * E_vis_corr^2 + current_res_c^2)
-    sigma_res_val = max.(sigma_res_val, 1e-9)
-
-    smeared_signal_spectrum = smear(E_vis_corr, spectrum_with_reactor_shape_sys, sigma_res_val, width=200) # width = 15 befofe wd?
+    # Compute energy resolution with fused operations
+    res_a = params.juno_res_a
+    res_b = params.juno_res_b
+    res_c = params.juno_res_c
+    sigma_res = @. sqrt(max(res_a^2 * abs(E_vis_corr) + res_b^2 * E_vis_corr^2 + res_c^2, 1e-18))
     
-    signal_counts = smeared_signal_spectrum
-    signal_counts .*= params.junotao_flux_scale * params.juno_detection_epsilon
-
+    # Apply smearing to signal spectrum in-place
+    smeared_signal = smear(E_vis_corr, spectrum, sigma_res, width=200)
+    signal_counts = @. smeared_signal * params.junotao_flux_scale * params.juno_detection_epsilon
     final_signal_counts = max.(signal_counts, 0.0)
-
-    nominal_geo_counts_rate = assets.background_rate_interp.(E_vis_corr)
-    geo_counts_scaled_rate = nominal_geo_counts_rate .* params.juno_geo_rate_norm .* assets.LIVETIME_DAYS
-
-    final_geo_counts = geo_counts_scaled_rate .* (1.0 .+ params.juno_geo_shape_eps .* assets.GEO_SHAPE_UNC_FRACTION) 
     
-    final_world_reactor_counts = assets.world_reactor_bkg_rate_interp.(E_vis_corr) .* params.juno_world_reactor_norm .* assets.LIVETIME_DAYS
-    final_accidental_counts = assets.accidental_bkg_rate_interp.(E_vis_corr) .* params.juno_accidental_norm .* assets.LIVETIME_DAYS
-    final_lihe_counts = assets.lihe_bkg_rate_interp.(E_vis_corr) .* params.juno_lihe_norm .* assets.LIVETIME_DAYS
-    final_co_counts = assets.co_bkg_rate_interp.(E_vis_corr) .* params.juno_co_norm .* assets.LIVETIME_DAYS
-    final_atmnc_counts = assets.atmnc_bkg_rate_interp.(E_vis_corr) .* params.juno_atmnc_norm .* assets.LIVETIME_DAYS
-    final_fast_neutron_counts = assets.fast_neutron_bkg_rate_interp.(E_vis_corr) .* params.juno_fast_neutron_norm .* assets.LIVETIME_DAYS    
+    # Compute all backgrounds with fused operations
+    final_geo_counts = assets.background_rate_interp.(E_vis_corr) .* params.juno_geo_rate_norm .* assets.LIVETIME_DAYS .* (1.0 .+ params.juno_geo_shape_eps .* assets.GEO_SHAPE_UNC_FRACTION)
     
-    other_background_counts = final_world_reactor_counts .+ final_accidental_counts .+ final_lihe_counts .+ final_co_counts .+ final_atmnc_counts .+ final_fast_neutron_counts
+    other_backgrounds = (@. assets.world_reactor_bkg_rate_interp(E_vis_corr) * params.juno_world_reactor_norm * assets.LIVETIME_DAYS +
+                         assets.accidental_bkg_rate_interp(E_vis_corr) * params.juno_accidental_norm * assets.LIVETIME_DAYS +
+                         assets.lihe_bkg_rate_interp(E_vis_corr) * params.juno_lihe_norm * assets.LIVETIME_DAYS +
+                         assets.co_bkg_rate_interp(E_vis_corr) * params.juno_co_norm * assets.LIVETIME_DAYS +
+                         assets.atmnc_bkg_rate_interp(E_vis_corr) * params.juno_atmnc_norm * assets.LIVETIME_DAYS +
+                         assets.fast_neutron_bkg_rate_interp(E_vis_corr) * params.juno_fast_neutron_norm * assets.LIVETIME_DAYS)
     
-    total_events = final_signal_counts .+ final_geo_counts .+ other_background_counts 
-
-    return max.(total_events, 0.0)
+    return max.(final_signal_counts .+ final_geo_counts .+ other_backgrounds, 0.0)
 
 end
 

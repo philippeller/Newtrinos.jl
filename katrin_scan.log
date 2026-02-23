@@ -1,0 +1,48 @@
+[ Info: Loading Katrin data
+Progress:   0%|▏                                        |  ETA: 0:02:00[KProgress: 100%|█████████████████████████████████████████| Time: 0:00:13[K
+
+======================================================================
+  NEUTRINO PHYSICS SCANNING SYSTEM
+======================================================================
+
+Reading configuration from config.txt...
+
+Configuration:
+  Model: NND
+  Ordering: NO
+  Experiments: katrin
+  Scan resolution: 31
+  Output directory: plot_auto
+  Plot smoothing sigma: 0.8
+
+Setup complete!
+
+
+----------------------------------------------------------------------
+EXPERIMENT: KATRIN
+----------------------------------------------------------------------
+
+  Scan 1/3: r vs N
+Number of threads: 4
+Total points to compute: 961
+TIMING STATISTICS:
+  Min time per point: 0.0 ms
+  Max time per point: 3815.9 ms
+  Mean time per point: 17.4 ms
+  Median time per point: 7.8 ms
+TOTAL TIME:
+  Total seconds: 16.69
+  Total minutes: 0.28
+
+  ✗ Error scanning katrin:
+    AssertionError("issorted(edges)")
+
+======================================================================
+  SCANNING COMPLETE
+======================================================================
+
+Output directory: plot_auto/
+  - katrin/
+
+======================================================================
+

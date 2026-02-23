@@ -1,0 +1,1115 @@
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OrderedCollections/LtT3J_fIcRM.so for OrderedCollections [bac558e1-5e72-5ebc-8fee-abe8a469f55d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/UUIDs/SIw1t_4x0TT.so for UUIDs [cf7118a7-6976-5b1a-9a39-7adc72f591a4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Base64/D7K0n_4x0TT.so for Base64 [2a0f44e3-6c83-55bd-87e4-b1978d98bd5f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Markdown/AREjX_4x0TT.so for Markdown [d6f4376e-aef5-505a-96c1-9c027394607a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/InteractiveUtils/0TrXF_4x0TT.so for InteractiveUtils [b77e0a4c-d291-57a0-90e8-8db25a27a240]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CodeTracking/a3E2l_lqE2y.so for CodeTracking [da1fd8a2-8d9e-5ec2-8556-3022fb5608a2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/JuliaInterpreter/PliIn_lqE2y.so for JuliaInterpreter [aa1ae85d-cabe-5617-a682-6adf51b2e16a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LoweredCodeUtils/zWkaN_lqE2y.so for LoweredCodeUtils [6f1432cf-f94c-5a45-995e-cdbf5db27b0b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/StyledStrings/UcVoM_4x0TT.so for StyledStrings [f489334b-da3d-4c2e-b8f0-e476e12c162b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Unicode/E4Hzs_4x0TT.so for Unicode [4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/REPL/u0gqU_4x0TT.so for REPL [3fa0cd96-eef1-5676-8a61-b3b8758bbffb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/NetworkOptions/J8H6s_4x0TT.so for NetworkOptions [ca575930-c2e3-43a9-ace4-1e988b2c1908]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Printf/3FQLY_4x0TT.so for Printf [de0858da-6303-5e67-8744-51eddeeeb8d7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/MbedTLS_jll/u5NEn_4x0TT.so for MbedTLS_jll [c8ffd9c3-330d-5841-b78e-0817d7145fa1]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/LibSSH2_jll/K6mup_4x0TT.so for LibSSH2_jll [29816b5a-b9ab-546f-933c-edad1886dfa8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/LibGit2_jll/nfCpg_4x0TT.so for LibGit2_jll [e37daf67-58a4-590a-8e99-b0245dd2ffc5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/LibGit2/xrYJZ_4x0TT.so for LibGit2 [76f85450-5226-5b5a-8eaa-529ad045b433]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Revise/M1Qoh_lqE2y.so for Revise [295af30f-e4ad-537b-8983-00126c2a3abe]
+└ @ Base loading.jl:1244
+┌ Debug: At least one include() file from /home/sofialon/.julia/compiled/v1.11/Newtrinos/579k5_fIcRM.ji is not relocatable
+│   srcfiles =
+│    Set{String} with 22 elements:
+│      "/home/sofialon/Newtrinos.jl/src/utils/plotting.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/juno/juno.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/icecube/deepcore_3y_highsta…
+│      "/home/sofialon/Newtrinos.jl/src/experiments/gerda/gerda.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/daya_bay/daya_bay_3158days/…
+│      "/home/sofialon/Newtrinos.jl/src/analysis/molewhacker.jl"
+│      "/home/sofialon/Newtrinos.jl/src/physics/earth_layers.jl"
+│      ⋮ 
+└ @ Base loading.jl:3383
+┌ Debug: At least one include() file from /home/sofialon/.julia/compiled/v1.11/Newtrinos/579k5_lqE2y.ji is not relocatable
+│   srcfiles =
+│    Set{String} with 22 elements:
+│      "/home/sofialon/Newtrinos.jl/src/utils/plotting.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/juno/juno.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/icecube/deepcore_3y_highsta…
+│      "/home/sofialon/Newtrinos.jl/src/experiments/gerda/gerda.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/daya_bay/daya_bay_3158days/…
+│      "/home/sofialon/Newtrinos.jl/src/analysis/molewhacker.jl"
+│      "/home/sofialon/Newtrinos.jl/src/physics/earth_layers.jl"
+│      ⋮ 
+└ @ Base loading.jl:3383
+┌ Debug: At least one include() file from /home/sofialon/.julia/compiled/v1.11/Newtrinos/579k5_fIcRM.ji is not relocatable
+│   srcfiles =
+│    Set{String} with 22 elements:
+│      "/home/sofialon/Newtrinos.jl/src/utils/plotting.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/juno/juno.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/icecube/deepcore_3y_highsta…
+│      "/home/sofialon/Newtrinos.jl/src/experiments/gerda/gerda.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/daya_bay/daya_bay_3158days/…
+│      "/home/sofialon/Newtrinos.jl/src/analysis/molewhacker.jl"
+│      "/home/sofialon/Newtrinos.jl/src/physics/earth_layers.jl"
+│      ⋮ 
+└ @ Base loading.jl:3383
+┌ Debug: Unable to resolve @depot tag for at least one include() file from cache file /home/sofialon/.julia/compiled/v1.11/OptimizationFiniteDiffExt/NHlZb_lqE2y.ji
+│   srcfiles =
+│    Set{String} with 1 element:
+│      "@depot/packages/OptimizationBase/UXLhR/ext/OptimizationFiniteDiffExt.jl"
+└ @ Base loading.jl:3380
+┌ Debug: Unable to resolve @depot tag for at least one include() file from cache file /home/sofialon/.julia/compiled/v1.11/Cairo_jll/ouRHo_lqE2y.ji
+│   srcfiles =
+│    Set{String} with 2 elements:
+│      "@depot/packages/Cairo_jll/n0mxp/src/Cairo_jll.jl"
+│      "@depot/packages/Cairo_jll/n0mxp/src/wrappers/x86_64-linux-gnu.jl"
+└ @ Base loading.jl:3380
+┌ Debug: Unable to resolve @depot tag for include_dependency() file @depot/packages/Cairo_jll/n0mxp/Artifacts.toml from cache file /home/sofialon/.julia/compiled/v1.11/Cairo_jll/ouRHo_lqE2y.ji
+└ @ Base loading.jl:3398
+┌ Debug: Unable to resolve @depot tag for at least one include() file from cache file /home/sofialon/.julia/compiled/v1.11/StackViews/VkAPD_lqE2y.ji
+│   srcfiles =
+│    Set{String} with 1 element:
+│      "@depot/packages/StackViews/2wEBK/src/StackViews.jl"
+└ @ Base loading.jl:3380
+┌ Debug: Unable to resolve @depot tag for at least one include() file from cache file /home/sofialon/.julia/compiled/v1.11/Pango_jll/lZI8Y_lqE2y.ji
+│   srcfiles =
+│    Set{String} with 2 elements:
+│      "@depot/packages/Pango_jll/0Ce2U/src/Pango_jll.jl"
+│      "@depot/packages/Pango_jll/0Ce2U/src/wrappers/x86_64-linux-gnu.jl"
+└ @ Base loading.jl:3380
+┌ Debug: Unable to resolve @depot tag for include_dependency() file @depot/packages/Pango_jll/0Ce2U/Artifacts.toml from cache file /home/sofialon/.julia/compiled/v1.11/Pango_jll/lZI8Y_lqE2y.ji
+└ @ Base loading.jl:3398
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Dates/p8See_4x0TT.so for Dates [ade2ca70-3891-5945-98fb-dc099432e06a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/TOML/mjrwE_4x0TT.so for TOML [fa267f1f-6049-4f14-aa54-33bafae1ed76]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Preferences/pWSk8_lqE2y.so for Preferences [21216c6a-2e73-6563-6e65-726566657250]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PrecompileTools/AQ9Mk_lqE2y.so for PrecompileTools [aea7be01-6a6a-4083-8856-8a6e6704d82a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArraysCore/Tzw28_lqE2y.so for StaticArraysCore [1e83bf80-4336-4d27-bf5d-d5a4f845583c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArrays/yY9vm_lqE2y.so for StaticArrays [90137ffa-7385-5640-81b9-e52037218182]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DataAPI/3a8mN_lqE2y.so for DataAPI [9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Compat/GSFWK_lqE2y.so for Compat [34da2185-b29b-5c13-b0c7-acf172513d20]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CompatLinearAlgebraExt/Zxpzq_lqE2y.so for CompatLinearAlgebraExt [dbe5ba0b-aecc-598a-a867-79051b540f49]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DataStructures/xKiwJ_fIcRM.so for DataStructures [864edb3b-99cc-5e75-8d2d-829cb0a9cfe8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SortingAlgorithms/6dCmw_fIcRM.so for SortingAlgorithms [a2af1166-a08f-5f64-846c-94a0d3cef48c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Missings/wLfgT_lqE2y.so for Missings [e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DocStringExtensions/KRdZs_fIcRM.so for DocStringExtensions [ffbed154-4ef7-542d-bbb7-c09d3a79fcae]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IrrationalConstants/ukdUG_lqE2y.so for IrrationalConstants [92d709cd-6900-40b7-9082-c6be49f344b6]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LogExpFunctions/cmCYR_fIcRM.so for LogExpFunctions [2ab3a3ac-af41-5b50-aa03-7779005ae688]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Statistics/ERcPL_lqE2y.so for Statistics [10745b16-79ce-11e8-11f9-7d13ad32a3b2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/SuiteSparse_jll/ME9At_4x0TT.so for SuiteSparse_jll [bea87d4a-7f5b-5778-9afe-8cc45184846c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Serialization/zGad9_4x0TT.so for Serialization [9e88b42a-f829-5b0c-bbe9-9e923198166b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseArrays/P9ieR_lqE2y.so for SparseArrays [2f01184e-e22b-5df5-ae63-d93ebab69eaf]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseArraysExt/k0lPI_lqE2y.so for SparseArraysExt [c399192f-b7ce-5053-9844-b5b6ade3ad52]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StatsAPI/Rf3YC_fIcRM.so for StatsAPI [82ae8749-77ed-4fe6-ae5f-f523153014b0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PtrArrays/y1ds7_lqE2y.so for PtrArrays [43287f4e-b6f4-7ad1-bb20-aadabca52c3d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AliasTables/C6bK3_lqE2y.so for AliasTables [66dad0bd-aa9a-41b7-9441-69ab47430ed8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StatsBase/EZjIG_fIcRM.so for StatsBase [2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArraysStatisticsExt/EfhbW_lqE2y.so for StaticArraysStatisticsExt [3453fcb0-342e-5e4a-a93b-f2e19ba3ba0f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArraysOfArrays/4Z8Nr_lqE2y.so for ArraysOfArrays [65a8f2f4-9b39-5baf-92e2-a9cc46fdf018]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArraysOfArraysStaticArraysCoreExt/VN2FK_lqE2y.so for ArraysOfArraysStaticArraysCoreExt [b50caedb-a423-5726-a886-e26ee9793788]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConstructionBase/sBbW6_P52xb.so for ConstructionBase [187b0558-2788-49d3-abe0-74a17ed4e7c9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConstructionBaseLinearAlgebraExt/mc2IG_P52xb.so for ConstructionBaseLinearAlgebraExt [c62c8707-47b7-5698-8582-f212d625ab71]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DataValueInterfaces/9Lpkp_lqE2y.so for DataValueInterfaces [e2d170a0-9d28-54be-80f0-106bbe20a464]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IteratorInterfaceExtensions/N0h8q_lqE2y.so for IteratorInterfaceExtensions [82899510-4779-5014-852e-03e436cf321d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TableTraits/I6SaN_lqE2y.so for TableTraits [3783bdb8-4a98-5b6b-af9a-565f29a5fe9c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Tables/Z804B_fIcRM.so for Tables [bd369af6-aec1-5ad0-b16a-f7cc5008161c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StructArrays/jRMFC_fIcRM.so for StructArrays [09ab397b-f2b6-538f-b94a-2f83cf4a842a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConstructionBaseStaticArraysExt/MmdaU_P52xb.so for ConstructionBaseStaticArraysExt [8497ba20-d017-5d93-8a79-2639523b7219]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StructArraysStaticArraysExt/xG3H2_fIcRM.so for StructArraysStaticArraysExt [d1e1e8be-46cf-5459-abb8-be6c7518b661]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StructArraysSparseArraysExt/PDHF1_fIcRM.so for StructArraysSparseArraysExt [d5b9410b-929f-5d61-aab8-0598522fd334]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StructArraysLinearAlgebraExt/j2VwV_fIcRM.so for StructArraysLinearAlgebraExt [084ded39-0575-5459-ba0f-7a4568fdaad8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SuiteSparse/X9Gex_lqE2y.so for SuiteSparse [4607b0f0-06f3-5cda-b6b1-a6196a1729e9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PDMats/wuzEE_lqE2y.so for PDMats [90014a1f-27ba-587c-ab20-58faa44d9150]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Reexport/bTpYr_lqE2y.so for Reexport [189a3867-3050-52da-a836-e630ba90ab69]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/OpenLibm_jll/ToVO1_4x0TT.so for OpenLibm_jll [05823500-19ac-5b8b-9628-191a04bc5112]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/JLLWrappers/7Zgw7_lqE2y.so for JLLWrappers [692b3bcd-3c85-4b1f-b108-f13ce0eb3210]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/CompilerSupportLibraries_jll/iCwSB_4x0TT.so for CompilerSupportLibraries_jll [e66e0078-7015-5450-92f7-15fbd957f2ae]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OpenSpecFun_jll/TDl1L_lqE2y.so for OpenSpecFun_jll [efe28fd5-8261-553b-a9e1-b2916fc3738e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SpecialFunctions/78gOt_fIcRM.so for SpecialFunctions [276daf66-3868-5448-9aa4-cd146d93841b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Rmath_jll/JC1Xk_lqE2y.so for Rmath_jll [f50d1b31-88e8-58de-be2c-1cc44531875f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Rmath/0iTqX_lqE2y.so for Rmath [79098fc4-a85e-5d69-aa6a-4863f24498fa]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HypergeometricFunctions/tHlAh_fIcRM.so for HypergeometricFunctions [34004b35-14d8-5ef3-9330-4cdb6864b03a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StatsFuns/530lR_fIcRM.so for StatsFuns [4c63d2b9-4356-54db-8cca-17b64c39e42c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/QuadGK/hq5Ol_fIcRM.so for QuadGK [1fd47b50-473d-5c70-9696-f719f8f3bcdc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FillArrays/2Dg1l_lqE2y.so for FillArrays [1a297f60-69ca-5386-bcde-b61e274b549b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FillArraysPDMatsExt/ss8Ey_lqE2y.so for FillArraysPDMatsExt [8f4ebe69-86d3-5e4a-a026-ecafd7646e97]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FillArraysSparseArraysExt/pkjPP_lqE2y.so for FillArraysSparseArraysExt [44fc9386-74a0-5599-8935-2652d5510edb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FillArraysStatisticsExt/Cj02z_lqE2y.so for FillArraysStatisticsExt [6aab314e-91af-578f-94bd-30d484db1c87]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Distributions/xILW0_fIcRM.so for Distributions [31c24e10-a181-5473-b8eb-7969acd0382f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DiffRules/x2ZNk_lqE2y.so for DiffRules [b552c78f-8df3-52c6-915a-8e097449b14b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DiffResults/vlfPe_lqE2y.so for DiffResults [163ba53b-c6d8-5494-b064-1a9d43ac40c5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/NaNMath/k9Y1O_lqE2y.so for NaNMath [77ba4419-2d1f-58cd-9bb1-8ffee604a2e3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MacroTools/38lnR_lqE2y.so for MacroTools [1914dd2f-81c6-5fcd-8719-6d5c9610ff09]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CommonSubexpressions/VMTKN_lqE2y.so for CommonSubexpressions [bbf7d656-a473-5ed7-a52c-81e309532950]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ForwardDiff/k0ETY_fIcRM.so for ForwardDiff [f6369f11-7733-5829-9624-2563aa707210]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ForwardDiffStaticArraysExt/QQ4BU_fIcRM.so for ForwardDiffStaticArraysExt [b74fd6d0-9da7-541f-a07d-1b6af30a262f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/WoodburyMatrices/LdtKf_lqE2y.so for WoodburyMatrices [efce3f68-66dc-5838-9240-27a6d6f5f9b6]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Ratios/zQEsd_lqE2y.so for Ratios [c84ed2f1-dad5-54f0-aa8e-dbefe2724439]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AxisAlgorithms/lW7vi_lqE2y.so for AxisAlgorithms [13072b0f-2c55-5437-9ae7-d433b7a33950]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OffsetArrays/UDEDl_lqE2y.so for OffsetArrays [6fe1bfb0-de20-5000-8ca7-80f57d26f881]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ChainRulesCore/G6ax7_lqE2y.so for ChainRulesCore [d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArraysChainRulesCoreExt/ETade_lqE2y.so for StaticArraysChainRulesCoreExt [cbf6619a-af44-5bf5-931a-f7c73a88debd]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ChainRulesCoreSparseArraysExt/QNMPN_lqE2y.so for ChainRulesCoreSparseArraysExt [b93a7035-081d-5d9c-b45c-e3eb3a79b0f8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Adapt/rUIgN_lqE2y.so for Adapt [79e6a3ab-5dfb-504d-930d-738a2a938a0e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OffsetArraysAdaptExt/evlsb_lqE2y.so for OffsetArraysAdaptExt [9ea13c92-b805-51cc-a17e-c5d4dc71a5cc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AdaptStaticArraysExt/9bCdf_lqE2y.so for AdaptStaticArraysExt [e1699a77-9e31-5da8-bb3e-0a796f95f0a0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AdaptSparseArraysExt/7qfxl_lqE2y.so for AdaptSparseArraysExt [c3128895-b67d-5ae3-9236-5571f71145f1]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Interpolations/VpKVx_lqE2y.so for Interpolations [a98d9a8b-a2ab-59e6-89dd-64a1c18fca59]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LogExpFunctionsChainRulesCoreExt/1yuhV_fIcRM.so for LogExpFunctionsChainRulesCoreExt [1bf5f11d-9a0a-5d25-85d0-d1d9a28a239c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArraysOfArraysChainRulesCoreExt/EvHwo_lqE2y.so for ArraysOfArraysChainRulesCoreExt [bc4e48b3-df0d-5674-b246-12f9e3f52912]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SpecialFunctionsChainRulesCoreExt/wr3Ok_fIcRM.so for SpecialFunctionsChainRulesCoreExt [9eb7bdd4-e44c-55fc-b9cc-1a32cb715188]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StatsFunsChainRulesCoreExt/CNges_fIcRM.so for StatsFunsChainRulesCoreExt [d41313fe-2684-5453-9fef-703f5fa397f4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistributionsChainRulesCoreExt/uFTmV_fIcRM.so for DistributionsChainRulesCoreExt [6db1f127-056a-568b-bd49-ae61d42389fa]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArraysOfArraysAdaptExt/MulHA_lqE2y.so for ArraysOfArraysAdaptExt [61a48756-deb8-5b59-adae-48b93e2c28cf]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StructArraysAdaptExt/LGSao_fIcRM.so for StructArraysAdaptExt [f04e5bcb-ab32-5a64-8b64-c2cc4abec66e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Mmap/GDYy0_4x0TT.so for Mmap [a63ad114-7e13-5084-954f-fe012c677804]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Parsers/833b9_lqE2y.so for Parsers [69de0a69-1ddd-5017-9359-2bf0b02dc9f0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Future/Ebope_4x0TT.so for Future [9fa8497b-333b-5362-9e8d-4d0656e87820]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PooledArrays/vi11X_lqE2y.so for PooledArrays [2dfb63ee-cc39-5dd5-95bd-886bf059d720]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SentinelArrays/uMYVe_lqE2y.so for SentinelArrays [91c51154-3ec4-41a3-a24f-3f23e20d615c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InlineStrings/prmY3_lqE2y.so for InlineStrings [842dd82b-1e85-43dc-bf29-5d0ee9dffc48]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ParsersExt/cULGY_lqE2y.so for ParsersExt [f526588d-e68b-5dc5-a62e-ff9f36e48b1a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/WeakRefStrings/muGbw_lqE2y.so for WeakRefStrings [ea10d353-3f73-51f8-a26c-33c1cb351aa5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Test/JfdTE_4x0TT.so for Test [8dfed614-e22c-5e08-85e1-65c5234f0b40]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TranscodingStreams/eJQ7D_fIcRM.so for TranscodingStreams [3bb67fe8-82b1-5028-8e26-92a6c54297fa]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Zlib_jll/xjq3Q_4x0TT.so for Zlib_jll [83775a58-1f1d-513f-b197-d71354ab007a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CodecZlib/1TI30_fIcRM.so for CodecZlib [944b1d66-785c-5afd-91f1-9de20f533193]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FilePathsBase/Efv1v_lqE2y.so for FilePathsBase [48062228-2e41-5def-b9a4-89aafe57970f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FilePathsBaseMmapExt/bw4lJ_lqE2y.so for FilePathsBaseMmapExt [968c5e7e-8fc3-5f0f-93d2-8a5e0e125e4f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FilePathsBaseTestExt/5f6TB_lqE2y.so for FilePathsBaseTestExt [36f6b4e4-024d-52bd-a01f-148eb20c09de]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/WorkerUtilities/8EFUg_lqE2y.so for WorkerUtilities [76eceee3-57b5-4d4a-8e66-0e911cebbf60]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CSV/HHBkp_fIcRM.so for CSV [336ed68f-0bac-5ca0-87d4-7b16caf5d00b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistributionsTestExt/Mb8xE_fIcRM.so for DistributionsTestExt [ffbe0ea5-a612-5ff7-aaf5-cac02eef3019]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InvertedIndices/0P8C6_lqE2y.so for InvertedIndices [41ab1584-1d38-5bbf-9106-f11c6c58b48f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StringManipulation/4nJQd_lqE2y.so for StringManipulation [892a3eda-7b42-436c-8928-eab12a02cf0e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Crayons/TXPcU_lqE2y.so for Crayons [a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LaTeXStrings/H4HGh_lqE2y.so for LaTeXStrings [b964fa9f-0449-5b57-a5c2-d3ea65f4040f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PrettyTables/kRdcL_fIcRM.so for PrettyTables [08abe8d2-0d0c-5749-adfa-8a2ac140af0d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DataFrames/AR9oZ_fIcRM.so for DataFrames [a93c6f00-e57d-5684-b7b6-d8193f3e46c0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DelimitedFiles/dlKZm_lqE2y.so for DelimitedFiles [8bb1440f-4735-579b-a4ab-409b98df4dab]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Indexing/nhxyK_lqE2y.so for Indexing [313cdc1a-70c2-5d6a-ae34-0150d3930a38]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Dictionaries/OxieO_lqE2y.so for Dictionaries [85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SplitApplyCombine/vbX6o_lqE2y.so for SplitApplyCombine [03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TypedTables/NU69s_fIcRM.so for TypedTables [9d95f2ec-7b3d-5a63-8d20-e2491e220bb9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InverseFunctions/PkVmn_lqE2y.so for InverseFunctions [3587e190-3f89-42d0-90ee-14403ec27112]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InverseFunctionsTestExt/iqUmc_lqE2y.so for InverseFunctionsTestExt [05f3ecc3-30a3-5b98-a414-5bae29b80c93]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DensityInterface/BAnhd_lqE2y.so for DensityInterface [b429d917-457f-4dbc-8f4c-0cc954292b1d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LogExpFunctionsInverseFunctionsExt/IXKft_fIcRM.so for LogExpFunctionsInverseFunctionsExt [1e5f9c58-a15c-5ce5-87cf-a68a2eda25d9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StatsFunsInverseFunctionsExt/q61Ri_fIcRM.so for StatsFunsInverseFunctionsExt [da3fed98-1718-55bb-8128-3e4a2e454b06]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InverseFunctionsDatesExt/gjNlb_lqE2y.so for InverseFunctionsDatesExt [33677a4c-2dac-51eb-93f3-7ff1c38acef2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistributionsDensityInterfaceExt/fjCdH_fIcRM.so for DistributionsDensityInterfaceExt [8d3cd4d8-9481-53f7-8454-1bd38b07cca3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Distributed/Pq94q_4x0TT.so for Distributed [8ba89e20-285c-5b6f-9357-94700520ee1b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AffineMaps/kB996_lqE2y.so for AffineMaps [2c83c9a8-abf5-4329-a0d7-deffaf474661]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AffineMapsAdaptExt/fFVHb_lqE2y.so for AffineMapsAdaptExt [d833814d-5344-54b8-9fd7-4b545fded41e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArgCheck/P66Js_lqE2y.so for ArgCheck [dce04be8-c92d-5529-be00-80e4d2c0e197]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ADTypes/czFbS_lqE2y.so for ADTypes [47edcb42-4c32-4615-8424-f2b9edc5f35b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AutoDiffOperators/Z4p1J_lqE2y.so for AutoDiffOperators [6e1301d5-4f4d-4fb5-9679-7191e22f0e0e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ChangesOfVariables/wqbay_lqE2y.so for ChangesOfVariables [9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AffineMapsChangesOfVariablesExt/208ft_lqE2y.so for AffineMapsChangesOfVariablesExt [91102c19-c861-5670-bbd0-2380824f89a0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Distances/yuMjt_fIcRM.so for Distances [b4f34e82-e78d-54a5-968a-f98e89d6e8f7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/NearestNeighbors/Yj1kF_fIcRM.so for NearestNeighbors [b8a86587-4115-5ab1-83bc-aa920d37bbce]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistancesSparseArraysExt/2KLYQ_lqE2y.so for DistancesSparseArraysExt [feee1041-5e3e-5b48-b2f8-f25e4435f184]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Clustering/Ovl2Q_fIcRM.so for Clustering [aaaa29a8-35af-508c-8bc3-b662a17a0fe5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LogExpFunctionsChangesOfVariablesExt/cs7F9_fIcRM.so for LogExpFunctionsChangesOfVariablesExt [d47b78d0-3e93-544e-a8f0-7d68e074d7e0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FixedPointNumbers/Ple2W_lqE2y.so for FixedPointNumbers [53c48c17-4a7d-5ca2-90c5-79b7896eea93]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ColorTypes/db21U_lqE2y.so for ColorTypes [3da002f7-5984-5a60-b8a6-cbb66c0b333f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Colors/NKjaT_fIcRM.so for Colors [5ae59095-9a9b-59fe-a467-6f913c188581]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AffineMapsInverseFunctionsExt/lfKnr_lqE2y.so for AffineMapsInverseFunctionsExt [0c52730f-560f-5cbc-afb0-4a52db915012]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ChangesOfVariablesInverseFunctionsExt/Nv32Z_lqE2y.so for ChangesOfVariablesInverseFunctionsExt [d0b4f6a1-c264-551e-8bef-a9290b2e7f67]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ChangesOfVariablesTestExt/cjbpL_lqE2y.so for ChangesOfVariablesTestExt [ada55b64-61cc-541e-9a5b-b883d9c14c84]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Requires/IyxeS_lqE2y.so for Requires [ae029012-a4dd-5104-9daa-d747884805df]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ADTypesConstructionBaseExt/1jNpr_P52xb.so for ADTypesConstructionBaseExt [ce394640-727c-5b1c-8cad-c739d5af1b37]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Setfield/dVM1R_fIcRM.so for Setfield [efcf1570-3423-57d1-acb7-fd33fddbac46]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RecipesBase/8e2Mm_lqE2y.so for RecipesBase [3cdcf5f2-1ef4-517c-9805-6587b60abb01]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Polynomials/OaK78_fIcRM.so for Polynomials [f27b6e38-b328-58d1-80ce-0feddd5e7a45]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/GenericLinearAlgebra/Tm5A3_lqE2y.so for GenericLinearAlgebra [14197337-ba66-59df-a3e3-ca00e7dcff7a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Quadmath/q52id_lqE2y.so for Quadmath [be4d8f0f-7fa4-5f49-b795-2f01399ab2dd]
+└ @ Base loading.jl:1244
+┌ Debug: Requires conditionally ran code in 0.104155609 seconds: `Quadmath` detected `SpecialFunctions`
+└ @ Requires ~/.julia/packages/Quadmath/9m1UY/src/Quadmath.jl:120
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DoubleFloats/KzTCm_fIcRM.so for DoubleFloats [497a8b3b-efae-58df-a0af-a86822472b78]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ElasticArrays/RnFLn_lqE2y.so for ElasticArrays [fdbdab4c-e67f-52f5-8c3f-e7b388dad3d4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AbstractFFTs/Di3HZ_lqE2y.so for AbstractFFTs [621f4979-c628-5d54-868e-fcf4e3e8185c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FFTW_jll/9AVlm_lqE2y.so for FFTW_jll [f5851436-0d7a-5f13-b9de-f02708fd171a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FFTW/PvIn2_fIcRM.so for FFTW [7a1cc6ca-52ef-59f5-83cd-3a7055c09341]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AbstractFFTsTestExt/Pr5Et_lqE2y.so for AbstractFFTsTestExt [f14dd36e-a047-53ac-8286-f8b5d0265aae]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PolynomialsFFTWExt/ZZCJs_fIcRM.so for PolynomialsFFTWExt [9608b13c-6431-545a-872b-73fbdae89308]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IfElse/YSZB7_lqE2y.so for IfElse [615f187c-cbe4-4ef1-ba3b-2fcf58d6d173]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CommonWorldInvalidations/rQYNM_lqE2y.so for CommonWorldInvalidations [f70d9fcc-98c5-4d4a-abd7-e4cdeebd8ca8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Static/4nGFz_lqE2y.so for Static [aedffcd0-7271-4cad-89d0-dc628f76c6d3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ForwardDiffPullbacks/T3G5B_fIcRM.so for ForwardDiffPullbacks [450a3b6d-2448-4ee1-8e34-e4eb8713b605]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ADTypesChainRulesCoreExt/7JI5I_lqE2y.so for ADTypesChainRulesCoreExt [65ed90d4-2771-548d-a522-050304da18d0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistancesChainRulesCoreExt/xg1UR_fIcRM.so for DistancesChainRulesCoreExt [ae626735-4632-5a5b-a2bf-d8e33c22a871]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PolynomialsChainRulesCoreExt/Q9QWh_fIcRM.so for PolynomialsChainRulesCoreExt [f5ad5175-ea71-5bad-b0d8-3d77b6894ccb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AbstractFFTsChainRulesCoreExt/g4vnt_lqE2y.so for AbstractFFTsChainRulesCoreExt [07c0d231-1838-56d6-9ec8-835e5b9b958e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AutoDiffOperatorsForwardDiffExt/nTCBs_fIcRM.so for AutoDiffOperatorsForwardDiffExt [1249499b-5e6b-5134-9883-9ce68e81a3c2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Tricks/EXUG1_lqE2y.so for Tricks [410a4b4d-49e4-4fbc-ab6d-cb71b17b3775]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionChains/6lFKN_lqE2y.so for FunctionChains [8e6b2b91-af83-483e-ba35-d00930e4cf9b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionChainsAdaptExt/bnlMs_lqE2y.so for FunctionChainsAdaptExt [5c9aabff-8d1b-56b7-9edc-e3f79759aac5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionChainsChangesOfVariablesExt/WpjzB_lqE2y.so for FunctionChainsChangesOfVariablesExt [49ee83fb-dde6-50da-ac89-683ddea3ad2e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalSets/2FHuv_lqE2y.so for IntervalSets [8197267c-284f-5f27-9208-e0e47529a953]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConstructionBaseIntervalSetsExt/yl6Pl_fIcRM.so for ConstructionBaseIntervalSetsExt [ada10adf-9d10-520f-9513-eeb7f7281760]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalSetsRecipesBaseExt/wAeAb_lqE2y.so for IntervalSetsRecipesBaseExt [37015e66-589a-58b1-bfae-83565f1dedb3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalSetsRandomExt/GqezX_lqE2y.so for IntervalSetsRandomExt [26d0d72c-3857-57d2-89fc-eff847a63330]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalSetsStatisticsExt/TaqYo_lqE2y.so for IntervalSetsStatisticsExt [4669a702-d83a-5010-9a36-51bb7e898c10]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/KernelDensity/4QyGx_fIcRM.so for KernelDensity [5ab0869b-81aa-558d-bb23-cbf5423bbe9b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RatiosFixedPointNumbersExt/R2tFd_lqE2y.so for RatiosFixedPointNumbersExt [dc815b64-233b-5bd3-8c5c-a58ec2b485bf]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/ArgTools/aGHFV_4x0TT.so for ArgTools [0dad84c5-d112-42e6-8d28-ef12dabb789f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/nghttp2_jll/KTGSA_4x0TT.so for nghttp2_jll [8e850ede-7688-5339-a07c-302acd2aaf8d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/LibCURL_jll/9JWaY_4x0TT.so for LibCURL_jll [deac9b47-8bc7-5906-a0fe-35ac56dc84c0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/MozillaCACerts_jll/XKIUi_4x0TT.so for MozillaCACerts_jll [14a3606d-f60d-562e-9121-12d972cd8159]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/LibCURL/ht49g_4x0TT.so for LibCURL [b27032c2-a3e7-50c8-80cd-2d36dbcbfd21]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Downloads/eiA4B_4x0TT.so for Downloads [f43a241f-c20a-4ad4-852c-f6b1247861c6]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Tar/G9ZYP_4x0TT.so for Tar [a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/p7zip_jll/dfuGM_4x0TT.so for p7zip_jll [3f19e933-33d8-53b3-aaab-bd5110c3b7a0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/Pkg/tUTdb_4x0TT.so for Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/UnPack/zm2TF_lqE2y.so for UnPack [3a884ed6-31ef-47d7-9d2a-63182c4928ed]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Parameters/ycYNs_fIcRM.so for Parameters [d96e819e-fc66-5662-9728-84c9c7592b0a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ElasticClusterManager/K60er_lqE2y.so for ElasticClusterManager [547eee1f-27c8-4193-bfd6-9e092c8e3331]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ParallelProcessingTools/aOqk7_fIcRM.so for ParallelProcessingTools [8e8a01fc-6193-5ca1-a2f1-20776dae4199]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PositiveFactorizations/8r3Dc_lqE2y.so for PositiveFactorizations [85a6dd25-e78a-55b7-8502-1745935b8125]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ZygoteRules/LmjSI_lqE2y.so for ZygoteRules [700de1a5-db45-46bc-99cf-38207098b444]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RandomNumbers/pgCpR_lqE2y.so for RandomNumbers [e6cf234a-135c-5ec9-84dd-332b85af5143]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Random123/1imiM_lqE2y.so for Random123 [74087812-796a-5b5d-8853-05524746bad3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ValueShapes/374qD_fIcRM.so for ValueShapes [136a8f8c-c49b-4edb-8b98-f3d64d48be8f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/GPUArraysCore/qiYUe_lqE2y.so for GPUArraysCore [46192b85-c4d5-4398-a991-12ede77f4527]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RealDot/dCVlS_lqE2y.so for RealDot [c1ae055f-0cd5-4b69-90a6-9a35b1a98df9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseInverseSubset/bmarX_lqE2y.so for SparseInverseSubset [dc90abb0-5640-4711-901d-7e5b23a2fada]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ChainRules/AzGmQ_fIcRM.so for ChainRules [082447d4-558c-5d27-93f4-14fc19e9eca2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistributionsAD/mhHYG_fIcRM.so for DistributionsAD [ced4e74d-a319-5a8a-b0ac-84af2272839c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistributionsADForwardDiffExt/WpfSf_fIcRM.so for DistributionsADForwardDiffExt [95af61a0-22df-51ed-b826-bfe4426ad132]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/EmpiricalDistributions/KnJds_fIcRM.so for EmpiricalDistributions [0bbb1fad-0f24-45fe-94a4-415852c5cc3b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CommonSolve/zEcGf_lqE2y.so for CommonSolve [38540f10-b2f7-11e9-35d8-d573e4eb0ff2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CompositionsBase/KqDTx_lqE2y.so for CompositionsBase [a33af91c-f02d-484b-be07-31d278c5ca2b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CompositionsBaseInverseFunctionsExt/WTKja_lqE2y.so for CompositionsBaseInverseFunctionsExt [62a8cebd-3339-5698-a5de-13c35b75e11f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Accessors/XelUh_fIcRM.so for Accessors [7d9f7c33-5ae7-4f3b-8dc6-eff91059b697]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LinearAlgebraExt/Pm3AL_fIcRM.so for LinearAlgebraExt [ef8e1453-9c17-56fe-886b-405471570bc8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Roots/o0Xsi_fIcRM.so for Roots [f2b01f46-fcfa-551c-844a-d8ac1e96c665]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Combinatorics/AwRuT_lqE2y.so for Combinatorics [861a8166-3701-5b0c-9a16-15d98fcdc6aa]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HypothesisTests/MUGEl_fIcRM.so for HypothesisTests [09f84164-cd44-5f33-b23f-e6b0d136a0d5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionChainsAccessorsExt/eygpy_fIcRM.so for FunctionChainsAccessorsExt [1ae9367c-e962-507f-bc4f-6915802e45cc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalSetsExt/TQHvG_fIcRM.so for IntervalSetsExt [71b72403-3d0d-5ec7-be98-551cc85f009b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StructArraysExt/enPJx_fIcRM.so for StructArraysExt [7174a82b-1e85-55a8-8a3d-2691d660c3ac]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TestExt/hMow3_fIcRM.so for TestExt [62af87b3-b810-57d2-b7eb-8929911df373]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArraysExt/sIz4V_fIcRM.so for StaticArraysExt [6207fee4-2535-5e24-a3ba-6518da1c7d2a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RootsForwardDiffExt/5SNbM_fIcRM.so for RootsForwardDiffExt [a63bd285-541a-50a0-818b-605bb84ce7b2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RootsChainRulesCoreExt/Y0Xth_fIcRM.so for RootsChainRulesCoreExt [ed86971b-cb3e-5b82-8694-788a75975987]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Calculus/G3wEN_lqE2y.so for Calculus [49dc2e85-a5d0-5ad3-a950-438e2897f1b9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Measurements/8B0my_lqE2y.so for Measurements [eff96d63-e80a-5855-80a2-b1b0885c5ab7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MeasurementsRecipesBaseExt/mHcMh_lqE2y.so for MeasurementsRecipesBaseExt [8d1752d7-b156-5d0c-ba1f-2b6104fd6068]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MeasurementsSpecialFunctionsExt/UVnBI_fIcRM.so for MeasurementsSpecialFunctionsExt [4e7bbfdf-6151-5523-96ab-16f816c5a3ee]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/NamedArrays/wPYCq_lqE2y.so for NamedArrays [86f7a689-2022-50b4-a561-43c23ac3c673]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Sobol/ohkOh_lqE2y.so for Sobol [ed01d8cd-4d21-5b2a-85b4-cc3bdc58bad4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StableRNGs/fu6AW_lqE2y.so for StableRNGs [860ef19b-820b-49d6-a774-d7a799459cd3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HeterogeneousComputing/6BLsC_lqE2y.so for HeterogeneousComputing [2182be2a-124f-4a91-8389-f06db5907a21]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PrettyPrinting/ayLxl_lqE2y.so for PrettyPrinting [54e16d92-306c-5ea0-a30b-337be88ac337]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LogarithmicNumbers/7iTUY_lqE2y.so for LogarithmicNumbers [aa2f6b4e-9042-5d33-9679-40d3a6b85899]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MappedArrays/xJB11_lqE2y.so for MappedArrays [dbb5928d-eab1-5f90-85c2-b9b0edb7c900]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MeasureBase/XJLgb_fIcRM.so for MeasureBase [fa1605e6-acd5-459c-a1e6-7e635759db14]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LogarithmicNumbersForwardDiffExt/hpyBY_fIcRM.so for LogarithmicNumbersForwardDiffExt [93b47b7c-0f02-5088-90d7-55f527d3c7c9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CompositeTypes/Uc3SY_lqE2y.so for CompositeTypes [b152e2b5-7a66-4b01-a709-34e65c35f657]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DomainSets/ksPnB_lqE2y.so for DomainSets [5b8099bc-c8ec-5219-889f-1d9e522a28bf]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MIMEs/d3QmO_fIcRM.so for MIMEs [6c6e2e6c-3030-632d-7369-2d6c69616d65]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LazyReports/ySxN2_fIcRM.so for LazyReports [e5afb96c-f319-4582-8667-2a6c7d02249d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LazyReportsStatsBaseExt/Ncs5r_fIcRM.so for LazyReportsStatsBaseExt [0b4fb294-d4cf-52fd-a64c-126310048803]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Functors/lER0H_fIcRM.so for Functors [d9f16b24-f501-4c13-a1f2-28368ffc5196]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AffineMapsFunctorsExt/WnduF_fIcRM.so for AffineMapsFunctorsExt [5397f292-0f07-5825-a45a-32649732068e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionChainsFunctorsExt/nDbau_fIcRM.so for FunctionChainsFunctorsExt [43525f10-f4fc-5c96-a579-7e072c0eb0ee]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/BAT/ILbBM_fIcRM.so for BAT [c0cd4b16-88b7-57fa-983b-ab80aecada7e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArrayInterface/7bROb_lqE2y.so for ArrayInterface [4fba245c-0d91-5ea0-9b3e-6abc04ee57a9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArrayInterfaceStaticArraysCoreExt/gqwrP_lqE2y.so for ArrayInterfaceStaticArraysCoreExt [48797bb2-d098-51e0-906f-70266c2e01ac]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ExprTools/eM8wu_lqE2y.so for ExprTools [e2ba6199-217a-4e67-a87a-7c52f15ade04]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RuntimeGeneratedFunctions/OELxO_fIcRM.so for RuntimeGeneratedFunctions [7e49a35a-f44a-4d26-94aa-eba1b4ca6b47]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SymbolicIndexingInterface/nIEWT_fIcRM.so for SymbolicIndexingInterface [2efcf032-c050-4f8e-a9bb-153293bab1f5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArrayInterfaceGPUArraysCoreExt/sVb8r_lqE2y.so for ArrayInterfaceGPUArraysCoreExt [f5566fad-042a-5915-b3b1-71de67883923]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RecursiveArrayTools/6B7tG_fIcRM.so for RecursiveArrayTools [731186ca-8d62-57ce-b412-fbd966d074cd]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLStructures/TEBpV_lqE2y.so for SciMLStructures [53ae85a6-f571-4167-b2af-e1d143709226]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionWrappers/wbVUX_lqE2y.so for FunctionWrappers [069b7b12-0de2-55c6-9aab-29f3d0a68a2e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FunctionWrappersWrappers/e68Y1_lqE2y.so for FunctionWrappersWrappers [77dc65aa-8811-40c2-897b-53d922fa7daf]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/EnumX/yh1Fz_lqE2y.so for EnumX [4e289a0a-7415-4d19-859d-a7e5c4648b56]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ExproniconLite/2CPrV_lqE2y.so for ExproniconLite [55351af7-c7e9-48d6-89ff-24e801d99491]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Jieko/F4xSq_lqE2y.so for Jieko [ae98c720-c025-4a4a-838c-29b094483192]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Moshi/AXKwX_lqE2y.so for Moshi [2e0e35c7-a2e4-4343-998d-7ef72827ed2d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLOperators/G7AwB_fIcRM.so for SciMLOperators [c0aeaf25-5076-4817-a8d5-81caf7dfa961]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLOperatorsStaticArraysCoreExt/1x2Xl_fIcRM.so for SciMLOperatorsStaticArraysCoreExt [a2df0a61-553a-563b-aed7-0ce21874eb58]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLBase/jigfq_fIcRM.so for SciMLBase [0bca4576-84f4-4d90-8ffe-ffa030f20462]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArrayInterfaceSparseArraysExt/3nhwj_lqE2y.so for ArrayInterfaceSparseArraysExt [df319534-c31f-52ad-82d4-403d3787952e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RecursiveArrayToolsSparseArraysExt/bbZ8J_fIcRM.so for RecursiveArrayToolsSparseArraysExt [73e54eaf-3344-511d-b088-1ac5413eca63]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLOperatorsSparseArraysExt/XG7P7_fIcRM.so for SciMLOperatorsSparseArraysExt [9985400b-97ec-5583-b534-4f70b643bcf7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FastClosures/x4yT8_lqE2y.so for FastClosures [9aa1b823-49e4-5ca5-8b0f-3971ec8bab6a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterface/eUOjg_lqE2y.so for DifferentiationInterface [a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceGPUArraysCoreExt/XwYg3_lqE2y.so for DifferentiationInterfaceGPUArraysCoreExt [84466896-9be0-59d9-a6c0-1e4e2a5f5925]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceSparseArraysExt/3G6Ie_lqE2y.so for DifferentiationInterfaceSparseArraysExt [b08b8115-38b0-5317-86de-b806e26a31fc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseConnectivityTracer/AGPkv_fIcRM.so for SparseConnectivityTracer [9f842d2f-2579-4b1d-911e-f412cf18a3f5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceSparseConnectivityTracerExt/jKyOe_fIcRM.so for DifferentiationInterfaceSparseConnectivityTracerExt [d59d10b7-1dae-5777-89c3-d355480b0221]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseMatrixColorings/N1ch2_fIcRM.so for SparseMatrixColorings [0a514795-09f3-496d-8182-132a7b665d35]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceSparseMatrixColoringsExt/Ze6MR_fIcRM.so for DifferentiationInterfaceSparseMatrixColoringsExt [47c9d817-0958-518c-b746-b505a6e8df74]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OptimizationBase/KqFVQ_fIcRM.so for OptimizationBase [bca83a33-5cc9-4baa-983d-23429ab6bcbb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ProgressLogging/3bHJq_lqE2y.so for ProgressLogging [33c8b6b6-d38a-422a-b730-caa89a2f386c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ProgressMeter/3V8n6_fIcRM.so for ProgressMeter [92933f4c-e287-5a05-a399-4b506db050ca]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConsoleProgressMonitor/9IB2A_fIcRM.so for ConsoleProgressMonitor [88cd18e8-d9cc-4ea6-8889-5259c0d15c8b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AbstractTrees/tEX7J_lqE2y.so for AbstractTrees [1520ce14-60c1-5f80-bbc7-55ef81b5835c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LeftChildRightSiblingTrees/Xcd3f_lqE2y.so for LeftChildRightSiblingTrees [1d6d02ad-be62-4b6b-8a6d-2f90e265016e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TerminalLoggers/gtVHp_lqE2y.so for TerminalLoggers [5d786b92-1e48-4d6f-9151-6b4477ca9bed]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LoggingExtras/9fRHf_lqE2y.so for LoggingExtras [e6f89c97-d47a-5376-807f-9c37f3926c36]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/L_BFGS_B_jll/cttBW_lqE2y.so for L_BFGS_B_jll [81d17ec3-03a1-5e46-b53e-bddc35a13473]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LBFGSB/8EWPi_lqE2y.so for LBFGSB [5be7bae1-8223-5378-bac3-9e7378a2f6e6]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Optimization/emDVZ_fIcRM.so for Optimization [7f7a1694-90dd-40f0-9382-eb1efda571ba]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArrayInterfaceChainRulesCoreExt/EjHsn_lqE2y.so for ArrayInterfaceChainRulesCoreExt [eb83e881-a866-5cf1-975c-edd1d5b6a108]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ArrayInterfaceChainRulesExt/hPJ0X_fIcRM.so for ArrayInterfaceChainRulesExt [8673388c-2cec-59d7-825e-32163c06c3e1]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RecursiveArrayToolsStructArraysExt/sC6hW_fIcRM.so for RecursiveArrayToolsStructArraysExt [07510ace-05c5-59ac-8535-cc0df8d4a157]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RecursiveArrayToolsForwardDiffExt/hFOID_fIcRM.so for RecursiveArrayToolsForwardDiffExt [14203109-85fb-5f77-af23-1cb7d9032242]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RecursiveArrayToolsMeasurementsExt/VgMwr_fIcRM.so for RecursiveArrayToolsMeasurementsExt [dc05e6ec-7185-572c-9405-d65ccff0d4b4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLBaseChainRulesCoreExt/rhCXQ_fIcRM.so for SciMLBaseChainRulesCoreExt [4676cac9-c8e0-5d6e-a4e0-e3351593cdf5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AutoDiffOperatorsDifferentiationInterfaceExt/2xRJG_lqE2y.so for AutoDiffOperatorsDifferentiationInterfaceExt [8e92b842-f14f-5b84-aedf-e53156479f51]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceChainRulesCoreExt/HcPk8_lqE2y.so for DifferentiationInterfaceChainRulesCoreExt [9dc9f1db-29b2-5863-acb4-b3b6c4880d6a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceStaticArraysExt/etrLL_lqE2y.so for DifferentiationInterfaceStaticArraysExt [a583ad16-7f3e-50a1-a3ab-8640d85ec5ce]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceForwardDiffExt/DTVAk_fIcRM.so for DifferentiationInterfaceForwardDiffExt [9b811ce9-db61-5a34-8340-8bb6e57a7c74]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseConnectivityTracerSpecialFunctionsExt/ugFAW_fIcRM.so for SparseConnectivityTracerSpecialFunctionsExt [05b93496-9bcc-57e2-a616-e46534dd9245]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseConnectivityTracerLogExpFunctionsExt/aBj0D_fIcRM.so for SparseConnectivityTracerLogExpFunctionsExt [d814ad88-ab24-57e0-b8f0-09133e37aa20]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseConnectivityTracerNaNMathExt/yfpqx_fIcRM.so for SparseConnectivityTracerNaNMathExt [1196811c-ab8c-56f5-92ba-b57bfe034832]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SparseMatrixColoringsColorsExt/KFO23_fIcRM.so for SparseMatrixColoringsColorsExt [42e6ba4b-6785-530d-add2-80af3b5b757b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OptimizationForwardDiffExt/3DUq7_fIcRM.so for OptimizationForwardDiffExt [04dc0061-c1f3-5338-88cf-aa3b7fdaee92]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/BATOptimizationExt/pApbz_fIcRM.so for BATOptimizationExt [d145caa7-6acb-5c19-8a2b-0b72c7a1aeb4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FiniteDiff/AIIBE_lqE2y.so for FiniteDiff [6a86dc24-6348-571c-b903-95158fe2bd41]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DifferentiationInterfaceFiniteDiffExt/epHKf_lqE2y.so for DifferentiationInterfaceFiniteDiffExt [6044458a-139e-583a-bc2f-a730a9b54282]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/NLSolversBase/NEDD6_fIcRM.so for NLSolversBase [d41bc354-129a-5804-8e4c-c37616107c6c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LineSearches/htmYa_fIcRM.so for LineSearches [d3d80556-e9d4-5f37-9878-2ab0fcc64255]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FiniteDiffSparseArraysExt/aguTQ_lqE2y.so for FiniteDiffSparseArraysExt [699899dd-2948-59d9-a4f6-ce210f3f1f61]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Optim/R5uoh_fIcRM.so for Optim [429524aa-4258-5aef-a3af-852621145aeb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OptimizationFiniteDiffExt/NHlZb_fIcRM.so for OptimizationFiniteDiffExt [df06f67f-711b-5016-ba4f-4fd847ce32b7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FiniteDiffStaticArraysExt/hU6OA_lqE2y.so for FiniteDiffStaticArraysExt [75e56524-3a34-51de-85ea-03aa6eac4b64]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/BATOptimExt/FRzEb_fIcRM.so for BATOptimExt [ee50c963-233b-5dee-b46a-4de5b141e63c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ContentHashes/UgoSU_lqE2y.so for ContentHashes [ac509c8a-358f-4e3e-a88a-d19fed7814aa]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FileIO/6iKRU_lqE2y.so for FileIO [5789e2e9-d7fb-5bc7-8068-2c6fae9b9549]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/JLD2/O1EyT_fIcRM.so for JLD2 [033835bb-8acc-5ee8-8aae-3f567f8a3819]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/UnPackExt/uehqT_fIcRM.so for UnPackExt [54d139d9-0a94-509c-a857-5483d55ba1db]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Contour/ZECEP_lqE2y.so for Contour [d38c429a-6771-53c6-b99e-75d170b6e991]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FilePaths/PrU4O_lqE2y.so for FilePaths [8fc22ac5-c921-52a6-82fd-178b2807b824]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SIMD/PRrUB_lqE2y.so for SIMD [fdea26ae-647d-5447-a871-4b548cad5224]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Automa/TrrBM_fIcRM.so for Automa [67c07d97-cdcb-5c2c-af73-a7f9c32a568b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Bzip2_jll/biC9V_lqE2y.so for Bzip2_jll [6e34b625-4abd-537c-b88f-471c36dfa7a0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FreeType2_jll/AzWNe_lqE2y.so for FreeType2_jll [d7e528f0-a631-5988-bf34-fe36492bcfd7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CEnum/0gyUJ_lqE2y.so for CEnum [fa961155-64e5-5f13-b03f-caf6b980ea82]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FreeType/pISpP_lqE2y.so for FreeType [b38be410-82b0-50bf-ab77-7b57e271db43]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TensorCore/wqzBb_lqE2y.so for TensorCore [62fd8b95-f654-4bbd-a8a5-9c27f68ccd50]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ColorVectorSpace/7uC4N_lqE2y.so for ColorVectorSpace [c3611d14-8923-5661-9e6a-0046d554d3a4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IterTools/hhnii_lqE2y.so for IterTools [c8e1da08-722c-5040-9ed9-7db0dc04731e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Extents/Rkh9c_lqE2y.so for Extents [411431e0-e8b7-467b-b5e0-f676ba4f2910]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/GeoFormatTypes/EfGHC_lqE2y.so for GeoFormatTypes [68eda718-8dee-11e9-39e7-89f7f65f511f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/GeoInterface/GJg1M_lqE2y.so for GeoInterface [cf35fbd7-0cd7-5166-be24-54bfbe79505f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/EarCut_jll/SRVPx_lqE2y.so for EarCut_jll [5ae413db-bbd1-5e63-b57d-d24a61df00f5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/GeometryBasics/lB452_lqE2y.so for GeometryBasics [5c1252a2-5f33-56bf-86c9-59e7332b4326]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/BaseDirs/OQUlC_fIcRM.so for BaseDirs [18cc8868-cbac-4acf-b575-c8ff214dc66f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FreeTypeAbstraction/Qde7d_fIcRM.so for FreeTypeAbstraction [663a7486-cb36-511b-a19d-713bb74d65c9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/UnicodeFun/wLwUU_lqE2y.so for UnicodeFun [1cfade01-22cf-5700-b092-accc4b62d6e1]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StyledStringsExt/nDT4H_lqE2y.so for StyledStringsExt [e8f1f8a7-7f11-520c-bb0f-13aae97f28ab]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Scratch/ICI1U_lqE2y.so for Scratch [6c6a2e73-6563-6170-7368-637461726353]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RelocatableFolders/Yg3O9_lqE2y.so for RelocatableFolders [05181044-ff0b-4ac5-8273-598c1e38db00]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MathTeXEngine/eCCtS_fIcRM.so for MathTeXEngine [0a4f8689-d25c-4efe-a92b-7142dfc1aa53]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FriBidi_jll/tf6pT_lqE2y.so for FriBidi_jll [559328eb-81f9-559d-9380-de523a88c83c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Libiconv_jll/ujTCF_lqE2y.so for Libiconv_jll [94ce4f54-9a6c-5748-9c1c-f9c7231a4531]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Libffi_jll/y4lM8_fIcRM.so for Libffi_jll [e9f186c6-92d2-5b65-8a66-fee21dc1b490]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/XML2_jll/xWVg2_lqE2y.so for XML2_jll [02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Gettext_jll/l4zGN_lqE2y.so for Gettext_jll [78b55507-aeef-58d4-861c-77aaff3498b1]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/PCRE2_jll/8i0KO_4x0TT.so for PCRE2_jll [efcefdf7-47ab-520b-bdef-62a2eaa19f15]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Libmount_jll/04u4y_lqE2y.so for Libmount_jll [4b2f31a3-9ecc-558c-b454-b3730dcb73e9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Glib_jll/S5dsb_fIcRM.so for Glib_jll [7746bdde-850d-59dc-9ae8-88ece973131d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Pixman_jll/yWAFT_lqE2y.so for Pixman_jll [30392449-352a-5448-841d-b1acce4e97dc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libpng_jll/paYot_lqE2y.so for libpng_jll [b53b4c65-9356-5827-b1ea-8c7a1a84506f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Libuuid_jll/H4xj5_lqE2y.so for Libuuid_jll [38a345b3-de98-5d2b-a5d3-14cd9215e700]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Expat_jll/4P57b_lqE2y.so for Expat_jll [2e619515-83b5-522b-bb60-26c02a35a201]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Fontconfig_jll/xsKJT_lqE2y.so for Fontconfig_jll [a3f928ae-7b40-5064-980b-68af3947d34b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_libXau_jll/S8Fsv_lqE2y.so for Xorg_libXau_jll [0c0b7dd1-d40b-584c-a123-a41640f87eec]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_libXdmcp_jll/o7tTX_lqE2y.so for Xorg_libXdmcp_jll [a3789734-cfe1-5b06-b2d0-1dd0d9d62d05]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_libxcb_jll/n4mZf_lqE2y.so for Xorg_libxcb_jll [c7cfdc94-dc32-55de-ac96-5a1b8d977c5b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_xtrans_jll/xYA3D_lqE2y.so for Xorg_xtrans_jll [c5fb5394-a638-5e4d-96e5-b29de1b5cf10]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_libX11_jll/KzQhU_lqE2y.so for Xorg_libX11_jll [4f6342f7-b3d2-589e-9d20-edeb45f2b2bc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_libXext_jll/H6ltV_lqE2y.so for Xorg_libXext_jll [1082639a-0dae-5f34-9b06-72781eeb8cb3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Xorg_libXrender_jll/izQY6_lqE2y.so for Xorg_libXrender_jll [ea2f1a96-1ddc-540d-b46f-429655e07cfa]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LZO_jll/dUj3l_lqE2y.so for LZO_jll [dd4b983a-f0e5-5f8d-a1b7-129d4a5fb1ac]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Cairo_jll/ouRHo_fIcRM.so for Cairo_jll [83423d85-b0ee-5818-9007-b63ccbeb887a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Graphite2_jll/XMuhG_lqE2y.so for Graphite2_jll [3b182d85-2403-5c21-9c21-1e1f0cc25472]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HarfBuzz_jll/h60co_fIcRM.so for HarfBuzz_jll [2e76f6c2-a576-52d4-95c1-20adfe4de566]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libass_jll/JqZi8_fIcRM.so for libass_jll [0ac62f75-1d6f-5e53-bd7c-93b484bb37c0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libfdk_aac_jll/Ido5Q_lqE2y.so for libfdk_aac_jll [f638f0a6-7fb0-5443-88ba-1cc74229b280]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LAME_jll/SFEUf_lqE2y.so for LAME_jll [c1c5ebd0-6772-5130-a774-d5fcae4a789d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Ogg_jll/gOU2R_lqE2y.so for Ogg_jll [e7412a2a-1a6e-54c0-be00-318e2571c051]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libvorbis_jll/X4qYa_lqE2y.so for libvorbis_jll [f27f6e37-5d2b-51aa-960f-b287f2bc3b7a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libaom_jll/i2i8X_lqE2y.so for libaom_jll [a4ae2306-e953-59d6-aa16-d00cac43593b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/x264_jll/XmaTp_lqE2y.so for x264_jll [1270edf5-f2f9-52d2-97e9-ab00b5d0237a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/x265_jll/5KlGs_lqE2y.so for x265_jll [dfaa095f-4041-5dcd-9319-2fabd8486b76]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OpenSSL_jll/M3X35_lqE2y.so for OpenSSL_jll [458c3c95-2e84-50aa-8efc-19380b2a3a95]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Opus_jll/vFQVB_lqE2y.so for Opus_jll [91d4177d-7536-5919-b921-800302f37372]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FFMPEG_jll/uSD0T_fIcRM.so for FFMPEG_jll [b22a6f82-2f65-5046-a5b2-351ab43fb4e5]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Observables/qosmH_lqE2y.so for Observables [510215fc-4207-5dde-b226-833fc4488ee2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ColorSchemes/EO5fj_fIcRM.so for ColorSchemes [35d6a980-a343-548e-a6ea-1d62b119f2f4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PlotUtils/YveHG_fIcRM.so for PlotUtils [995b91a9-d308-5afd-9ec6-746e21dbc043]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/JSON/uf6oy_lqE2y.so for JSON [682c06a0-de6a-54ab-a142-c8b1cf79cde6]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ColorBrewer/EZnfy_fIcRM.so for ColorBrewer [a2cac450-b92f-5266-8821-25eda20663c8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/CRC32c/gLoON_4x0TT.so for CRC32c [8bf52ea8-c179-5cab-976a-9e18b702a9bc]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Packing/LtWKr_lqE2y.so for Packing [19eb6ba3-879d-56ad-ad62-d5c202156566]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SignedDistanceFields/SOik2_lqE2y.so for SignedDistanceFields [73760f76-fbc4-59ce-8f25-708e95d2df96]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MakieCore/ALu4Q_fIcRM.so for MakieCore [20f20a25-4f0e-4fdf-b5d1-57303727442b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ShaderAbstractions/K09Eb_lqE2y.so for ShaderAbstractions [65257c39-d410-5151-9873-9b3e5be5013e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Unitful/5WYj5_fIcRM.so for Unitful [1986cc42-f94f-5a68-af5c-568840ba703d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConstructionBaseUnitfulExt/XxhMX_fIcRM.so for ConstructionBaseUnitfulExt [2b7dcb06-1a74-5ae7-a318-b62feea60883]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SpecialFunctionsExt/SsZkK_fIcRM.so for SpecialFunctionsExt [997ecda8-951a-5f50-90ea-61382e97704b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InterpolationsUnitfulExt/FTO3m_fIcRM.so for InterpolationsUnitfulExt [39de6958-b8ab-5ce0-9a8f-2bc2e9e79136]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/isoband_jll/ZrTGq_lqE2y.so for isoband_jll [9a68df92-36a6-505f-a73e-abb412b6bfb4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Isoband/EhYtk_lqE2y.so for Isoband [f1662d9f-8043-43de-a69a-05efc1cc6ff4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PolygonOps/TUelr_lqE2y.so for PolygonOps [647866c9-e3ac-4575-94e7-e3d426903924]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/GridLayoutBase/I3oSr_lqE2y.so for GridLayoutBase [3955a311-db13-416c-9275-1d80ed98e5e9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IndirectArrays/UR6AD_lqE2y.so for IndirectArrays [9b13fd28-a010-5f03-acff-a1bbcff69959]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LazyModules/K2iU0_lqE2y.so for LazyModules [8cdb02fc-e678-4876-92c5-9defec4f444e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ImageIO/aYC4e_lqE2y.so for ImageIO [82e4d734-157c-48bb-816b-45c225c6df19]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/REPLExt/m7ggP_4x0TT.so for REPLExt [e5eb5ef1-03cf-53a7-ae1d-5a66b08e832b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TriplotBase/RitKY_lqE2y.so for TriplotBase [981d1d27-644d-49a2-9326-4793e63143c3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/RoundingEmulator/UgCAh_lqE2y.so for RoundingEmulator [5eaf0fd0-dfba-4ccb-bf02-d820a40db705]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CRlibm_jll/zz86t_lqE2y.so for CRlibm_jll [4e9b3aee-d8a1-5a3d-ad8b-7d824db253f0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CRlibm/WPcPM_lqE2y.so for CRlibm [96374032-68de-5a5b-8d9e-752f78720389]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmetic/Gjmwo_lqE2y.so for IntervalArithmetic [d1acc4aa-44c8-5952-acd4-ba5d80a2a253]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OpenBLASConsistentFPCSR_jll/Cs4XM_lqE2y.so for OpenBLASConsistentFPCSR_jll [6cdc7f73-28fd-5e50-80fb-958a8875b1af]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmeticLinearAlgebraExt/bCMUi_lqE2y.so for IntervalArithmeticLinearAlgebraExt [2191e3cb-bfc0-5415-be28-d82ab1f2c0a4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ExactPredicates/V0G1E_lqE2y.so for ExactPredicates [429591f6-91af-11e9-00e2-59fbe8cec110]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/AdaptivePredicates/qpOd9_lqE2y.so for AdaptivePredicates [35492f91-a3bd-45ad-95db-fcad7dcfedb7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DelaunayTriangulation/eCNhP_lqE2y.so for DelaunayTriangulation [927a84f5-c5f4-47a5-9785-b46e178433df]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmeticIntervalSetsExt/e8C2k_lqE2y.so for IntervalArithmeticIntervalSetsExt [fe1c01f3-e48c-5d10-9a22-1f3e4b1804eb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmeticSparseArraysExt/jfhVG_lqE2y.so for IntervalArithmeticSparseArraysExt [7d512a68-f907-5f80-bfe1-b09a08cec04b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/InverseFunctionsUnitfulExt/77rDl_fIcRM.so for InverseFunctionsUnitfulExt [f5f6e0dd-5310-5802-bcb2-1cb72ad693d4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Showoff/vyYkR_lqE2y.so for Showoff [992d4aef-0814-514b-bc4d-f2e9a6c4116f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PaddedViews/SrUyA_lqE2y.so for PaddedViews [5432bcbf-9aad-5242-b902-cca2824c8663]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StackViews/VkAPD_fIcRM.so for StackViews [cae243ae-269e-4f55-b966-ac2d0dc13c15]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MosaicViews/X3bJX_fIcRM.so for MosaicViews [e94cdb99-869f-56ef-bcf0-1ae2bcbe0389]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ImageCore/cqNLm_fIcRM.so for ImageCore [a09fc81d-aa75-5fe9-8630-4744c3626534]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ImageBase/kFbbd_fIcRM.so for ImageBase [c817782e-172a-44cc-b673-b171935fbb9e]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PNGFiles/yIZEc_fIcRM.so for PNGFiles [f57f5aa1-a3ce-4bc8-8ab9-96f992907883]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Format/MRFzB_lqE2y.so for Format [1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Animations/KvqO2_fIcRM.so for Animations [27a7e980-b3e6-11e9-2bcd-0b925532e340]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Makie/iZ1Bl_fIcRM.so for Makie [ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PolynomialsMakieCoreExt/SdTJ4_fIcRM.so for PolynomialsMakieCoreExt [2151d38c-38fc-55d4-b92e-1aa6cebde649]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/UnitfulExt/dmt9b_fIcRM.so for UnitfulExt [8d0556db-720e-519a-baed-0b9ed79749be]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MeasurementsUnitfulExt/m3llT_fIcRM.so for MeasurementsUnitfulExt [48afeb45-b64e-55cf-94da-32e5a635d72b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmeticForwardDiffExt/feixq_fIcRM.so for IntervalArithmeticForwardDiffExt [ba47a815-ec9a-57c1-b718-e4e972ac9261]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmeticRecipesBaseExt/iSjwR_lqE2y.so for IntervalArithmeticRecipesBaseExt [e3b91bd4-2888-5303-85ed-4cf5ebb38ff1]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/IntervalArithmeticDiffRulesExt/9u6eo_lqE2y.so for IntervalArithmeticDiffRulesExt [86439bda-9ede-5c22-99a0-f82df582fb22]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MeasurementsMakieExt/kxTH6_fIcRM.so for MeasurementsMakieExt [255515a4-532d-589b-944b-ec83cf1d0fb0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DomainSetsMakieExt/k5AyA_fIcRM.so for DomainSetsMakieExt [da481366-01c8-5b4d-b359-47a10c8532e7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLBaseMakieExt/QMnLO_fIcRM.so for SciMLBaseMakieExt [565f26a4-c902-5eae-92ad-e10714a9d9de]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TableOperations/5GGWt_fIcRM.so for TableOperations [ab02a1b2-a7df-11e8-156e-fb1833f50b87]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/NamedTupleTools/Xfy1D_lqE2y.so for NamedTupleTools [d9ec5142-1e00-5aa0-9d6a-321866360f50]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ScientificTypesBase/iLKcU_lqE2y.so for ScientificTypesBase [30f210dd-8aff-4c5f-94ba-8e64358c1161]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StatisticalTraits/Jtq0e_lqE2y.so for StatisticalTraits [64bff920-2084-43da-a3e6-9bb72801c0c9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MLJModelInterface/cOFkZ_lqE2y.so for MLJModelInterface [e80e1ace-859a-464e-9ed9-23947d8ae3ea]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MCMCDiagnosticTools/pEXcT_fIcRM.so for MCMCDiagnosticTools [be115224-59cd-429b-ad48-344e309966f0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PairPlots/CkXHN_fIcRM.so for PairPlots [43a3c2be-4208-490b-832a-a21dcd55d7da]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/PairPlotsDynamicUnitfulExt/J7Auv_fIcRM.so for PairPlotsDynamicUnitfulExt [1bd29d90-1c16-57a4-97cf-338f3e0c8f00]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Pango_jll/lZI8Y_fIcRM.so for Pango_jll [36c8627f-9965-5494-a995-c6b170f724f3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Graphics/DwlUf_fIcRM.so for Graphics [a2bd30eb-e257-5431-a919-1863eab51364]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Cairo/l6vnT_fIcRM.so for Cairo [159f3aea-2a34-519c-b102-8c37f9878175]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CairoMakie/9mSey_fIcRM.so for CairoMakie [13f3f980-e62b-5c42-98c6-ff1f3baf88f0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/juliaup/julia-1.11.5+0.x64.linux.gnu/share/julia/compiled/v1.11/LazyArtifacts/MRP8l_4x0TT.so for LazyArtifacts [4af54fe1-eca0-43a8-85a7-787d91b784e3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MPIPreferences/rGk9Z_lqE2y.so for MPIPreferences [3da0fdf6-3ccc-4f1b-acd9-58baa6c99267]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libaec_jll/hvhO3_lqE2y.so for libaec_jll [477f73a3-ac25-53e9-8cc3-50b2fa2566f0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Hwloc_jll/tooZ5_lqE2y.so for Hwloc_jll [e33a78d0-f292-5ffc-b300-72abe9b543c8]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MPICH_jll/vDjle_lqE2y.so for MPICH_jll [7cb0a576-ebde-5e09-9194-50597f1243b4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HDF5_jll/w9xrx_lqE2y.so for HDF5_jll [0234f1f7-429e-5d53-9886-15a909be8d59]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HDF5/L7Dga_lqE2y.so for HDF5 [f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f]
+└ @ Base loading.jl:1244
+┌ Debug: Requires conditionally ran code in 0.00730108 seconds: `HDF5` detected `OrderedCollections`
+└ @ Requires ~/.julia/packages/HDF5/Z859u/src/fileio.jl:17
+┌ Debug: Requires conditionally ran code in 0.129121637 seconds: `HDF5` detected `FileIO`
+└ @ Requires ~/.julia/packages/HDF5/Z859u/src/HDF5.jl:120
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/BATHDF5Ext/tENBm_fIcRM.so for BATHDF5Ext [874a161f-8296-5d54-99aa-7bac4d288000]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Memoize/HGnX1_lqE2y.so for Memoize [c03570c3-d221-55d1-a50c-7939bbd78826]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Lz4_jll/g0UsO_lqE2y.so for Lz4_jll [5ced341a-0733-55b8-9ab6-a4889d929147]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CodecLz4/70TRq_fIcRM.so for CodecLz4 [5ba52731-8f18-5e0d-9241-30f10d1ec561]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/XZ_jll/uX93p_lqE2y.so for XZ_jll [ffd25f8a-64ca-5728-b0f7-c24cf3aae800]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CodecXz/a6TFW_fIcRM.so for CodecXz [ba30903b-d9e8-5048-a5ec-d1f5b0d4b47b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Zstd_jll/cFDJB_lqE2y.so for Zstd_jll [3161d3a3-bdf6-5164-811a-617609db77b4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CodecZstd/sdgr0_fIcRM.so for CodecZstd [6b39b394-51ab-5f42-8807-6242bab2b4c2]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LorentzVectors/JgUI6_fIcRM.so for LorentzVectors [3f54b04b-17fc-5cd4-9758-90c048d965e3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Mixers/jERzh_lqE2y.so for Mixers [2a8e4939-dab8-5edc-8f64-72a8776f13de]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Memoization/cQ9tc_lqE2y.so for Memoization [6fafb56a-5788-4b4e-91ca-c0cea6611c73]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LRUCache/TDw15_lqE2y.so for LRUCache [8ac3fa9e-de4c-5943-b1dc-09c6b5f20637]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SerializationExt/u9qhL_lqE2y.so for SerializationExt [628b3d63-01f8-59af-95aa-4b748299ae62]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/libdeflate_jll/IBUVF_fIcRM.so for libdeflate_jll [46979653-d7f6-5232-b59e-dd310c4598de]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/LibDeflate/9QUck_fIcRM.so for LibDeflate [9255714d-24a7-4b30-8ea3-d46a97f7e13b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/xrootdgo_jll/1uM2l_fIcRM.so for xrootdgo_jll [9d84c17e-11f2-50ef-8cc9-e9701362097f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/URIs/eec2u_fIcRM.so for URIs [5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/MbedTLS/bf9T0_lqE2y.so for MbedTLS [739be429-bea8-5141-9913-cc70e7f3736d]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/BitFlags/sbYUO_fIcRM.so for BitFlags [d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/OpenSSL/B4VRP_fIcRM.so for OpenSSL [4d8831e6-92b7-49fb-bdf8-b643e874388c]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ExceptionUnwrapping/DKnWN_fIcRM.so for ExceptionUnwrapping [460bff9d-24e4-43bc-9d9f-a8973cb893f4]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ConcurrentUtilities/OtIZJ_fIcRM.so for ConcurrentUtilities [f0e56b4a-5159-44fe-b623-3e5288b988bb]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SimpleBufferStream/QbHsM_fIcRM.so for SimpleBufferStream [777ac1f9-54b0-4bf8-805c-2214025038e7]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HTTP/zXWya_fIcRM.so for HTTP [cd3eb016-35fb-5094-929b-558a96fad6f3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/UnROOT/koyqt_fIcRM.so for UnROOT [3cd96dde-e98d-4713-81e9-a4a1b0235ce9]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/HTTPExt/VIoHu_fIcRM.so for HTTPExt [d96af470-7dec-5786-bf74-32dbc175f043]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/Newtrinos/579k5_fIcRM.so for Newtrinos [5b289081-bab5-45e8-97fc-86872f1653a0]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/DistributedExt/zsiAc_lqE2y.so for DistributedExt [075b2bf6-2807-5c02-93c4-9c66b4782582]
+└ @ Base loading.jl:1244
+┌ Debug: Extension DistributedExt of Revise loaded
+└ @ Base loading.jl:1545
+┌ Debug: Requires conditionally ran code in 0.158719704 seconds: `FilePaths` detected `URIs`
+└ @ Requires ~/.julia/packages/FilePaths/ULnpu/src/FilePaths.jl:14
+┌ Debug: At least one include() file from /home/sofialon/.julia/compiled/v1.11/Newtrinos/579k5_fIcRM.ji is not relocatable
+│   srcfiles =
+│    Set{String} with 22 elements:
+│      "/home/sofialon/Newtrinos.jl/src/utils/plotting.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/juno/juno.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/icecube/deepcore_3y_highsta…
+│      "/home/sofialon/Newtrinos.jl/src/experiments/gerda/gerda.jl"
+│      "/home/sofialon/Newtrinos.jl/src/experiments/daya_bay/daya_bay_3158days/…
+│      "/home/sofialon/Newtrinos.jl/src/analysis/molewhacker.jl"
+│      "/home/sofialon/Newtrinos.jl/src/physics/earth_layers.jl"
+│      ⋮ 
+└ @ Base loading.jl:3383
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CustomUnitRanges/jFjt3_lqE2y.so for CustomUnitRanges [dc8bdbbb-1ca9-579f-8c36-e416f6a65cce]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/FFTViews/DakB1_lqE2y.so for FFTViews [4f61f5a4-77b1-5117-aa51-3ab5ef4ef0cd]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ComputationalResources/4zT7R_lqE2y.so for ComputationalResources [ed09eef8-17a6-5b46-8889-db040fac31e3]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/SciMLPublic/Cv5x5_fIcRM.so for SciMLPublic [431bcebd-1456-4ced-9d72-93c2757fff0b]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArrayInterface/1FInX_fIcRM.so for StaticArrayInterface [0d7ed370-da01-4f52-bd93-41d350b8b718]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArrayInterfaceOffsetArraysExt/LOVcL_fIcRM.so for StaticArrayInterfaceOffsetArraysExt [a8fab69c-de6f-5f74-aba3-bef19c2d033f]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/TiledIteration/Xoq2b_fIcRM.so for TiledIteration [06e1c1a7-607b-532d-9fad-de7d9aa2abac]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/StaticArrayInterfaceStaticArraysExt/Nww1z_fIcRM.so for StaticArrayInterfaceStaticArraysExt [06b0261c-7a9b-5753-9bdf-fd6840237b4a]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/CatIndices/Mqj0B_lqE2y.so for CatIndices [aafaddc9-749c-510e-ac4f-586e18779b91]
+└ @ Base loading.jl:1244
+┌ Debug: Loading object cache file /home/sofialon/.julia/compiled/v1.11/ImageFiltering/MN5uU_fIcRM.so for ImageFiltering [6a3955dd-da59-5b1f-98d4-e7296123deb5]
+└ @ Base loading.jl:1244
+[ Info: Loading Katrin data
+Progress:   0%|▏                                        |  ETA: 0:01:54[KProgress:  60%|████████████████████████▋                |  ETA: 0:00:02[KProgress:  63%|██████████████████████████               |  ETA: 0:00:02[KProgress:  64%|██████████████████████████▍              |  ETA: 0:00:02[KProgress:  65%|██████████████████████████▉              |  ETA: 0:00:02[KProgress:  66%|███████████████████████████▎             |  ETA: 0:00:02[KProgress:  67%|███████████████████████████▋             |  ETA: 0:00:02[KProgress:  68%|███████████████████████████▉             |  ETA: 0:00:02[KProgress:  69%|████████████████████████████▍            |  ETA: 0:00:02[KProgress:  70%|████████████████████████████▋            |  ETA: 0:00:02[KProgress:  71%|█████████████████████████████            |  ETA: 0:00:02[KProgress:  71%|█████████████████████████████▎           |  ETA: 0:00:02[KProgress:  72%|█████████████████████████████▌           |  ETA: 0:00:02[KProgress:  73%|█████████████████████████████▊           |  ETA: 0:00:02[KProgress:  73%|██████████████████████████████           |  ETA: 0:00:02[KProgress:  74%|██████████████████████████████▎          |  ETA: 0:00:02[KProgress:  74%|██████████████████████████████▌          |  ETA: 0:00:02[KProgress:  75%|██████████████████████████████▊          |  ETA: 0:00:02[KProgress:  76%|███████████████████████████████          |  ETA: 0:00:02[KProgress:  76%|███████████████████████████████▎         |  ETA: 0:00:02[KProgress:  77%|███████████████████████████████▌         |  ETA: 0:00:02[KProgress:  77%|███████████████████████████████▊         |  ETA: 0:00:02[KProgress:  78%|████████████████████████████████         |  ETA: 0:00:02[KProgress:  79%|████████████████████████████████▎        |  ETA: 0:00:02[KProgress:  79%|████████████████████████████████▌        |  ETA: 0:00:02[KProgress:  80%|████████████████████████████████▋        |  ETA: 0:00:02[KProgress:  80%|████████████████████████████████▊        |  ETA: 0:00:02[KProgress:  81%|█████████████████████████████████        |  ETA: 0:00:02[KProgress:  81%|█████████████████████████████████▎       |  ETA: 0:00:02[KProgress:  82%|█████████████████████████████████▌       |  ETA: 0:00:02[KProgress:  82%|█████████████████████████████████▋       |  ETA: 0:00:02[KProgress:  83%|█████████████████████████████████▉       |  ETA: 0:00:01[KProgress:  83%|██████████████████████████████████▏      |  ETA: 0:00:01[KProgress:  84%|██████████████████████████████████▎      |  ETA: 0:00:01[KProgress:  84%|██████████████████████████████████▌      |  ETA: 0:00:01[KProgress:  85%|██████████████████████████████████▋      |  ETA: 0:00:01[KProgress:  85%|██████████████████████████████████▉      |  ETA: 0:00:01[KProgress:  86%|███████████████████████████████████▏     |  ETA: 0:00:01[KProgress:  86%|███████████████████████████████████▏     |  ETA: 0:00:01[KProgress:  86%|███████████████████████████████████▍     |  ETA: 0:00:01[KProgress:  87%|███████████████████████████████████▋     |  ETA: 0:00:01[KProgress:  87%|███████████████████████████████████▊     |  ETA: 0:00:01[KProgress:  88%|███████████████████████████████████▉     |  ETA: 0:00:01[KProgress:  88%|████████████████████████████████████▏    |  ETA: 0:00:01[KProgress:  89%|████████████████████████████████████▎    |  ETA: 0:00:01[KProgress:  89%|████████████████████████████████████▌    |  ETA: 0:00:01[KProgress:  90%|████████████████████████████████████▊    |  ETA: 0:00:01[KProgress:  90%|█████████████████████████████████████    |  ETA: 0:00:01[KProgress:  91%|█████████████████████████████████████▏   |  ETA: 0:00:01[KProgress:  91%|█████████████████████████████████████▍   |  ETA: 0:00:01[KProgress:  92%|█████████████████████████████████████▋   |  ETA: 0:00:01[KProgress:  92%|█████████████████████████████████████▊   |  ETA: 0:00:01[KProgress:  93%|██████████████████████████████████████   |  ETA: 0:00:01[KProgress:  93%|██████████████████████████████████████▏  |  ETA: 0:00:01[KProgress:  93%|██████████████████████████████████████▎  |  ETA: 0:00:01[KProgress:  94%|██████████████████████████████████████▍  |  ETA: 0:00:01[KProgress:  94%|██████████████████████████████████████▌  |  ETA: 0:00:01[KProgress:  94%|██████████████████████████████████████▋  |  ETA: 0:00:01[KProgress:  94%|██████████████████████████████████████▊  |  ETA: 0:00:01[KProgress:  95%|██████████████████████████████████████▉  |  ETA: 0:00:01[KProgress:  95%|███████████████████████████████████████  |  ETA: 0:00:01[KProgress:  95%|███████████████████████████████████████▏ |  ETA: 0:00:01[KProgress:  96%|███████████████████████████████████████▎ |  ETA: 0:00:00[KProgress:  96%|███████████████████████████████████████▍ |  ETA: 0:00:00[KProgress:  96%|███████████████████████████████████████▌ |  ETA: 0:00:00[KProgress:  97%|███████████████████████████████████████▋ |  ETA: 0:00:00[KProgress:  97%|███████████████████████████████████████▊ |  ETA: 0:00:00[KProgress:  97%|███████████████████████████████████████▉ |  ETA: 0:00:00[KProgress:  98%|████████████████████████████████████████ |  ETA: 0:00:00[KProgress:  98%|████████████████████████████████████████▏|  ETA: 0:00:00[KProgress:  98%|████████████████████████████████████████▎|  ETA: 0:00:00[KProgress:  99%|████████████████████████████████████████▍|  ETA: 0:00:00[KProgress:  99%|████████████████████████████████████████▌|  ETA: 0:00:00[KProgress:  99%|████████████████████████████████████████▋|  ETA: 0:00:00[KProgress:  99%|████████████████████████████████████████▊|  ETA: 0:00:00[KProgress:  99%|████████████████████████████████████████▉|  ETA: 0:00:00[KProgress: 100%|█████████████████████████████████████████| Time: 0:00:12[K
+┌ Debug: Plot axes info:
+│   size(z_smooth) = (31, 31)
+│   length(x_axis) = 31
+│   length(y_axis) = 31
+│   issorted(x_axis) = true
+│   issorted(y_axis) = true
+└ @ Main ~/Newtrinos.jl/scan.jl:224
+
+======================================================================
+  NEUTRINO PHYSICS SCANNING SYSTEM
+======================================================================
+
+Reading configuration from config.txt...
+
+Configuration:
+  Model: NND
+  Ordering: NO
+  Experiments: katrin
+  Scan resolution: 31
+  Output directory: plot_auto
+  Plot smoothing sigma: 0.0
+
+Setup complete!
+
+
+----------------------------------------------------------------------
+EXPERIMENT: KATRIN
+----------------------------------------------------------------------
+
+  Scan 1/3: r vs N
+Number of threads: 4
+Total points to compute: 961
+TIMING STATISTICS:
+  Min time per point: -513.3 ms
+  Max time per point: 3491.6 ms
+  Mean time per point: 16.2 ms
+  Median time per point: 8.6 ms
+TOTAL TIME:
+  Total seconds: 15.6
+  Total minutes: 0.26
+
+  ✗ Error scanning katrin:
+    AssertionError("issorted(edges)")
+
+======================================================================
+  SCANNING COMPLETE
+======================================================================
+
+Output directory: plot_auto/
+  - katrin/
+
+======================================================================
+

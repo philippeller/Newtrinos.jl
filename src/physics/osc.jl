@@ -801,7 +801,7 @@ function get_priors(cfg::NND)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = LogUniform(ftype(1e-6),ftype(1e-1))#Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = DiscreteUniform(ftype(2),ftype(40))
+    priors[:N] = DiscreteUniform(ftype(2),ftype(200))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
     priors[:η] =  Uniform(ftype(1.01),ftype(100))
 
@@ -1358,8 +1358,223 @@ function get_matrices(cfg::NND) #full
 end
 
 
+function get_matrices(cfg::NNM) #full schur
 
-function get_matrices(cfg::NNM) #full
+   function get_Nnaturalness(params::NamedTuple)
+
+        #@time begin
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]   
+    
+        r=params[:r]   
+
+        m0= params[:m₀]
+        Lambda= 1e4*1e9 #cutoff scale eV
+        l=0.05#higgs coupling
+        ms=100*1e9 #rehaton mass eV
+       
+        η=params[:η]
+        #b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
+       
+        #b=1/sqrt(N_dual) #choice of b 
+        #η=1+(m0*l*N_dual*ms)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
+        
+        
+        T = promote_type(
+            typeof(params[:N]), 
+            typeof(params[:m₀]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
+            typeof(params[:Δm²₃₁]),
+            typeof(params[:δCP]),
+            typeof(params[:θ₁₂]),
+            typeof(params[:θ₁₃]),
+            typeof(params[:θ₂₃])
+        ) 
+
+        m1, m2, m3 = get_abs_masses(params)
+
+        
+        m1_T = T(m1)
+        m2_T = T(m2) 
+        m3_T = T(m3)
+        
+        
+        factor=(η-1) * 2^(1/(N_dual-1)) #first method
+        #factor= (1+(η-1)/N_dual)*(η-1) #second methods
+      
+
+        if r > zero(T)
+            scale_1= (m1_T)/(r*factor)
+            scale_2= (m2_T)/(r*factor)
+            scale_3= (m3_T)/(r*factor)
+        
+        end
+
+       
+        matrix_e=zeros(T, N_int,N_int)
+        matrix_m=zeros(T, N_int,N_int)
+        matrix_t=zeros(T, N_int,N_int)
+
+      
+    
+        for i in 1:N_int
+            
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+           
+            
+            for j in 1:N_int
+                
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
+
+                
+                if i == j
+
+                    matrix_e[i, j] =sqrt_i * sqrt_j *η
+                    matrix_m[i, j] =sqrt_i * sqrt_j *η
+                    matrix_t[i, j] =sqrt_i * sqrt_j *η
+                else
+                    matrix_e[i, j] =sqrt_i * sqrt_j 
+                    matrix_m[i, j] =sqrt_i * sqrt_j 
+                    matrix_t[i, j] =sqrt_i * sqrt_j 
+                end
+
+
+            end
+
+
+        end
+
+        
+    
+        # PMNS matrix 
+
+        U = get_PMNS(params)
+
+       eigenvalues_e, V_e = eigen(Hermitian(matrix_e))
+       eigenvalues_m, V_m = eigen(Hermitian(matrix_m))
+       eigenvalues_t, V_t = eigen(Hermitian(matrix_t))
+      
+     
+       eigenvalues= Vector{T}(undef, 3*N_int)
+
+        # KK entries (i≥2): eigenvalue × scale is well-conditioned
+        for i in 2:N_int
+            eigenvalues[3*i-2] =((eigenvalues_e[i])*scale_1)^2
+            eigenvalues[3*i-1] =((eigenvalues_m[i])*scale_2)^2
+            eigenvalues[3*i] = ((eigenvalues_t[i])*scale_3)^2
+        end
+
+        eigenvalues[end-2] = eigenvalues[end-2]
+        eigenvalues[end-1] = eigenvalues[end-1]
+        eigenvalues[end] =  eigenvalues[end]
+
+        # SM entries (i=1): will be set after Schur complement computation below
+        #EIG=Diagonal(eigenvalues[1: 3*N_int-3])
+
+
+        Vmatrix = zeros(T, 3*N_int, 3*N_int)
+
+        col = 1
+        for i in 1:N_int  # For each eigenvector index i
+            # Column for electron eigenvector i
+            Vmatrix[1:3:3*N_int, col] = V_e[:, i]
+            col += 1
+            
+            # Column for muon eigenvector i
+            Vmatrix[2:3:3*N_int, col] = V_m[:, i]
+            col += 1
+            
+            # Column for tau eigenvector i
+            Vmatrix[3:3:3*N_int, col] = V_t[:, i]
+            col += 1
+        end
+        
+        #println("Vmatrix size: ", size(Vmatrix))
+
+        bigU = kron(Matrix{T}(I, N_int, N_int), U)
+
+        FinalUmatrix = bigU * Vmatrix 
+
+        #println("FinalUmatrix size: ", size(FinalUmatrix))
+
+        delta_mass = Vector{T}(undef, 3*N_int)
+
+        # ── SM-like states (i=1): Schur complement, numerically stable ──
+        # The SM eigenvalue λ₁ ∝ r, and scale ∝ 1/r, so their product is r-independent.
+        # Instead of computing λ₁ from eigen() and multiplying by scale = m/(r·factor),
+        # we factor out r analytically via the Schur complement:
+        #   λ₁ = r·(η − vᵀ_rest C⁻¹ v_rest)
+        #   λ₁ × scale_α = m_α/factor × (η − vᵀ_rest C⁻¹ v_rest)  [r cancels]
+        # This avoids the catastrophic loss of precision when r is small.
+
+        if N_int > 1
+            # KK submatrix C = M[2:N, 2:N] — well-conditioned (no tiny eigenvalues)
+            C_sub = matrix_e[2:N_int, 2:N_int]
+            # Coupling vector (with √r factored out): v_rest[i] = √(2i + r) for i=1..N-1
+            v_rest = Vector{T}(undef, N_int - 1)
+            for i in 1:(N_int - 1)
+                v_rest[i] = sqrt(T(2*i) + T(r))
+            end
+            # Solve C·w = v_rest (stable linear solve, condition number ~ N²)
+            w = C_sub \ v_rest
+            # Schur complement: μ̃ = η − vᵀ_rest C⁻¹ v_rest (dimensionless, O(1))
+            μ_tilde = η - dot(v_rest, w)
+            # SM mass ratio: μ = μ̃/factor — this replaces the unstable λ₁/(r·factor)
+            μ = μ_tilde / factor
+        else
+            # N=1: only SM states, no KK tower
+            μ = η / factor
+        end
+
+        # Update diagnostic eigenvalues array for SM entries (i=1)
+        eigenvalues[1] = (μ * m1_T)^2
+        eigenvalues[2] = (μ * m2_T)^2
+        eigenvalues[3] = (μ * m3_T)^2
+
+        # SM-like delta_mass: μ² × (m_α² − m₁²) — no r, no tiny eigenvalues
+        sm_ref = (μ * m1_T)^2
+        delta_mass[1] = zero(T)
+        delta_mass[2] = (μ * m2_T)^2 - sm_ref
+        delta_mass[3] = (μ * m3_T)^2 - sm_ref
+
+        # ── KK states (i≥2): use eigenvalues from full matrix (well-conditioned for KK) ──
+        # KK eigenvalues are O(0.01–6400), so eigenvalue × scale is numerically fine.
+        # For r=0 (scale=0), KK modes fully decouple — set delta_mass to 0
+        # (their mixing amplitude is exactly zero, so the value doesn't affect physics).
+        for i in 2:N_int
+            if r == zero(T)
+                delta_mass[3*i-2] = zero(T)
+                delta_mass[3*i-1] = zero(T)
+                delta_mass[3*i]   = zero(T)
+            elseif i == N_int
+                delta_mass[3*i-2] = ((eigenvalues_e[i])*scale_1)^2 - sm_ref
+                delta_mass[3*i-1] = ((eigenvalues_m[i])*scale_2)^2 - sm_ref
+                delta_mass[3*i]   = ((eigenvalues_t[i])*scale_3)^2 - sm_ref
+            else
+                delta_mass[3*i-2] = ((eigenvalues_e[i])*scale_1)^2 - sm_ref
+                delta_mass[3*i-1] = ((eigenvalues_m[i])*scale_2)^2 - sm_ref
+                delta_mass[3*i]   = ((eigenvalues_t[i])*scale_3)^2 - sm_ref
+            end
+        end
+        #println(delta_mass)
+      
+        h = delta_mass
+        
+        #H=Diagonal(h[1:N_int-3])
+                
+
+        #end #time block
+
+        
+
+        return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
+    end
+
+end
+
+function get_matrices_N(cfg::NNM) #full normal
 
    function get_Nnaturalness(params::NamedTuple)
 
