@@ -4,7 +4,7 @@
 
 # EXPERIMENT SELECTION
 
-experiments = katrin
+experiments = gerda
 
 # OSCILLATION MODEL
 
