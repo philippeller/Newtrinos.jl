@@ -24,8 +24,16 @@ using Dates
 using LibGit2
 using ..Newtrinos
 
-adsel = AutoForwardDiff()
-set_batcontext(ad = adsel)
+"""
+    select_ad(n_params; threshold=12)
+
+Choose AD backend based on parameter count. Uses `AutoPolyesterForwardDiff`
+(threaded chunked ForwardDiff) when `n_params > threshold`, otherwise plain
+`AutoForwardDiff`.
+"""
+select_ad(n_params; threshold=12) = n_params > threshold ? AutoPolyesterForwardDiff() : AutoForwardDiff()
+
+set_batcontext(ad = AutoForwardDiff())
 
 # ── Core Types ──────────────────────────────────────────────────────
 
@@ -282,13 +290,13 @@ end
 # ── Optimization ────────────────────────────────────────────────────
 
 """
-    find_mle(likelihood, prior, params; adsel=AutoPolyesterForwardDiff())
+    find_mle(likelihood, prior, params; adsel=select_ad(length(params)))
 
 Find the Maximum Likelihood Estimator using LBFGS optimization via BAT.
 Returns `(llh, log_posterior, optimized_params)`. Parameters with `ConstValueDist`
 priors are held fixed.
 """
-function find_mle(likelihood, prior, params; adsel = AutoPolyesterForwardDiff())
+function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
     try
         set_batcontext(ad = adsel)
         posterior = PosteriorMeasure(likelihood, prior)

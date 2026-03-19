@@ -92,9 +92,6 @@ if use_distributed
     end
 
     map_func = pmap
-else
-    adsel = AutoForwardDiff()
-    context = set_batcontext(ad = adsel)
 end
 
 ##### PHYSICS CONFIG #####
@@ -116,6 +113,10 @@ end
 
 p = Newtrinos.get_params(experiments)
 priors = Newtrinos.get_priors(experiments)
+
+if !use_distributed
+    set_batcontext(ad = Newtrinos.select_ad(length(p)))
+end
 
 # Variables to condition on (=fix)
 conditional_vars = Dict(:θ₁₂=>p.θ₁₂, :δCP=>-1.89, :Δm²₂₁=>p.Δm²₂₁)
@@ -150,7 +151,7 @@ elseif lowercase(args["task"]) == "importancesampling"
     #seed_points = load("darkdim_seeds.jld2")["df"]
     #seed_points = seed_points[seed_points.ca3 .< 0, :]
     #init_samples = make_init_samples(posterior, seed_points[1:10, :], 10_000)
-    init_samples = make_init_samples(posterior, 10, 1_000)
+    init_samples = make_init_samples(posterior, 10, 50_000)
 
     FileIO.save(name * "_init_samples.jld2", Dict(String(a)=>init_samples[a] for a in keys(init_samples)))
     whack_samples = whack_many_moles(posterior, init_samples, target_samplesize=10_000, cache_dir=name)
