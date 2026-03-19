@@ -53,18 +53,26 @@ function get_params(cfg::Differential_H2O)
         cc1pi_norm = 1.,
         ccother_norm = 1.,
         ccdis_norm = 1.,
+        xsec_MA_QE = 1.05,
+        xsec_MA_Res = 0.95,
+        xsec_I12 = 1.30,
+        xsec_fsi = 1.,
     )
 end
 
 function get_priors(cfg::Differential_H2O)
     (
         nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
-        nutau_cc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
+        nutau_cc_norm = Truncated(Normal(1, 0.25), 0.3, 1.7),
         cc1p1h_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
-        cc2p2h_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
+        cc2p2h_norm = Truncated(Normal(1, 1.0), 0, 3),
         cc1pi_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
         ccother_norm = Truncated(Normal(1, 0.4), 0.2, 1.8),
         ccdis_norm = Truncated(Normal(1, 0.1), 0.7, 1.3),
+        xsec_MA_QE = Normal(1.05, 0.16),
+        xsec_MA_Res = Normal(0.95, 0.15),
+        xsec_I12 = Normal(1.30, 0.20),
+        xsec_fsi = Normal(1, 0.1),
     )
 end
 
@@ -80,6 +88,24 @@ function get_scale(cfg::SimpleScaling)
     end
 end
 
+
+function ma_qe_ratio(E, MA)
+    # Approximate CCQE σ ratio from dipole form factor
+    MA_nom = 1.05
+    Q2_typ = 0.5 * E
+    r_nom = 1 / (1 + Q2_typ / MA_nom^2)^2
+    r_new = 1 / (1 + Q2_typ / MA^2)^2
+    return r_new / r_nom
+end
+
+function ma_res_ratio(E, MA)
+    # Approximate resonance σ ratio from dipole form factor
+    MA_nom = 0.95
+    Q2_typ = 0.3 * E
+    r_nom = 1 / (1 + Q2_typ / MA_nom^2)^2
+    r_new = 1 / (1 + Q2_typ / MA^2)^2
+    return r_new / r_nom
+end
 
 function get_scale(cfg::Differential_H2O)
 
@@ -131,7 +157,12 @@ function get_scale(cfg::Differential_H2O)
                 rs = ratios(nue, E)
             end
 
-            s = rs.CC1p1h * params.cc1p1h_norm .+ rs.CC2p2h * params.cc2p2h_norm .+ rs.CC1pi * params.cc1pi_norm .+ rs.CCother * params.ccother_norm .+ rs.CCDIS * params.ccdis_norm 
+            ma_qe = ma_qe_ratio.(E, params.xsec_MA_QE)
+            ma_res = ma_res_ratio.(E, params.xsec_MA_Res)
+            fsi_1p1h = 1 .- 0.1 .* (params.xsec_fsi - 1)
+            fsi_1pi = 1 .+ 0.1 .* (params.xsec_fsi - 1)
+
+            s = rs.CC1p1h .* params.cc1p1h_norm .* ma_qe .* fsi_1p1h .+ rs.CC2p2h * params.cc2p2h_norm .+ rs.CC1pi .* params.cc1pi_norm .* ma_res .* fsi_1pi .+ rs.CCother * params.ccother_norm * params.xsec_I12 .+ rs.CCDIS * params.ccdis_norm
 
             if flav == :nutau
                 return s * params.nutau_cc_norm

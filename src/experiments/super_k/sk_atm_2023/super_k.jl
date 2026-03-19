@@ -226,6 +226,23 @@ function get_assets(physics; datadir = @__DIR__)
         sk_i_v_multigev_multiring_nuebar = occursin.("sk1-5_fc_multigev_multiring_nuebarlike", bininfo.Sample),
         sk_i_v_multigev_multiring_mu = occursin.("sk1-5_fc_multigev_multiring_mulike", bininfo.Sample),
         sk_i_v_multigev_multiring_other = occursin.("sk1-5_fc_multigev_multiring_other", bininfo.Sample),
+        # PID migration masks
+        sk_i_iii_subgev_elike = occursin.(r"sk1-3_fc_subgev_1ring_elike", bininfo.Sample),
+        sk_i_iii_subgev_mulike = occursin.(r"sk1-3_fc_subgev_1ring_mulike", bininfo.Sample),
+        sk_iv_v_subgev_elike = occursin.(r"sk4-5_fc_subgev_1ring_nue", bininfo.Sample),
+        sk_iv_v_subgev_mulike = occursin.(r"sk4-5_fc_subgev_1ring_numu", bininfo.Sample),
+        sk_i_iii_multigev_1ring_elike = occursin.(r"sk1-3_fc_multigev_1ring_(elike|nue)", bininfo.Sample),
+        sk_i_iii_multigev_1ring_mulike = occursin.(r"sk1-3_fc_multigev_1ring_(mulike|numu)", bininfo.Sample),
+        sk_iv_v_multigev_1ring_elike = occursin.(r"sk4-5_fc_multigev_1ring_nue", bininfo.Sample),
+        sk_iv_v_multigev_1ring_mulike = occursin.(r"sk4-5_fc_multigev_1ring_numu", bininfo.Sample),
+        # Ring counting masks
+        sk_1ring = occursin.(r"_1ring_", bininfo.Sample),
+        sk_multiring = occursin.(r"_(2ring|multiring)_", bininfo.Sample),
+        # E-like mask (for nue contamination and NC pi0)
+        sk_elike = occursin.(r"(elike|nuebarlike)", bininfo.Sample) .| occursin.(r"_nuelike", bininfo.Sample),
+        # SK phase masks (for split energy scale)
+        sk_i_iii_bins = occursin.(r"^sk1-3_", bininfo.Sample),
+        sk_iv_v_bins = .!occursin.(r"^sk1-3_", bininfo.Sample),
     )
 
     data = CSV.read(joinpath(datadir, "bins/sk_2023_Data.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false)
@@ -282,7 +299,8 @@ end
     
 function get_params()
     params = (
-        sk_energy_scale = 1.0,
+        sk_i_iii_energy_scale = 1.0,
+        sk_iv_v_energy_scale = 1.0,
         sk_updown_energy_scale = 1.0,
         sk_fc_norm = 1.0,
         sk_pc_norm = 1.0,
@@ -299,12 +317,20 @@ function get_params()
         sk_i_v_btd_1 = 1.0,
         sk_i_v_btd_2 = 1.0,
         sk_i_v_btd_3 = 1.0,
+        sk_i_iii_subgev_pid = 1.0,
+        sk_iv_v_subgev_pid = 1.0,
+        sk_i_iii_multigev_pid = 1.0,
+        sk_iv_v_multigev_pid = 1.0,
+        sk_ring_counting = 1.0,
+        sk_nue_contamination = 1.0,
+        sk_ncpi0_norm = 1.0,
         )
 end
 
 function get_priors()
     priors = (
-        sk_energy_scale = Normal(1.0, 0.025),
+        sk_i_iii_energy_scale = Normal(1.0, 0.03),
+        sk_iv_v_energy_scale = Normal(1.0, 0.018),
         sk_updown_energy_scale = Normal(1.0, 0.01),
         sk_fc_norm = Normal(1.0, 0.05),
         sk_pc_norm = Normal(1.0, 0.05),
@@ -321,6 +347,13 @@ function get_priors()
         sk_i_v_btd_1 = Normal(1, 0.05),
         sk_i_v_btd_2 = Normal(1, 0.05),
         sk_i_v_btd_3 = Normal(1, 0.05),
+        sk_i_iii_subgev_pid = Normal(1, 0.03),
+        sk_iv_v_subgev_pid = Normal(1, 0.03),
+        sk_i_iii_multigev_pid = Normal(1, 0.03),
+        sk_iv_v_multigev_pid = Normal(1, 0.03),
+        sk_ring_counting = Normal(1, 0.05),
+        sk_nue_contamination = Normal(1, 0.05),
+        sk_ncpi0_norm = Normal(1, 0.1),
         )
 end
 
@@ -362,12 +395,25 @@ function get_all_factors(params, assets, total)
         get_double_factor(total, assets.masks.sk_iv_v_multigev_0neutron, assets.masks.sk_iv_v_multigev_1neutron, params.sk_iv_v_multigev_neutron_tag_eff) .*
         get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_btd_1) .*
         get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_btd_2) .*
-        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_btd_3) 
+        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_btd_3) .*
+        # PID migration: e-like ↔ mu-like
+        get_double_factor(total, assets.masks.sk_i_iii_subgev_elike, assets.masks.sk_i_iii_subgev_mulike, params.sk_i_iii_subgev_pid) .*
+        get_double_factor(total, assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .*
+        get_double_factor(total, assets.masks.sk_i_iii_multigev_1ring_elike, assets.masks.sk_i_iii_multigev_1ring_mulike, params.sk_i_iii_multigev_pid) .*
+        get_double_factor(total, assets.masks.sk_iv_v_multigev_1ring_elike, assets.masks.sk_iv_v_multigev_1ring_mulike, params.sk_iv_v_multigev_pid) .*
+        # Ring counting migration: single-ring ↔ multi-ring
+        get_double_factor(total, assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting)
     )
 end
 
 function get_Fij_factor(Fij, param)
     factor = 1 .+ Fij .* (1 - param)
+end
+
+function get_Fij_factor_escale(Fij, masks, params)
+    # Split energy scale by SK phase: SK I-III and SK IV-V bins get independent scales
+    1 .+ Fij .* ((1 - params.sk_i_iii_energy_scale) .* masks.sk_i_iii_bins .+
+                  (1 - params.sk_iv_v_energy_scale) .* masks.sk_iv_v_bins)
 end
 
 function get_expected(params, physics, assets)
@@ -377,13 +423,13 @@ function get_expected(params, physics, assets)
 
     factors = get_all_factors(params, assets, total)
 
-    nunc = expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_Fij_factor(assets.Fij.nunc, params.sk_energy_scale) .* get_Fij_factor(assets.Fij_updown.nunc, params.sk_updown_energy_scale)
-    
-    nue = expected.nue .* factors .* get_Fij_factor(assets.Fij.nue, params.sk_energy_scale) .* get_Fij_factor(assets.Fij_updown.nue, params.sk_updown_energy_scale)
-    numu = expected.numu .* factors .* get_Fij_factor(assets.Fij.numu, params.sk_energy_scale) .* get_Fij_factor(assets.Fij_updown.numu, params.sk_updown_energy_scale)
-    nutau = expected.nutau .* factors .* get_Fij_factor(assets.Fij.nutau, params.sk_energy_scale) .* get_Fij_factor(assets.Fij_updown.nutau, params.sk_updown_energy_scale)
-    nuebar = expected.nuebar .* factors .* get_Fij_factor(assets.Fij.nuebar, params.sk_energy_scale) .* get_Fij_factor(assets.Fij_updown.nuebar, params.sk_updown_energy_scale)
-    numubar = expected.numubar .* factors .* get_Fij_factor(assets.Fij.numubar, params.sk_energy_scale) .* get_Fij_factor(assets.Fij_updown.numubar, params.sk_updown_energy_scale)
+    nunc = expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .* get_Fij_factor_escale(assets.Fij.nunc, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nunc, params.sk_updown_energy_scale)
+
+    nue = expected.nue .* factors .* get_Fij_factor_escale(assets.Fij.nue, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nue, params.sk_updown_energy_scale)
+    numu = expected.numu .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numu, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.numu, params.sk_updown_energy_scale)
+    nutau = expected.nutau .* factors .* get_Fij_factor_escale(assets.Fij.nutau, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nutau, params.sk_updown_energy_scale)
+    nuebar = expected.nuebar .* factors .* get_Fij_factor_escale(assets.Fij.nuebar, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nuebar, params.sk_updown_energy_scale)
+    numubar = expected.numubar .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numubar, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.numubar, params.sk_updown_energy_scale)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end
