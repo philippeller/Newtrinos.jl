@@ -99,9 +99,9 @@ end
 function get_nominal_flux(cfg::HKKM)
     function nominal_flux(energy, coszen)
         # make fine grid
-        e_fine_meshgrid = [((ones(size(coszen))' .* energy)...)...]
+        e_fine_meshgrid = vec(energy .* ones(length(coszen))')
         log10e_fine_meshgrid = log10.(e_fine_meshgrid)
-        cz_fine_meshgrid = [((coszen' .* ones(size(energy)))...)...]
+        cz_fine_meshgrid = vec(ones(length(energy)) .* coszen')
     
         flux_splines = get_hkkm_flux(joinpath(datadir, cfg.fname))
         

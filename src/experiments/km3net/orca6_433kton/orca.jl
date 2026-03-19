@@ -59,7 +59,7 @@ function get_assets(physics; datadir = @__DIR__)
         cz_reco_edges = f["Ct_reco_axis"]["edges"]
     )
 
-    #flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
+    flux_nominal = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
     layers = physics.earth_layers.compute_layers()
     paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
 
@@ -81,7 +81,7 @@ function get_assets(physics; datadir = @__DIR__)
     data_hist = permutedims(reshape(data.W, reco_shape[rs]), rs)
     muon_hist = permutedims(reshape(muons.W, reco_shape[rs]), rs);
 
-    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, layers, paths)
+    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, layers, paths, flux_nominal)
 end
 
 function get_params()
@@ -133,21 +133,27 @@ end
 
 function reweight(params, physics, assets)
 
-    flux = physics.atm_flux.nominal_flux(assets.binning.e_fine * params.orca_energy_scale, assets.binning.cz_fine)
-    
-    sys_flux = physics.atm_flux.sys_flux(flux, params)
+    sys_flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
     s = assets.true_shape
 
     p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, assets.paths, assets.layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
     
-    nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].E_true_bin, assets.mc[ch].Ct_true_bin, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
+    nus = (
+        nue = gather_flux(p_flux, assets.mc.nue.E_true_bin, assets.mc.nue.Ct_true_bin, 1),
+        numu = gather_flux(p_flux, assets.mc.numu.E_true_bin, assets.mc.numu.Ct_true_bin, 2),
+        nutau = gather_flux(p_flux, assets.mc.nutau.E_true_bin, assets.mc.nutau.Ct_true_bin, 3),
+    )
 
     p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, assets.paths, assets.layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
-    nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].E_true_bin, assets.mc[ch].Ct_true_bin, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
+    nubars = (
+        nuebar = gather_flux(p_flux, assets.mc.nuebar.E_true_bin, assets.mc.nuebar.Ct_true_bin, 1),
+        numubar = gather_flux(p_flux, assets.mc.numubar.E_true_bin, assets.mc.numubar.Ct_true_bin, 2),
+        nutaubar = gather_flux(p_flux, assets.mc.nutaubar.E_true_bin, assets.mc.nutaubar.Ct_true_bin, 3),
+    )
 
     merge(nus, nubars)
 end
@@ -158,9 +164,16 @@ function get_expected(params, physics, assets)
 
     lifetime_seconds = 1.
 
-    hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds, params, assets) for ch in keys(assets.mc))
+    hists = (
+        nue = make_hist_per_channel(assets.mc.nue, osc_flux.nue, lifetime_seconds, params, assets),
+        nuebar = make_hist_per_channel(assets.mc.nuebar, osc_flux.nuebar, lifetime_seconds, params, assets),
+        numu = make_hist_per_channel(assets.mc.numu, osc_flux.numu, lifetime_seconds, params, assets),
+        numubar = make_hist_per_channel(assets.mc.numubar, osc_flux.numubar, lifetime_seconds, params, assets),
+        nutau = make_hist_per_channel(assets.mc.nutau, osc_flux.nutau, lifetime_seconds, params, assets),
+        nutaubar = make_hist_per_channel(assets.mc.nutaubar, osc_flux.nutaubar, lifetime_seconds, params, assets),
+    )
 
-    hists_nc = sum(h[:, :, :, 1] for h in hists) * physics.xsec.scale(:any, :NC, params)
+    hists_nc = reduce(+, map(h -> h[:, :, :, 1], values(hists))) * physics.xsec.scale(:any, :NC, params)
 
     hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ (hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]) * physics.xsec.scale(:nutau, :CC, params)
     expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc .+ hists_cc) * params.orca_norm_all
@@ -191,7 +204,7 @@ function get_forward_model(physics, assets)
     function forward_model(params)
         exp_events = get_expected(params, physics, assets)
         #distprod(Poisson.(exp_events))
-        distprod(NamedTuple(ch => distprod(Poisson.(exp_events[ch])) for ch in keys(exp_events)))
+        distprod(map(e -> distprod(Poisson.(e)), exp_events))
     end
 end
 

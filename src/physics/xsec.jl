@@ -141,9 +141,10 @@ function get_scale(cfg::Differential_H2O)
     )
 
     function ratios(funs, E)
-        x = NamedTuple(key=>funs[key].(E) for key in keys(funs) if key != :NC)
-        total_CC = sum(x)
-        return NamedTuple(key=>x[key]./total_CC for key in keys(x))
+        cc_funs = (CC1p1h=funs.CC1p1h, CC2p2h=funs.CC2p2h, CC1pi=funs.CC1pi, CCother=funs.CCother, CCDIS=funs.CCDIS)
+        x = map(f -> f.(E), cc_funs)
+        total_CC = reduce(+, values(x))
+        return map(v -> v ./ total_CC, x)
     end
 
     function scale(E::AbstractArray, flav::Symbol, interaction::Symbol, anti::Bool, params::NamedTuple)

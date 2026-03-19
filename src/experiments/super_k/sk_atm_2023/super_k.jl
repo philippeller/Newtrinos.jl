@@ -360,7 +360,7 @@ end
 
 function reweight(params, physics, assets)
     weights = calc_weights(params, assets, physics)
-    return NamedTuple(key => assets.MC[key].Counts .* safe_div.(weights[key], assets.nominal_weights[key]) for key in keys(assets.MC))
+    return map((mc, w, nw) -> mc.Counts .* safe_div.(w, nw), assets.MC, weights, assets.nominal_weights)
 end
 
 function get_factor(mask, factor)
@@ -419,7 +419,7 @@ end
 function get_expected(params, physics, assets)
     expected = reweight(params, physics, assets)
 
-    total = sum([expected[key] for key in keys(expected)])
+    total = reduce(+, values(expected))
 
     factors = get_all_factors(params, assets, total)
 
@@ -437,7 +437,7 @@ end
 function get_forward_model(physics, assets)
     function fwd_model(params)
         expected = get_expected(params, physics, assets)
-        total = sum(expected[key] for key in keys(expected))
+        total = reduce(+, values(expected))
         clamped = max.(1e-3, total)
         distprod(Poisson.(clamped))
     end
