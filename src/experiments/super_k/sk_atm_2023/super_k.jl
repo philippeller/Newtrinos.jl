@@ -319,7 +319,8 @@ function get_params()
     params = (
         sk_i_iii_energy_scale = 1.0,
         sk_iv_v_energy_scale = 1.0,
-        sk_updown_energy_scale = 1.0,
+        sk_i_iii_updown_energy_scale = 1.0,
+        sk_iv_v_updown_energy_scale = 1.0,
         sk_fc_norm = 1.0,
         sk_pc_norm = 1.0,
         sk_upmu_norm = 1.0,
@@ -357,13 +358,16 @@ end
 
 function get_priors()
     priors = (
-        # Energy scales: weighted averages from Table 5.6 (conventional FV)
-        # SK I: 3.3%, SK II: 2.0%, SK III: 2.4% → weighted ~2.5%
-        # SK IV: 2.1%, SK V: 1.8% → weighted ~2.0%
-        sk_i_iii_energy_scale = Normal(1.0, 0.025),
-        sk_iv_v_energy_scale = Normal(1.0, 0.02),
-        # Up/down: SK I-III ~0.6-1.3%, SK IV-V ~0.5-0.7% → use 0.8% average
-        sk_updown_energy_scale = Normal(1.0, 0.008),
+        # Energy scales from Table 5.6 (conventional FV), exposure-weighted by livetime
+        # SK I: 3.3% (~1489d), SK II: 2.0% (~799d), SK III: 2.4% (~518d) → exposure-weighted ~2.8%, use SK I-dominated 3.3%
+        # SK IV: 2.1% (~3244d), SK V: 1.8% (~2970d) → exposure-weighted ~2.0%
+        sk_i_iii_energy_scale = Normal(1.0, 0.033),
+        sk_iv_v_energy_scale = Normal(1.0, 0.021),
+        # Up/down energy scale from Table 5.6, split by phase group
+        # SK I: 1.3%, SK II: 0.6%, SK III: 0.7% → exposure-weighted ~1.0%
+        # SK IV: 0.5%, SK V: 0.7% → exposure-weighted ~0.6%
+        sk_i_iii_updown_energy_scale = Normal(1.0, 0.01),
+        sk_iv_v_updown_energy_scale = Normal(1.0, 0.006),
         sk_fc_norm = Normal(1.0, 0.015),
         sk_pc_norm = Normal(1.0, 0.03),
         sk_upmu_norm = Normal(1.0, 0.01),
@@ -470,6 +474,12 @@ function get_Fij_factor_escale(Fij, masks, params)
                   (1 - params.sk_iv_v_energy_scale) .* masks.sk_iv_v_bins)
 end
 
+function get_Fij_factor_updown(Fij_updown, masks, params)
+    # Split up/down energy scale by SK phase
+    1 .+ Fij_updown .* ((1 - params.sk_i_iii_updown_energy_scale) .* masks.sk_i_iii_bins .+
+                         (1 - params.sk_iv_v_updown_energy_scale) .* masks.sk_iv_v_bins)
+end
+
 function get_expected(params, physics, assets)
     expected = reweight(params, physics, assets)
 
@@ -477,13 +487,13 @@ function get_expected(params, physics, assets)
 
     factors = get_all_factors(params, assets, total)
 
-    nunc = expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .* get_Fij_factor_escale(assets.Fij.nunc, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nunc, params.sk_updown_energy_scale)
+    nunc = expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .* get_Fij_factor_escale(assets.Fij.nunc, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nunc, assets.masks, params)
 
-    nue = expected.nue .* factors .* get_Fij_factor_escale(assets.Fij.nue, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nue, params.sk_updown_energy_scale)
-    numu = expected.numu .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numu, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.numu, params.sk_updown_energy_scale)
-    nutau = expected.nutau .* factors .* get_Fij_factor_escale(assets.Fij.nutau, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nutau, params.sk_updown_energy_scale)
-    nuebar = expected.nuebar .* factors .* get_Fij_factor_escale(assets.Fij.nuebar, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.nuebar, params.sk_updown_energy_scale)
-    numubar = expected.numubar .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numubar, assets.masks, params) .* get_Fij_factor(assets.Fij_updown.numubar, params.sk_updown_energy_scale)
+    nue = expected.nue .* factors .* get_Fij_factor_escale(assets.Fij.nue, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nue, assets.masks, params)
+    numu = expected.numu .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numu, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.numu, assets.masks, params)
+    nutau = expected.nutau .* factors .* get_Fij_factor_escale(assets.Fij.nutau, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nutau, assets.masks, params)
+    nuebar = expected.nuebar .* factors .* get_Fij_factor_escale(assets.Fij.nuebar, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nuebar, assets.masks, params)
+    numubar = expected.numubar .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numubar, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.numubar, assets.masks, params)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end
