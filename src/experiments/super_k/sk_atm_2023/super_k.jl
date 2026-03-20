@@ -243,6 +243,20 @@ function get_assets(physics; datadir = @__DIR__)
         # SK phase masks (for split energy scale)
         sk_i_iii_bins = occursin.(r"^sk1-3_", bininfo.Sample),
         sk_iv_v_bins = .!occursin.(r"^sk1-3_", bininfo.Sample),
+        # Multi-GeV FC mask (for relative normalization)
+        fc_multigev = occursin.(r"_fc_multigev_", bininfo.Sample),
+        # PC + Up-mu mask (for relative normalization)
+        pc_upmu = occursin.("_pc_", bininfo.Sample) .| occursin.("_upmu_", bininfo.Sample),
+        # FC multi-GeV mu-like single-ring (for FC/PC separation)
+        fc_multigev_mulike = occursin.(r"_fc_multigev_1ring_mu", bininfo.Sample),
+        # pi0 samples
+        sk_1ring_pi0 = occursin.("_1ring_ncpi0", bininfo.Sample),
+        sk_2ring_pi0 = occursin.("_2ring_ncpi0", bininfo.Sample),
+        # Ring separation sub-GeV vs multi-GeV
+        sk_subgev_1ring = occursin.(r"_fc_subgev_1ring_", bininfo.Sample),
+        sk_subgev_multiring = occursin.(r"_fc_subgev.*(2ring|multiring)", bininfo.Sample),
+        sk_multigev_1ring = occursin.(r"_fc_multigev_1ring_", bininfo.Sample),
+        sk_multigev_multiring = occursin.(r"_fc_multigev.*(2ring|multiring)", bininfo.Sample),
     )
 
     data = CSV.read(joinpath(datadir, "bins/sk_2023_Data.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false)
@@ -324,14 +338,28 @@ function get_params()
         sk_ring_counting = 1.0,
         sk_nue_contamination = 1.0,
         sk_ncpi0_norm = 1.0,
+        # Relative normalizations (flux model differences at high energy)
+        sk_fc_multigev_rel_norm = 1.0,
+        sk_pc_upmu_rel_norm = 1.0,
+        # FC/PC separation
+        sk_fc_pc_separation = 1.0,
+        # pi0 selection
+        sk_pi0_norm = 1.0,
+        # Split ring counting: sub-GeV and multi-GeV
+        sk_subgev_ring_counting = 1.0,
+        sk_multigev_ring_counting = 1.0,
         )
 end
 
 function get_priors()
     priors = (
-        sk_i_iii_energy_scale = Normal(1.0, 0.03),
-        sk_iv_v_energy_scale = Normal(1.0, 0.018),
-        sk_updown_energy_scale = Normal(1.0, 0.01),
+        # Energy scales: weighted averages from Table 5.6 (conventional FV)
+        # SK I: 3.3%, SK II: 2.0%, SK III: 2.4% → weighted ~2.5%
+        # SK IV: 2.1%, SK V: 1.8% → weighted ~2.0%
+        sk_i_iii_energy_scale = Normal(1.0, 0.025),
+        sk_iv_v_energy_scale = Normal(1.0, 0.02),
+        # Up/down: SK I-III ~0.6-1.3%, SK IV-V ~0.5-0.7% → use 0.8% average
+        sk_updown_energy_scale = Normal(1.0, 0.008),
         sk_fc_norm = Normal(1.0, 0.05),
         sk_pc_norm = Normal(1.0, 0.05),
         sk_upmu_norm = Normal(1.0, 0.05),
@@ -347,13 +375,26 @@ function get_priors()
         sk_i_v_btd_1 = Normal(1, 0.05),
         sk_i_v_btd_2 = Normal(1, 0.05),
         sk_i_v_btd_3 = Normal(1, 0.05),
-        sk_i_iii_subgev_pid = Normal(1, 0.03),
-        sk_iv_v_subgev_pid = Normal(1, 0.03),
+        # PID: thesis shows <1% for most phases, up to ~2-3% for some
+        # Sub-GeV PID is better constrained than multi-GeV
+        sk_i_iii_subgev_pid = Normal(1, 0.02),
+        sk_iv_v_subgev_pid = Normal(1, 0.02),
         sk_i_iii_multigev_pid = Normal(1, 0.03),
         sk_iv_v_multigev_pid = Normal(1, 0.03),
+        # Ring counting: split into sub-GeV (better constrained) and multi-GeV
         sk_ring_counting = Normal(1, 0.05),
         sk_nue_contamination = Normal(1, 0.05),
         sk_ncpi0_norm = Normal(1, 0.1),
+        # Relative normalizations (Section 5.2.1): 5% for multi-GeV FC and PC+upmu
+        sk_fc_multigev_rel_norm = Normal(1, 0.05),
+        sk_pc_upmu_rel_norm = Normal(1, 0.05),
+        # FC/PC separation: ~1% migration
+        sk_fc_pc_separation = Normal(1, 0.01),
+        # pi0 selection uncertainty
+        sk_pi0_norm = Normal(1, 0.1),
+        # Split ring counting
+        sk_subgev_ring_counting = Normal(1, 0.03),
+        sk_multigev_ring_counting = Normal(1, 0.05),
         )
 end
 
@@ -386,7 +427,7 @@ function get_all_factors(params, assets, total)
         get_factor(assets.masks.upmu, params.sk_upmu_norm) .*
         get_double_factor(total, assets.masks.pc_stop, assets.masks.pc_thru, params.sk_pc_stopping_vs_througoing) .*
         get_double_factor(total, assets.masks.umpmu_stop, assets.masks.upmu_thru, params.sk_upmu_stopping_vs_througoing) .*
-        get_double_factor(total, assets.masks.upmu_nonshower, assets.masks.upmu_shower, params.sk_upmu_nonshower_vs_shower) .* 
+        get_double_factor(total, assets.masks.upmu_nonshower, assets.masks.upmu_shower, params.sk_upmu_nonshower_vs_shower) .*
         get_double_factor(total, assets.masks.sk_i_iii_elike_1decay_e, assets.masks.sk_i_iii_elike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .*
         get_double_factor(total, assets.masks.sk_i_iii_mulike_1decay_e, assets.masks.sk_i_iii_mulike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .*
         get_double_factor(total, assets.masks.sk_i_iii_mulike_2decay_e, assets.masks.sk_i_iii_mulike_1decay_e, params.sk_i_iii_decay_e_tag_eff) .*
@@ -401,8 +442,17 @@ function get_all_factors(params, assets, total)
         get_double_factor(total, assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .*
         get_double_factor(total, assets.masks.sk_i_iii_multigev_1ring_elike, assets.masks.sk_i_iii_multigev_1ring_mulike, params.sk_i_iii_multigev_pid) .*
         get_double_factor(total, assets.masks.sk_iv_v_multigev_1ring_elike, assets.masks.sk_iv_v_multigev_1ring_mulike, params.sk_iv_v_multigev_pid) .*
-        # Ring counting migration: single-ring ↔ multi-ring
-        get_double_factor(total, assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting)
+        # Ring counting migration: overall + split by energy
+        get_double_factor(total, assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting) .*
+        get_double_factor(total, assets.masks.sk_subgev_1ring, assets.masks.sk_subgev_multiring, params.sk_subgev_ring_counting) .*
+        get_double_factor(total, assets.masks.sk_multigev_1ring, assets.masks.sk_multigev_multiring, params.sk_multigev_ring_counting) .*
+        # Relative normalizations for high-energy samples
+        get_factor(assets.masks.fc_multigev, params.sk_fc_multigev_rel_norm) .*
+        get_factor(assets.masks.pc_upmu, params.sk_pc_upmu_rel_norm) .*
+        # FC/PC separation: FC multi-GeV mu-like ↔ PC
+        get_double_factor(total, assets.masks.fc_multigev_mulike, assets.masks.pc, params.sk_fc_pc_separation) .*
+        # pi0 selection
+        get_double_factor(total, assets.masks.sk_1ring_pi0, assets.masks.sk_2ring_pi0, params.sk_pi0_norm)
     )
 end
 
