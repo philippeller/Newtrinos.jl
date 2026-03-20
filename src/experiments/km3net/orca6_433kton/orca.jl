@@ -60,8 +60,7 @@ function get_assets(physics; datadir = @__DIR__)
     )
 
     flux_nominal = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
-    layers = physics.earth_layers.compute_layers()
-    paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
+    nominal_layers = physics.earth_layers.compute_layers()
 
     true_shape = (length(binning.e_fine), length(binning.cz_fine))
     reco_shape = (length(binning.e_reco), length(binning.cz_reco), 3, 2)
@@ -81,7 +80,7 @@ function get_assets(physics; datadir = @__DIR__)
     data_hist = permutedims(reshape(data.W, reco_shape[rs]), rs)
     muon_hist = permutedims(reshape(muons.W, reco_shape[rs]), rs);
 
-    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, layers, paths, flux_nominal)
+    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, nominal_layers, flux_nominal)
 end
 
 function get_params()
@@ -137,16 +136,19 @@ function reweight(params, physics, assets)
 
     s = assets.true_shape
 
-    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, assets.paths, assets.layers, params)
+    layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
+    paths = physics.earth_layers.compute_paths(assets.binning.cz_fine, layers)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, paths, layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
-    
+
     nus = (
         nue = gather_flux(p_flux, assets.mc.nue.E_true_bin, assets.mc.nue.Ct_true_bin, 1),
         numu = gather_flux(p_flux, assets.mc.numu.E_true_bin, assets.mc.numu.Ct_true_bin, 2),
         nutau = gather_flux(p_flux, assets.mc.nutau.E_true_bin, assets.mc.nutau.Ct_true_bin, 3),
     )
 
-    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, assets.paths, assets.layers, params, anti=true)
+    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, paths, layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
     nubars = (

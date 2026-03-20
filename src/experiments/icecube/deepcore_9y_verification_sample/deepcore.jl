@@ -75,8 +75,7 @@ function get_assets(physics; datadir = @__DIR__)
     binning[:e_ticks] = (binning[:reco_energy_bin_edges], [@sprintf("%.1f",b) for b in binning[:reco_energy_bin_edges]])
     binning = NamedTuple(binning)
     
-    layers = physics.earth_layers.compute_layers()
-    paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
+    nominal_layers = physics.earth_layers.compute_layers()
 
 
     mc_flextable = (nu_nc = CSV.read(joinpath(datadir, "mc_nu_nc.csv"), FlexTable; header=true),
@@ -144,7 +143,7 @@ function get_assets(physics; datadir = @__DIR__)
     
     flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
 
-    assets = (;mc, hypersurfaces, flux, muons, observed=data.count, layers, paths, binning)
+    assets = (;mc, hypersurfaces, flux, muons, observed=data.count, nominal_layers, binning)
 
 end
 
@@ -217,9 +216,12 @@ function reweight(params, physics, assets)
 
     s = (size(assets.binning.e_fine)[1], size(assets.binning.cz_fine)[1])
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
+    layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
+    paths = physics.earth_layers.compute_paths(assets.binning.cz_fine, layers)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
-    
+
     nus = (
         nue_cc = gather_flux(p_flux, assets.mc.nue_cc.ef_idx, assets.mc.nue_cc.cf_idx, 1),
         numu_cc = gather_flux(p_flux, assets.mc.numu_cc.ef_idx, assets.mc.numu_cc.cf_idx, 2),
@@ -227,8 +229,8 @@ function reweight(params, physics, assets)
     )
 
     nu_ncs = (nu_nc = gather_flux_nc(reshape(sys_flux.nue .+ sys_flux.numu, s),  assets.mc[:nu_nc].ef_idx, assets.mc[:nu_nc].cf_idx),)
-    
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
     nubars = (
@@ -238,7 +240,7 @@ function reweight(params, physics, assets)
     )
 
     nubar_ncs = (nubar_nc = gather_flux_nc(reshape(sys_flux.nue .+ sys_flux.numu, s),  assets.mc[:nubar_nc].ef_idx, assets.mc[:nubar_nc].cf_idx),)
-    
+
     merge(nu_ncs, nus, nubar_ncs, nubars)
 end
 

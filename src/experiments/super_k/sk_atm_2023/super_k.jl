@@ -149,8 +149,11 @@ function calc_weights(params, assets, physics)
 
     E = 10. .^midpoints(assets.loge_grid)
 
-    p = physics.osc.osc_prob(E, assets.paths, assets.layers, params);
-    p_anti = physics.osc.osc_prob(E, assets.paths, assets.layers, params, anti=true);
+    layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
+    paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
+
+    p = physics.osc.osc_prob(E, paths, layers, params);
+    p_anti = physics.osc.osc_prob(E, paths, layers, params, anti=true);
 
     flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
@@ -280,31 +283,32 @@ function get_assets(physics; datadir = @__DIR__)
     @reset params_nominal.θ₁₃ = asin(sqrt(0.02))
     @reset params_nominal.δCP = -1.89
 
-    layers = physics.earth_layers.compute_layers()
-    paths = physics.earth_layers.compute_paths(midpoints(cz_grid), layers)
-    flux_nominal = physics.atm_flux.nominal_flux(10. .^midpoints(loge_grid), midpoints(cz_grid))
+    nominal_layers = physics.earth_layers.compute_layers()
+    cz_midpoints = midpoints(cz_grid)
+    paths = physics.earth_layers.compute_paths(cz_midpoints, nominal_layers)
+    flux_nominal = physics.atm_flux.nominal_flux(10. .^midpoints(loge_grid), cz_midpoints)
 
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
 
     R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid) for key in keys(MC))
     R = flatten_R(R_3d)
-    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, layers, loge_grid), physics)
+    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
 
     R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(1.02), cz_grid) for key in keys(MC))
     R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(0.98), cz_grid) for key in keys(MC))
-    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, layers, loge_grid), physics)
-    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, layers, loge_grid), physics)
+    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
+    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
     Fij = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
     for key in keys(R_3d)
         R_plus_3d[key][:,:,1:50] .= R_3d[key][:,:,1:50]
         R_minus_3d[key][:,:,1:50] .= R_3d[key][:,:,1:50]
     end
-    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, layers, loge_grid), physics)
-    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, layers, loge_grid), physics)
+    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
+    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
     Fij_updown = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
-    return (; MC, R, Fij, Fij_updown, flux_nominal, paths, layers, loge_grid, cz_grid, nominal_weights, observed, bininfo, masks)
+    return (; MC, R, Fij, Fij_updown, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks)
 
 end
 
