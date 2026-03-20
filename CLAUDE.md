@@ -5,10 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Test Commands
 
 ```bash
-# Run unit tests (~230 tests, ~20s without Mooncake, ~40min with Mooncake on threads)
-julia --project -e 'using Pkg; Pkg.test()'
+# Run core tests (~230 tests, ~20s; regression tests parallelize across threads)
+julia --project --threads=auto -e 'using Pkg; Pkg.test()'
 
-# Run just the Mooncake tests (parallel rule building requires threads)
+# Run with Mooncake tests included (~40min, requires threads)
+NEWTRINOS_TEST_MOONCAKE=1 julia --project --threads=auto -e 'using Pkg; Pkg.test()'
+
+# Run just the Mooncake tests directly (parallel rule building requires threads)
 julia --project --threads=auto -e 'using Newtrinos, Test; include("test/test_mooncake.jl")'
 
 # Run benchmarks
@@ -44,6 +47,8 @@ Theory predictions with no experiment knowledge. Each module returns a struct `<
 
 ### Experiments (`src/experiments/`)
 Each experiment module has `configure(physics=default_physics())` returning a struct `<: Newtrinos.Experiment` with fields: `physics`, `params`, `priors`, `assets`, `forward_model`, `plot`. Each experiment defines its own `default_physics()` with appropriate oscillation config, flux files, and cross-section models.
+
+Experiments inherit systematic uncertainties from their physics modules automatically. For example, an atmospheric experiment using `osc` (SI), `atm_flux`, `earth_layers`, and `xsec` gets oscillation parameter uncertainties, flux systematics (Barr parameters, normalization, flavor ratios), matter effect uncertainties, and cross-section systematics (MA_QE, MA_Res, FSI, etc.) — all via `get_params`/`get_priors` which merges physics and experiment parameters. The experiment module itself only needs to define **detector-specific** systematics (e.g., energy scale, sample normalizations, reconstruction efficiencies, PID migration).
 
 Experiment groups and their physics requirements:
 - **Atmospheric** (deepcore, ic_upgrade, super_k, orca): `osc` (SI), `atm_flux`, `earth_layers`, `xsec`
