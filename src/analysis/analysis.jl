@@ -81,6 +81,7 @@ if use_distributed
 
         ad_backend = Symbol(args["ad"])
         Newtrinos.set_ad_backend(ad_backend)
+        p = Newtrinos.get_params(experiments)
         set_batcontext(ad = Newtrinos.select_ad(length(p)))
     end
 
