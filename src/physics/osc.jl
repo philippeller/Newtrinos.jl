@@ -22,10 +22,10 @@ export configure
 const ftype = Float64
 
 # struct for matter layers
-struct Layer{T}
+struct Layer{T, U}
     radius::T
-    p_density::T
-    n_density::T
+    p_density::U
+    n_density::U
 end
 
 # struct for matter paths
