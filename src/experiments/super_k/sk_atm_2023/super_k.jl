@@ -364,9 +364,9 @@ function get_priors()
         sk_iv_v_energy_scale = Normal(1.0, 0.02),
         # Up/down: SK I-III ~0.6-1.3%, SK IV-V ~0.5-0.7% → use 0.8% average
         sk_updown_energy_scale = Normal(1.0, 0.008),
-        sk_fc_norm = Normal(1.0, 0.05),
-        sk_pc_norm = Normal(1.0, 0.05),
-        sk_upmu_norm = Normal(1.0, 0.05),
+        sk_fc_norm = Normal(1.0, 0.015),
+        sk_pc_norm = Normal(1.0, 0.03),
+        sk_upmu_norm = Normal(1.0, 0.01),
         sk_fiducial_norm = Normal(1.0, 0.02),
         sk_nc_mu_norm = Normal(1.0, 0.1),
         sk_pc_stopping_vs_througoing = Normal(1.0, 0.2),
