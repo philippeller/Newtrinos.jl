@@ -332,9 +332,9 @@ function get_params()
         sk_iv_v_decay_e_tag_eff = 1.0,
         sk_iv_v_subgev_neutron_tag_eff = 1.0,
         sk_iv_v_multigev_neutron_tag_eff = 1.0,
-        sk_i_v_btd_1 = 1.0,
-        sk_i_v_btd_2 = 1.0,
-        sk_i_v_btd_3 = 1.0,
+        sk_i_v_bdt_1 = 1.0,
+        sk_i_v_bdt_2 = 1.0,
+        sk_i_v_bdt_3 = 1.0,
         sk_i_iii_subgev_pid = 1.0,
         sk_iv_v_subgev_pid = 1.0,
         sk_i_iii_multigev_pid = 1.0,
@@ -376,9 +376,9 @@ function get_priors()
         sk_iv_v_decay_e_tag_eff = Normal(1.0, 0.008),
         sk_iv_v_subgev_neutron_tag_eff = Normal(1.0, 0.12),
         sk_iv_v_multigev_neutron_tag_eff = Normal(1.0, 0.12),
-        sk_i_v_btd_1 = Normal(1, 0.05),
-        sk_i_v_btd_2 = Normal(1, 0.05),
-        sk_i_v_btd_3 = Normal(1, 0.05),
+        sk_i_v_bdt_1 = Normal(1, 0.05),
+        sk_i_v_bdt_2 = Normal(1, 0.05),
+        sk_i_v_bdt_3 = Normal(1, 0.05),
         # PID: thesis shows <1% for most phases, up to ~2-3% for some
         # Sub-GeV PID is better constrained than multi-GeV
         sk_i_iii_subgev_pid = Normal(1, 0.02),
@@ -438,9 +438,9 @@ function get_all_factors(params, assets, total)
         get_double_factor(total, assets.masks.sk_iv_v_1decay_e, assets.masks.sk_iv_v_0decay_e, params.sk_iv_v_decay_e_tag_eff) .*
         get_double_factor(total, assets.masks.sk_iv_v_subgev_0neutron, assets.masks.sk_iv_v_subgev_1neutron, params.sk_iv_v_subgev_neutron_tag_eff) .*
         get_double_factor(total, assets.masks.sk_iv_v_multigev_0neutron, assets.masks.sk_iv_v_multigev_1neutron, params.sk_iv_v_multigev_neutron_tag_eff) .*
-        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_btd_1) .*
-        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_btd_2) .*
-        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_btd_3) .*
+        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_bdt_1) .*
+        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_bdt_2) .*
+        get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_bdt_3) .*
         # PID migration: e-like ↔ mu-like
         get_double_factor(total, assets.masks.sk_i_iii_subgev_elike, assets.masks.sk_i_iii_subgev_mulike, params.sk_i_iii_subgev_pid) .*
         get_double_factor(total, assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .*
