@@ -61,7 +61,8 @@ function select_ad(n_params; threshold=12)
     end
 end
 
-set_batcontext(ad = AutoForwardDiff())
+# AD backend is set via set_ad_backend() + set_batcontext(ad = select_ad(n))
+# Do NOT set a hardcoded default here — it overrides user selection
 
 # ── Core Types ──────────────────────────────────────────────────────
 

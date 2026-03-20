@@ -94,6 +94,12 @@ if use_distributed
         # experiments = configure_experiments(args["experiments"], physics)
 
         likelihood = Newtrinos.generate_likelihood(experiments)
+
+        # Set AD backend on each worker
+        ad_backend = Symbol(args["ad"])
+        Newtrinos.set_ad_backend(ad_backend)
+        p = Newtrinos.get_params(experiments)
+        set_batcontext(ad = Newtrinos.select_ad(length(p)))
     end
 
     map_func = pmap
@@ -121,9 +127,7 @@ priors = Newtrinos.get_priors(experiments)
 
 ad_backend = Symbol(args["ad"])
 Newtrinos.set_ad_backend(ad_backend)
-if !use_distributed
-    set_batcontext(ad = Newtrinos.select_ad(length(p)))
-end
+set_batcontext(ad = Newtrinos.select_ad(length(p)))
 
 # Variables to condition on (=fix)
 conditional_vars = Dict(:θ₁₂=>p.θ₁₂, :δCP=>-1.89, :Δm²₂₁=>p.Δm²₂₁)
