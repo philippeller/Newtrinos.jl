@@ -102,9 +102,9 @@ function get_assets(physics; datadir = @__DIR__)
     end
       
 
-    #flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
+    flux_nominal = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
 
-    assets = (;mc, layers, paths, binning)
+    assets = (;mc, layers, paths, binning, flux_nominal)
 
 end
 
@@ -160,21 +160,27 @@ end
 
 function reweight(params, physics, assets)
 
-    flux = physics.atm_flux.nominal_flux(assets.binning.e_fine * params.ic_upgrade_energy_scale, assets.binning.cz_fine)
-
-    sys_flux = physics.atm_flux.sys_flux(flux, params)
+    sys_flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
     s = (size(assets.binning.e_fine)[1], size(assets.binning.cz_fine)[1])
 
     p = physics.osc.osc_prob(assets.binning.e_fine * params.ic_upgrade_energy_scale, assets.paths, assets.layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
     
-    nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
+    nus = (
+        nue = gather_flux(p_flux, assets.mc.nue.ef_idx, assets.mc.nue.cf_idx, 1),
+        numu = gather_flux(p_flux, assets.mc.numu.ef_idx, assets.mc.numu.cf_idx, 2),
+        nutau = gather_flux(p_flux, assets.mc.nutau.ef_idx, assets.mc.nutau.cf_idx, 3),
+    )
     
     p = physics.osc.osc_prob(assets.binning.e_fine * params.ic_upgrade_energy_scale, assets.paths, assets.layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
-    nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))
+    nubars = (
+        nuebar = gather_flux(p_flux, assets.mc.nuebar.ef_idx, assets.mc.nuebar.cf_idx, 1),
+        numubar = gather_flux(p_flux, assets.mc.numubar.ef_idx, assets.mc.numubar.cf_idx, 2),
+        nutaubar = gather_flux(p_flux, assets.mc.nutaubar.ef_idx, assets.mc.nutaubar.cf_idx, 3),
+    )
 
     merge(nus, nubars)
 end
@@ -185,7 +191,14 @@ function get_expected(params, physics, assets)
 
     lifetime_seconds = params.ic_upgrade_lifetime * 365. * 24. * 3600.
 
-    hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds, params, assets) for ch in keys(assets.mc))
+    hists = (
+        nue = make_hist_per_channel(assets.mc.nue, osc_flux.nue, lifetime_seconds, params, assets),
+        nuebar = make_hist_per_channel(assets.mc.nuebar, osc_flux.nuebar, lifetime_seconds, params, assets),
+        numu = make_hist_per_channel(assets.mc.numu, osc_flux.numu, lifetime_seconds, params, assets),
+        numubar = make_hist_per_channel(assets.mc.numubar, osc_flux.numubar, lifetime_seconds, params, assets),
+        nutau = make_hist_per_channel(assets.mc.nutau, osc_flux.nutau, lifetime_seconds, params, assets),
+        nutaubar = make_hist_per_channel(assets.mc.nutaubar, osc_flux.nutaubar, lifetime_seconds, params, assets),
+    )
 
     nues = hists[:nue] .+ hists[:nuebar]
     numus = hists[:numu] .+ hists[:numubar]
