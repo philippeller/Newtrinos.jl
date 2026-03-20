@@ -73,7 +73,9 @@ using Newtrinos
 
 We need to specify the physics we want to use.
 Here we decided on a module for standard 3-flavour oscillations with basic propagation, all states used for oscillations, and standard interactions (matter effects).
-Furthermore we use modules for computing atmospheric fluxes and Earth density profiles (each just with standard configuration here)
+Furthermore we use modules for computing atmospheric fluxes, Earth density profiles, and cross sections.
+
+The Earth density model can be configured as fixed (`PREM`, the default) or variable (`VariableDensity`), which adds a `matter_density_scale` nuisance parameter with a 6.8% uncertainty on the Earth's electron density.
 
 
 ```julia
@@ -86,7 +88,8 @@ osc_cfg = Newtrinos.osc.OscillationConfig(
 
 osc = Newtrinos.osc.configure(osc_cfg)
 atm_flux = Newtrinos.atm_flux.configure()
-earth_layers = Newtrinos.earth_layers.configure()
+earth_layers = Newtrinos.earth_layers.configure()  # fixed PREM densities
+# earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())  # parameterized densities
 xsec = Newtrinos.xsec.configure()
 
 physics = (; osc, atm_flux, earth_layers, xsec);
