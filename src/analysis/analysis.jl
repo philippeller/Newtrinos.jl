@@ -120,12 +120,12 @@ Newtrinos.set_ad_backend(ad_backend)
 set_batcontext(ad = Newtrinos.select_ad(length(p)))
 
 # Variables to condition on (=fix)
-conditional_vars = Dict(:θ₁₂=>p.θ₁₂, :δCP=>-1.89, :Δm²₂₁=>p.Δm²₂₁)
+conditional_vars = Dict(:θ₁₂=>p.θ₁₂, :Δm²₂₁=>p.Δm²₂₁)
 
 # For profile / scan task only: choose scan grid
 vars_to_scan = OrderedDict()
-vars_to_scan[:θ₂₃] = 11
-vars_to_scan[:Δm²₃₁] = 11
+vars_to_scan[:θ₂₃] = 8
+vars_to_scan[:Δm²₃₁] = 8
 
 ###### END CONFIG ######
 
