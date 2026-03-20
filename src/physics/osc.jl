@@ -139,7 +139,7 @@ function get_params(cfg::ThreeFlavour)
     params[:θ₁₂] = ftype(asin(sqrt(0.307)))
     params[:θ₁₃] = ftype(asin(sqrt(0.021)))
     params[:θ₂₃] = ftype(asin(sqrt(0.57)))
-    params[:δCP] = ftype(1.)
+    params[:δCP] = ftype(pi/2)
     params[:Δm²₂₁] = ftype(7.53e-5)
     
     if cfg.ordering == :NO
