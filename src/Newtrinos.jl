@@ -29,6 +29,7 @@ export make_init_samples, make_prior_samples, whack_a_moles, whack_many_moles
 include("physics/osc.jl")
 using .osc
 include("physics/barger_eigen.jl")
+include("physics/mooncake_eigen_rule.jl")
 include("physics/earth_layers.jl")
 include("physics/atm_flux.jl")
 include("physics/xsec.jl")
