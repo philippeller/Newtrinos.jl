@@ -44,6 +44,11 @@ function parse_command_line()
         help = "Number of threads per worker (only used when --workers > 1)"
         arg_type = Int
         default = 1
+
+        "--ad"
+        help = "AD backend: auto, forwarddiff, polyester, mooncake"
+        arg_type = String
+        default = "auto"
     end
 
     return parse_args(s)
@@ -114,6 +119,8 @@ end
 p = Newtrinos.get_params(experiments)
 priors = Newtrinos.get_priors(experiments)
 
+ad_backend = Symbol(args["ad"])
+Newtrinos.set_ad_backend(ad_backend)
 if !use_distributed
     set_batcontext(ad = Newtrinos.select_ad(length(p)))
 end

@@ -22,16 +22,44 @@ using Logging
 using ProgressMeter
 using Dates
 using LibGit2
+import Mooncake
 using ..Newtrinos
+
+const AD_BACKEND = Ref{Symbol}(:auto)
+
+"""
+    set_ad_backend(backend::Symbol)
+
+Set the global AD backend. Valid values: `:auto`, `:forwarddiff`, `:polyester`, `:mooncake`.
+"""
+function set_ad_backend(backend::Symbol)
+    backend in (:auto, :forwarddiff, :polyester, :mooncake) || error("Unknown AD backend: $backend. Choose from: auto, forwarddiff, polyester, mooncake")
+    AD_BACKEND[] = backend
+end
 
 """
     select_ad(n_params; threshold=12)
 
-Choose AD backend based on parameter count. Uses `AutoPolyesterForwardDiff`
-(threaded chunked ForwardDiff) when `n_params > threshold`, otherwise plain
-`AutoForwardDiff`.
+Choose AD backend for gradient-based optimization based on the global setting
+(see [`set_ad_backend`](@ref)).
+
+- `:auto` — ForwardDiff for ≤ threshold params, PolyesterForwardDiff otherwise
+- `:forwarddiff` — standard chunked ForwardDiff
+- `:polyester` — threaded chunked ForwardDiff (PolyesterForwardDiff)
+- `:mooncake` — reverse-mode AD via Mooncake (constant overhead, lower memory)
 """
-select_ad(n_params; threshold=12) = n_params > threshold ? AutoPolyesterForwardDiff() : AutoForwardDiff()
+function select_ad(n_params; threshold=12)
+    backend = AD_BACKEND[]
+    if backend == :auto
+        return n_params > threshold ? AutoPolyesterForwardDiff() : AutoForwardDiff()
+    elseif backend == :forwarddiff
+        return AutoForwardDiff()
+    elseif backend == :polyester
+        return AutoPolyesterForwardDiff()
+    elseif backend == :mooncake
+        return AutoMooncake(Mooncake.Config())
+    end
+end
 
 set_batcontext(ad = AutoForwardDiff())
 
