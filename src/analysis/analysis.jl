@@ -102,7 +102,16 @@ if use_distributed
         set_batcontext(ad = Newtrinos.select_ad(length(p)))
     end
 
-    map_func = pmap
+    # Define remote work function that uses each worker's local likelihood
+    @everywhere function _remote_find_mle(scanpoint, params, cache_dir)
+        Newtrinos.find_mle_cached(likelihood, scanpoint, deepcopy(params), cache_dir)
+    end
+
+    map_func = function(work, scanpoints, params, cache_dir)
+        pmap(work) do i
+            _remote_find_mle(scanpoints[i], params, cache_dir)
+        end
+    end
 end
 
 ##### PHYSICS CONFIG #####
