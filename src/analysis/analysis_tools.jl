@@ -436,17 +436,18 @@ function assemble_profile_results(opt_results, result_size)
 end
 
 function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing)
+    do_work(i) = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+
     if isnothing(map_func)
-        # Default: threaded execution using local likelihood
-        do_work(i) = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+        # Default: threaded execution
         opt_results = Array{Any}(undef, size(scanpoints))
         @showprogress Threads.@threads for i in eachindex(scanpoints)
             opt_results[i] = do_work(i)
         end
     else
-        # Distributed: pass scanpoints/params/cache_dir as data, workers use their own likelihood
+        # Custom map (e.g., pmap for distributed)
         work = collect(eachindex(scanpoints))
-        opt_results_flat = map_func(work, scanpoints, params, cache_dir)
+        opt_results_flat = map_func(do_work, work)
         opt_results = reshape(opt_results_flat, size(scanpoints))
     end
     assemble_profile_results(opt_results, size(scanpoints))

@@ -61,64 +61,93 @@ n_workers = args["workers"]
 n_threads = args["threads"]
 use_distributed = n_workers > 1
 
-# Set up distributed workers if requested
-map_func = nothing
-if use_distributed
+"""
+    _distributed_profile(args, conditional_vars, prior_overrides, vars_to_scan, cache_dir, n_workers, n_threads)
+
+Run profiling on distributed workers. Each worker builds its own likelihood, scanpoints,
+and AD context locally — nothing is serialized except integer indices and scalar results.
+`prior_overrides` is a Dict{Symbol,Distribution} of prior replacements to apply after conditioning.
+"""
+function _distributed_profile(args, conditional_vars, prior_overrides, vars_to_scan, cache_dir, n_workers, n_threads)
+    t1 = time()
+
     addprocs(n_workers; exeflags="--threads=$n_threads")
 
+    # Send only plain data to workers (strings, numbers, dicts, simple distributions)
     @everywhere args = $args
+    @everywhere conditional_vars = $conditional_vars
+    @everywhere prior_overrides = $prior_overrides
+    @everywhere vars_to_scan = $vars_to_scan
+    @everywhere cache_dir = $cache_dir
 
     @everywhere begin
         using Distributions
         using DensityInterface
         using BAT
+        using DataStructures
         using MeasureBase
         using ADTypes
         using Newtrinos
+        using Accessors
 
         include(joinpath(@__DIR__, "cli_common.jl"))
 
-        ##### PHYSICS CONFIG #####
-        # To use defaults:
+        # Each worker builds everything from scratch — no serialization needed
         experiments = configure_experiments(args["experiments"])
-
-        # To override physics (e.g. for IO, sterile models, custom flux, etc.), uncomment and modify:
-        # osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(
-        #     flavour=Newtrinos.osc.ThreeFlavour(ordering=:IO),
-        #     interaction=Newtrinos.osc.SI(),
-        # ))
-        # atm_flux = Newtrinos.atm_flux.configure()
-        # earth_layers = Newtrinos.earth_layers.configure()
-        # xsec = Newtrinos.xsec.configure()
-        # physics = (; osc, atm_flux, earth_layers, xsec)
-        # experiments = configure_experiments(args["experiments"], physics)
-
+        p = Newtrinos.get_params(experiments)
+        priors = Newtrinos.get_priors(experiments)
         likelihood = Newtrinos.generate_likelihood(experiments)
 
-        # Set AD backend on each worker
         ad_backend = Symbol(args["ad"])
         Newtrinos.set_ad_backend(ad_backend)
-        p = Newtrinos.get_params(experiments)
         set_batcontext(ad = Newtrinos.select_ad(length(p)))
+
+        priors = Newtrinos.condition(priors, conditional_vars, p)
+        for (k, v) in prior_overrides
+            @reset priors[k] = v
+        end
+
+        _, scanpoints = Newtrinos.generate_scanpoints(vars_to_scan, priors)
     end
 
-    # Define remote work function that uses each worker's local likelihood
-    @everywhere function _remote_find_mle(scanpoint, params, cache_dir)
-        Newtrinos.find_mle_cached(likelihood, scanpoint, deepcopy(params), cache_dir)
+    # Workers have everything — just send integer indices
+    @everywhere function _do_work(i)
+        Newtrinos.find_mle_cached(likelihood, scanpoints[i], deepcopy(p), cache_dir)
     end
 
-    map_func = function(work, scanpoints, params, cache_dir)
-        pmap(work) do i
-            _remote_find_mle(scanpoints[i], params, cache_dir)
+    n_points = prod(values(vars_to_scan))
+    work = collect(1:n_points)
+
+    if !isnothing(cache_dir)
+        if isdir(cache_dir)
+            @info "Reusing cache dir `$(cache_dir)`"
+        else
+            mkdir(cache_dir)
         end
     end
+
+    opt_results_flat = pmap(_do_work, work)
+
+    # Collect scanpoint grid shape and assemble results
+    grid_shape = Tuple(values(vars_to_scan))
+    opt_results = reshape(opt_results_flat, grid_shape)
+    res = Newtrinos.assemble_profile_results(opt_results, grid_shape)
+
+    # Build axes from main-process priors (same conditioning as workers)
+    values_grid, _ = Newtrinos.generate_scanpoints(vars_to_scan, priors)
+    axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values_grid)
+
+    t2 = time()
+    meta = Dict("task"=> "profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan, "params"=>p, "exec_time"=>t2-t1, "cache_dir"=>cache_dir)
+    Newtrinos.add_meta!(meta)
+
+    rmprocs(workers())
+
+    Newtrinos.NewtrinosResult(axes=axes, values=res, meta=meta)
 end
 
 ##### PHYSICS CONFIG #####
-# To use defaults:
-if !use_distributed
-    experiments = configure_experiments(args["experiments"])
-end
+experiments = configure_experiments(args["experiments"])
 
 # To override physics (e.g. for IO, sterile models, custom flux, etc.), uncomment and modify:
 # osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(
@@ -133,6 +162,7 @@ end
 
 p = Newtrinos.get_params(experiments)
 priors = Newtrinos.get_priors(experiments)
+likelihood = Newtrinos.generate_likelihood(experiments)
 
 ad_backend = Symbol(args["ad"])
 Newtrinos.set_ad_backend(ad_backend)
@@ -146,16 +176,18 @@ vars_to_scan = OrderedDict()
 vars_to_scan[:θ₂₃] = 11
 vars_to_scan[:Δm²₃₁] = 11
 
+# Prior overrides (applied after conditioning)
+prior_overrides = Dict{Symbol,Distribution}(
+    :Δm²₃₁ => Uniform(0.002, 0.003),
+    :θ₂₃ => Uniform(pi/4-0.2, pi/4+0.2),
+)
+
 ###### END CONFIG ######
 
-if !use_distributed
-    likelihood = Newtrinos.generate_likelihood(experiments);
-end
-
 priors = Newtrinos.condition(priors, conditional_vars, p)
-
-@reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
-@reset priors.θ₂₃ = Uniform(pi/4-0.2, pi/4+0.2)
+for (k, v) in prior_overrides
+    @reset priors[k] = v
+end
 
 if lowercase(args["task"]) == "nestedsampling"
     import UltraNest
@@ -178,7 +210,11 @@ elseif lowercase(args["task"]) == "importancesampling"
     FileIO.save(name * ".jld2", Dict(String(a)=>whack_samples[a] for a in keys(whack_samples)))
 else
     if lowercase(args["task"]) == "profile"
-        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p; cache_dir=name, map_func=map_func)
+        if use_distributed
+            result = _distributed_profile(args, conditional_vars, prior_overrides, vars_to_scan, name, n_workers, n_threads)
+        else
+            result = Newtrinos.profile(likelihood, priors, vars_to_scan, p; cache_dir=name)
+        end
     elseif lowercase(args["task"]) == "scan"
         result = Newtrinos.scan(likelihood, priors, vars_to_scan, p)
     end
