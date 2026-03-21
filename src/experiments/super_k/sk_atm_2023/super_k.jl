@@ -145,9 +145,20 @@ function contract_R(R_flat, weighted_flux)
     R_flat * vec(weighted_flux)
 end
 
+function flux_norm_sigma_low(logE)
+    # 25% at logE=-1 (0.1 GeV), linear in logE to 7% at logE=0 (1 GeV), zero above
+    logE < zero(logE) ? max(0.07, 0.25 - 0.18 * (logE + 1)) : zero(logE)
+end
+
+function flux_norm_sigma_high(logE)
+    # Zero below 1 GeV; 7% flat from 1-10 GeV; linear in logE to 20% at 1 TeV
+    logE < zero(logE) ? zero(logE) : (logE ≤ 1 ? oftype(logE, 0.07) : 0.07 + 0.065 * (logE - 1))
+end
+
 function calc_weights(params, assets, physics)
 
     E = 10. .^midpoints(assets.loge_grid)
+    logE = midpoints(assets.loge_grid)
 
     layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
@@ -159,6 +170,11 @@ function calc_weights(params, assets, physics)
 
     s = (size(p)[1], size(p)[2])
 
+    # Energy-dependent flux normalization (bathtub shape, split at 1 GeV)
+    fnl = haskey(params, :sk_flux_norm_low) ? params.sk_flux_norm_low : zero(eltype(E))
+    fnh = haskey(params, :sk_flux_norm_high) ? params.sk_flux_norm_high : zero(eltype(E))
+    flux_norm = 1 .+ fnl .* flux_norm_sigma_low.(logE) .+ fnh .* flux_norm_sigma_high.(logE)
+
     xsec_nue     = physics.xsec.scale(E, :nue,   :CC, false, params)
     xsec_numu    = physics.xsec.scale(E, :numu,  :CC, false, params)
     xsec_nutau   = physics.xsec.scale(E, :nutau, :CC, false, params)
@@ -168,24 +184,24 @@ function calc_weights(params, assets, physics)
     xsec_nc      = physics.xsec.scale(E, :nue,   :NC, false, params)
 
     nue_flux   = (reshape(flux.nue,    s) .* p[:, :, 1, 1] .+
-                  reshape(flux.numu,   s) .* p[:, :, 2, 1]) .* xsec_nue
+                  reshape(flux.numu,   s) .* p[:, :, 2, 1]) .* xsec_nue .* flux_norm
     numu_flux  = (reshape(flux.nue,    s) .* p[:, :, 1, 2] .+
-                  reshape(flux.numu,   s) .* p[:, :, 2, 2]) .* xsec_numu
+                  reshape(flux.numu,   s) .* p[:, :, 2, 2]) .* xsec_numu .* flux_norm
     nutau_flux = (reshape(flux.nue,    s) .* p[:, :, 1, 3] .+
-                  reshape(flux.numu,   s) .* p[:, :, 2, 3]) .* xsec_nutau
+                  reshape(flux.numu,   s) .* p[:, :, 2, 3]) .* xsec_nutau .* flux_norm
     nuebar_flux  = (reshape(flux.nuebar,  s) .* p_anti[:, :, 1, 1] .+
-                    reshape(flux.numubar, s) .* p_anti[:, :, 2, 1]) .* xsec_nuebar
+                    reshape(flux.numubar, s) .* p_anti[:, :, 2, 1]) .* xsec_nuebar .* flux_norm
     numubar_flux = (reshape(flux.nuebar,  s) .* p_anti[:, :, 1, 2] .+
-                    reshape(flux.numubar, s) .* p_anti[:, :, 2, 2]) .* xsec_numubar
+                    reshape(flux.numubar, s) .* p_anti[:, :, 2, 2]) .* xsec_numubar .* flux_norm
     nutaubar_flux = (reshape(flux.nuebar,  s) .* p_anti[:, :, 1, 3] .+
-                     reshape(flux.numubar, s) .* p_anti[:, :, 2, 3]) .* xsec_nutaubar
+                     reshape(flux.numubar, s) .* p_anti[:, :, 2, 3]) .* xsec_nutaubar .* flux_norm
 
     nue     = contract_R(assets.R.nue,     nue_flux)
     numu    = contract_R(assets.R.numu,    numu_flux)
     nutau   = contract_R(assets.R.nutau,   nutau_flux)
     nuebar  = contract_R(assets.R.nuebar,  nuebar_flux)
     numubar = contract_R(assets.R.numubar, numubar_flux)
-    nunc    = contract_R(assets.R.nunc,    ones(eltype(nue_flux), s) .* xsec_nc)
+    nunc    = contract_R(assets.R.nunc,    ones(eltype(nue_flux), s) .* xsec_nc .* flux_norm)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end
@@ -353,6 +369,9 @@ function get_params()
         # Split ring counting: sub-GeV and multi-GeV
         sk_subgev_ring_counting = 1.0,
         sk_multigev_ring_counting = 1.0,
+        # Energy-dependent flux normalization (bathtub shape, split at 1 GeV)
+        sk_flux_norm_low = 0.0,
+        sk_flux_norm_high = 0.0,
         )
 end
 
@@ -403,6 +422,11 @@ function get_priors()
         # Split ring counting
         sk_subgev_ring_counting = Normal(1, 0.03),
         sk_multigev_ring_counting = Normal(1, 0.05),
+        # Energy-dependent flux normalization (bathtub shape)
+        # Low-E: 25% at 0.1 GeV, linear in logE to 7% at 1 GeV
+        # High-E: 7% flat from 1-10 GeV, linear in logE to 20% at 1 TeV
+        sk_flux_norm_low = Truncated(Normal(0, 1), -3, 3),
+        sk_flux_norm_high = Truncated(Normal(0, 1), -3, 3),
         )
 end
 
