@@ -77,7 +77,10 @@ function get_compute_layers(cfg::PREM)
 end
 
 function scale_densities(layers, scale)
-    StructArray{Newtrinos.Layer}((layers.radius, layers.p_density .* scale, layers.n_density))
+    p_old = layers.p_density
+    p = p_old .* scale
+    n = layers.n_density .+ p_old .- p  # conserve total density: Δn = -Δp
+    StructArray{Newtrinos.Layer}((layers.radius, p, n))
 end
 
 function ray_circle_path_length(r, y, cz)
