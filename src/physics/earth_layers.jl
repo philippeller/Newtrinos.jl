@@ -77,8 +77,9 @@ function get_compute_layers(cfg::PREM)
 end
 
 function scale_densities(layers, scale)
-    p = layers.p_density .* scale
-    n = layers.n_density .* one.(p)
+    p_old = layers.p_density
+    p = p_old .* scale
+    n = layers.n_density .+ p_old .- p  # conserve total density: Δn = -Δp
     StructArray{Newtrinos.Layer}((layers.radius, p, n))
 end
 
