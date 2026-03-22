@@ -26,7 +26,7 @@ end
 function default_physics()
     osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
-    earth_layers = Newtrinos.earth_layers.configure()
+    earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
     xsec = Newtrinos.xsec.configure(Newtrinos.xsec.Differential_H2O())
     (; osc, atm_flux, earth_layers, xsec)
 end
@@ -160,7 +160,7 @@ function calc_weights(params, assets, physics)
     E = 10. .^midpoints(assets.loge_grid)
     logE = midpoints(assets.loge_grid)
 
-    layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
+    layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
 
     p = physics.osc.osc_prob(E, paths, layers, params);

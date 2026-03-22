@@ -45,8 +45,8 @@ end
 function configure(cfg::VariableDensity)
     EarthLayers(
         cfg=cfg,
-        params = (matter_density_scale = 1.0,),
-        priors = (matter_density_scale = Normal(1.0, 0.068),),
+        params = (electron_density_scale = 1.0,),
+        priors = (electron_density_scale = Normal(1.0, 0.068),),
         compute_layers = get_compute_layers(cfg.prem),
         compute_paths = compute_paths
         )
@@ -77,7 +77,7 @@ function get_compute_layers(cfg::PREM)
 end
 
 function scale_densities(layers, scale)
-    StructArray{Newtrinos.Layer}((layers.radius, layers.p_density .* scale, layers.n_density .* scale))
+    StructArray{Newtrinos.Layer}((layers.radius, layers.p_density .* scale, layers.n_density))
 end
 
 function ray_circle_path_length(r, y, cz)
