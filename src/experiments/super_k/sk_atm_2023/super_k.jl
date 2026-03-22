@@ -310,19 +310,36 @@ function get_assets(physics; datadir = @__DIR__)
     R = flatten_R(R_3d)
     nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
 
+    loge_grid_plus = loge_grid .+ log10(1.02)
+    loge_grid_minus = loge_grid .+ log10(0.98)
     R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(1.02), cz_grid) for key in keys(MC))
     R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(0.98), cz_grid) for key in keys(MC))
-    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
-    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
+    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints), physics)
+    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints), physics)
     Fij = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
-    for key in keys(R_3d)
-        R_plus_3d[key][:,:,1:50] .= R_3d[key][:,:,1:50]
-        R_minus_3d[key][:,:,1:50] .= R_3d[key][:,:,1:50]
-    end
-    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
-    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
-    Fij_updown = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
+    # Up/down Fij: downgoing uses nominal R and nominal E, upgoing uses shifted R and shifted E
+    nE = length(midpoints(loge_grid))
+    ncz_half = length(cz_midpoints) ÷ 2
+    ncols_half = nE * ncz_half
+
+    cz_down = cz_midpoints[1:ncz_half]
+    cz_up = cz_midpoints[ncz_half+1:end]
+    flux_down = flux_nominal[1:ncols_half]
+    flux_up = flux_nominal[ncols_half+1:end]
+
+    slice_R_cols(R_nt, cols) = NamedTuple(key => R_nt[key][:, cols] for key in keys(R_nt))
+    R_down_nom = slice_R_cols(R, 1:ncols_half)
+    R_up_plus = slice_R_cols(flatten_R(R_plus_3d), ncols_half+1:2*ncols_half)
+    R_up_minus = slice_R_cols(flatten_R(R_minus_3d), ncols_half+1:2*ncols_half)
+
+    weights_down = calc_weights(params_nominal, (;R=R_down_nom, flux_nominal=flux_down, nominal_layers, loge_grid, cz_midpoints=cz_down), physics)
+    weights_up_plus = calc_weights(params_nominal, (;R=R_up_plus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints=cz_up), physics)
+    weights_up_minus = calc_weights(params_nominal, (;R=R_up_minus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints=cz_up), physics)
+
+    weights_updown_plus = NamedTuple(key => weights_down[key] .+ weights_up_plus[key] for key in keys(weights_down))
+    weights_updown_minus = NamedTuple(key => weights_down[key] .+ weights_up_minus[key] for key in keys(weights_down))
+    Fij_updown = NamedTuple(key => safe_div.((weights_updown_plus[key] .- weights_updown_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
     return (; MC, R, Fij, Fij_updown, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks)
 
