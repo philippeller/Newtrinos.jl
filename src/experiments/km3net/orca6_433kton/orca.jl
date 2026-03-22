@@ -136,7 +136,7 @@ function reweight(params, physics, assets)
 
     s = assets.true_shape
 
-    layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
+    layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.binning.cz_fine, layers)
 
     p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, paths, layers, params)

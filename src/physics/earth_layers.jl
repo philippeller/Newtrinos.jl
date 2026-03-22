@@ -16,7 +16,7 @@ abstract type DensityModel end
 
 @kwdef struct PREM <: DensityModel
     zones::Array{Float64} = [0., 4., 7.5, 12.5, 13.1]
-    p_fractions::Float64 = 0.5
+    p_fractions::Vector{Float64} = [0.496, 0.494, 0.468, 0.466]  # Ye per density zone
     atm_heihgt::Float64 = 20.
 end
 
@@ -45,8 +45,8 @@ end
 function configure(cfg::VariableDensity)
     EarthLayers(
         cfg=cfg,
-        params = (matter_density_scale = 1.0,),
-        priors = (matter_density_scale = Normal(1.0, 0.068),),
+        params = (electron_density_scale = 1.0,),
+        priors = (electron_density_scale = Normal(1.0, 0.068),),
         compute_layers = get_compute_layers(cfg.prem),
         compute_paths = compute_paths
         )
@@ -71,12 +71,13 @@ function get_compute_layers(cfg::PREM)
             push!(ave_densities, mean(PREM.density[mask]))
         end
 
-        layers = StructArray{Newtrinos.Layer}((radii, ave_densities .* cfg.p_fractions, ave_densities .* (1 .- cfg.p_fractions)))
+        ye = vcat([0.5], cfg.p_fractions)  # prepend atmosphere Ye (density=0, so value irrelevant)
+        layers = StructArray{Newtrinos.Layer}((radii, ave_densities .* ye, ave_densities .* (1 .- ye)))
     end
 end
 
 function scale_densities(layers, scale)
-    StructArray{Newtrinos.Layer}((layers.radius, layers.p_density .* scale, layers.n_density .* scale))
+    StructArray{Newtrinos.Layer}((layers.radius, layers.p_density .* scale, layers.n_density))
 end
 
 function ray_circle_path_length(r, y, cz)

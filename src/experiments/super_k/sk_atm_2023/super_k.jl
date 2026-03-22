@@ -160,7 +160,7 @@ function calc_weights(params, assets, physics)
     E = 10. .^midpoints(assets.loge_grid)
     logE = midpoints(assets.loge_grid)
 
-    layers = haskey(params, :matter_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.matter_density_scale) : assets.nominal_layers
+    layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
 
     p = physics.osc.osc_prob(E, paths, layers, params);
