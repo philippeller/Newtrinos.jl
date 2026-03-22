@@ -16,7 +16,7 @@ abstract type DensityModel end
 
 @kwdef struct PREM <: DensityModel
     zones::Array{Float64} = [0., 4., 7.5, 12.5, 13.1]
-    p_fractions::Float64 = 0.5
+    p_fractions::Vector{Float64} = [0.496, 0.494, 0.468, 0.466]  # Ye per density zone
     atm_heihgt::Float64 = 20.
 end
 
@@ -71,7 +71,8 @@ function get_compute_layers(cfg::PREM)
             push!(ave_densities, mean(PREM.density[mask]))
         end
 
-        layers = StructArray{Newtrinos.Layer}((radii, ave_densities .* cfg.p_fractions, ave_densities .* (1 .- cfg.p_fractions)))
+        ye = vcat([0.5], cfg.p_fractions)  # prepend atmosphere Ye (density=0, so value irrelevant)
+        layers = StructArray{Newtrinos.Layer}((radii, ave_densities .* ye, ave_densities .* (1 .- ye)))
     end
 end
 
