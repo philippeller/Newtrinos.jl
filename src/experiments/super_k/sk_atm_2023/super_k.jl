@@ -353,7 +353,7 @@ function get_assets(physics; datadir = @__DIR__)
         nunc=read_sk_file(joinpath(datadir, "bins/normal/sk_2023_MCNCNO.txt")))
 
         
-    loge_grid = LinRange(-1,3,201)
+    loge_grid = LinRange(-1,3,251)
     cz_grid = LinRange(-1.0,1.0,101)
 
     # Bestfit from SK atm 2023 paper
@@ -475,13 +475,13 @@ function get_priors()
         # Energy scales from Table 5.6 (conventional FV), exposure-weighted by livetime
         # SK I: 3.3% (~1489d), SK II: 2.0% (~799d), SK III: 2.4% (~518d) → exposure-weighted ~2.8%, use SK I-dominated 3.3%
         # SK IV: 2.1% (~3244d), SK V: 1.8% (~2970d) → exposure-weighted ~2.0%
-        sk_i_iii_energy_scale = Normal(1.0, 0.033),
-        sk_iv_v_energy_scale = Normal(1.0, 0.021),
+        sk_i_iii_energy_scale = Truncated(Normal(1.0, 0.033), 0.5, 1.5),
+        sk_iv_v_energy_scale = Truncated(Normal(1.0, 0.021), 0.5, 1.5),
         # Up/down energy scale from Table 5.6, split by phase group
         # SK I: 1.3%, SK II: 0.6%, SK III: 0.7% → exposure-weighted ~1.0%
         # SK IV: 0.5%, SK V: 0.7% → exposure-weighted ~0.6%
-        sk_i_iii_updown_energy_scale = Normal(1.0, 0.01),
-        sk_iv_v_updown_energy_scale = Normal(1.0, 0.006),
+        sk_i_iii_updown_energy_scale = Truncated(Normal(1.0, 0.01), 0.5, 1.5),
+        sk_iv_v_updown_energy_scale = Truncated(Normal(1.0, 0.006), 0.5, 1.5),
         sk_fc_norm = Normal(1.0, 0.015),
         sk_pc_norm = Normal(1.0, 0.03),
         sk_upmu_norm = Normal(1.0, 0.01),
