@@ -314,16 +314,16 @@ function get_assets(physics; datadir = @__DIR__)
 
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
 
-    # Build response matrices with 5% broadened quantile spreads to account for
+    # Build response matrices with 1% broadened quantile spreads to account for
     # uncertainty in the reconstruction distribution (known only from 5 quantiles)
-    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.05) for key in keys(MC))
+    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.01) for key in keys(MC))
     R = flatten_R(R_3d)
     nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
 
     loge_grid_plus = loge_grid .+ log10(1.02)
     loge_grid_minus = loge_grid .+ log10(0.98)
-    R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(1.02), cz_grid) for key in keys(MC))
-    R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(0.98), cz_grid) for key in keys(MC))
+    R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(1.02), cz_grid; resolution_scale=1.01) for key in keys(MC))
+    R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(0.98), cz_grid; resolution_scale=1.01) for key in keys(MC))
     weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints), physics)
     weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints), physics)
     Fij = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
