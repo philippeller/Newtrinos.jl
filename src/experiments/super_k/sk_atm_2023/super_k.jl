@@ -153,6 +153,62 @@ function contract_R(R_flat, weighted_flux)
     R_flat * vec(weighted_flux)
 end
 
+# Energy scale via reco bin overlap method
+struct EnergyGroup
+    indices::Vector{Int}
+    logP_edges::Vector{Float64}
+end
+
+function build_energy_groups(bininfo, bin_mask)
+    groups = EnergyGroup[]
+    masked_indices = findall(bin_mask)
+    sub_bininfo = bininfo[masked_indices, :]
+    for key in unique(zip(sub_bininfo.Sample, sub_bininfo.CosZMin, sub_bininfo.CosZMax))
+        local_mask = (sub_bininfo.Sample .== key[1]) .& (sub_bininfo.CosZMin .== key[2]) .& (sub_bininfo.CosZMax .== key[3])
+        local_idxs = findall(local_mask)
+        order = sortperm(sub_bininfo.logPMin[local_idxs])
+        sorted_local = local_idxs[order]
+        global_idxs = masked_indices[sorted_local]
+        edges = vcat(sub_bininfo.logPMin[sorted_local], [sub_bininfo.logPMax[sorted_local[end]]])
+        push!(groups, EnergyGroup(global_idxs, edges))
+    end
+    return groups
+end
+
+function apply_energy_scale(counts, energy_groups, delta)
+    result = copy(counts)
+    for group in energy_groups
+        n = length(group.indices)
+        edges = group.logP_edges
+        for i in 1:n
+            # Clamp edge bins to group boundaries for count conservation
+            shifted_lo = (i == 1) ? edges[1] : edges[i] + delta
+            shifted_hi = (i == n) ? edges[end] : edges[i+1] + delta
+            acc = zero(eltype(counts))
+            for j in 1:n
+                overlap = max(zero(eltype(counts)), min(shifted_hi, edges[j+1]) - max(shifted_lo, edges[j]))
+                nom_width = edges[j+1] - edges[j]
+                acc += (overlap / nom_width) * counts[group.indices[j]]
+            end
+            result[group.indices[i]] = acc
+        end
+    end
+    return result
+end
+
+function apply_all_energy_scales(counts, assets, params)
+    delta_i_iii = log10(params.sk_i_iii_energy_scale)
+    delta_iv_v = log10(params.sk_iv_v_energy_scale)
+    result = apply_energy_scale(counts, assets.energy_groups_sk_i_iii, delta_i_iii)
+    result = apply_energy_scale(result, assets.energy_groups_sk_iv_v, delta_iv_v)
+
+    delta_ud_i_iii = log10(params.sk_i_iii_updown_energy_scale)
+    delta_ud_iv_v = log10(params.sk_iv_v_updown_energy_scale)
+    result = apply_energy_scale(result, assets.energy_groups_sk_i_iii_up, delta_ud_i_iii)
+    result = apply_energy_scale(result, assets.energy_groups_sk_iv_v_up, delta_ud_iv_v)
+    return result
+end
+
 function flux_norm_sigma_low(logE)
     # 25% at logE=-1 (0.1 GeV), linear in logE to 7% at logE=0 (1 GeV), zero above
     logE < zero(logE) ? max(0.07, 0.25 - 0.18 * (logE + 1)) : zero(logE)
@@ -320,38 +376,50 @@ function get_assets(physics; datadir = @__DIR__)
     R = flatten_R(R_3d)
     nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
 
-    loge_grid_plus = loge_grid .+ log10(1.02)
-    loge_grid_minus = loge_grid .+ log10(0.98)
-    R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(1.02), cz_grid; resolution_scale=1.01) for key in keys(MC))
-    R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid .+ log(0.98), cz_grid; resolution_scale=1.01) for key in keys(MC))
-    weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints), physics)
-    weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints), physics)
-    Fij = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
+    # Old F_ij method (commented out — replaced by reco bin overlap method)
+    #loge_grid_plus = loge_grid .+ log10(1.02)
+    #loge_grid_minus = loge_grid .+ log10(0.98)
+    #R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid_plus, cz_grid; resolution_scale=1.01) for key in keys(MC))
+    #R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid_minus, cz_grid; resolution_scale=1.01) for key in keys(MC))
+    #weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints), physics)
+    #weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints), physics)
+    #Fij = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
+    #
+    ## Up/down Fij: downgoing uses nominal R and nominal E, upgoing uses shifted R and shifted E
+    #nE = length(midpoints(loge_grid))
+    #ncz_half = length(cz_midpoints) ÷ 2
+    #ncols_half = nE * ncz_half
+    #
+    #cz_down = cz_midpoints[1:ncz_half]
+    #cz_up = cz_midpoints[ncz_half+1:end]
+    #flux_down = flux_nominal[1:ncols_half]
+    #flux_up = flux_nominal[ncols_half+1:end]
+    #
+    #slice_R_cols(R_nt, cols) = NamedTuple(key => R_nt[key][:, cols] for key in keys(R_nt))
+    #R_down_nom = slice_R_cols(R, 1:ncols_half)
+    #R_up_plus = slice_R_cols(flatten_R(R_plus_3d), ncols_half+1:2*ncols_half)
+    #R_up_minus = slice_R_cols(flatten_R(R_minus_3d), ncols_half+1:2*ncols_half)
+    #
+    #weights_down = calc_weights(params_nominal, (;R=R_down_nom, flux_nominal=flux_down, nominal_layers, loge_grid, cz_midpoints=cz_down), physics)
+    #weights_up_plus = calc_weights(params_nominal, (;R=R_up_plus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints=cz_up), physics)
+    #weights_up_minus = calc_weights(params_nominal, (;R=R_up_minus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints=cz_up), physics)
+    #
+    #weights_updown_plus = NamedTuple(key => weights_down[key] .+ weights_up_plus[key] for key in keys(weights_down))
+    #weights_updown_minus = NamedTuple(key => weights_down[key] .+ weights_up_minus[key] for key in keys(weights_down))
+    #Fij_updown = NamedTuple(key => safe_div.((weights_updown_plus[key] .- weights_updown_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
-    # Up/down Fij: downgoing uses nominal R and nominal E, upgoing uses shifted R and shifted E
-    nE = length(midpoints(loge_grid))
-    ncz_half = length(cz_midpoints) ÷ 2
-    ncols_half = nE * ncz_half
+    # Build energy groups for reco bin overlap energy scale method
+    sk_i_iii_mask = masks.sk_i_iii_bins
+    sk_iv_v_mask = masks.sk_iv_v_bins
+    upgoing_mask = bininfo.CosZMax .<= 0
 
-    cz_down = cz_midpoints[1:ncz_half]
-    cz_up = cz_midpoints[ncz_half+1:end]
-    flux_down = flux_nominal[1:ncols_half]
-    flux_up = flux_nominal[ncols_half+1:end]
+    energy_groups_sk_i_iii = build_energy_groups(bininfo, sk_i_iii_mask)
+    energy_groups_sk_iv_v = build_energy_groups(bininfo, sk_iv_v_mask)
+    energy_groups_sk_i_iii_up = build_energy_groups(bininfo, sk_i_iii_mask .& upgoing_mask)
+    energy_groups_sk_iv_v_up = build_energy_groups(bininfo, sk_iv_v_mask .& upgoing_mask)
 
-    slice_R_cols(R_nt, cols) = NamedTuple(key => R_nt[key][:, cols] for key in keys(R_nt))
-    R_down_nom = slice_R_cols(R, 1:ncols_half)
-    R_up_plus = slice_R_cols(flatten_R(R_plus_3d), ncols_half+1:2*ncols_half)
-    R_up_minus = slice_R_cols(flatten_R(R_minus_3d), ncols_half+1:2*ncols_half)
-
-    weights_down = calc_weights(params_nominal, (;R=R_down_nom, flux_nominal=flux_down, nominal_layers, loge_grid, cz_midpoints=cz_down), physics)
-    weights_up_plus = calc_weights(params_nominal, (;R=R_up_plus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints=cz_up), physics)
-    weights_up_minus = calc_weights(params_nominal, (;R=R_up_minus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints=cz_up), physics)
-
-    weights_updown_plus = NamedTuple(key => weights_down[key] .+ weights_up_plus[key] for key in keys(weights_down))
-    weights_updown_minus = NamedTuple(key => weights_down[key] .+ weights_up_minus[key] for key in keys(weights_down))
-    Fij_updown = NamedTuple(key => safe_div.((weights_updown_plus[key] .- weights_updown_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
-
-    return (; MC, R, Fij, Fij_updown, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks)
+    return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v, energy_groups_sk_i_iii_up, energy_groups_sk_iv_v_up)
 
 end
 
@@ -515,21 +583,22 @@ function get_all_factors(params, assets, total)
     )
 end
 
-function get_Fij_factor(Fij, param)
-    factor = 1 .+ Fij .* (1 - param)
-end
-
-function get_Fij_factor_escale(Fij, masks, params)
-    # Split energy scale by SK phase: SK I-III and SK IV-V bins get independent scales
-    1 .+ Fij .* ((1 - params.sk_i_iii_energy_scale) .* masks.sk_i_iii_bins .+
-                  (1 - params.sk_iv_v_energy_scale) .* masks.sk_iv_v_bins)
-end
-
-function get_Fij_factor_updown(Fij_updown, masks, params)
-    # Split up/down energy scale by SK phase
-    1 .+ Fij_updown .* ((1 - params.sk_i_iii_updown_energy_scale) .* masks.sk_i_iii_bins .+
-                         (1 - params.sk_iv_v_updown_energy_scale) .* masks.sk_iv_v_bins)
-end
+# Old F_ij functions (commented out — replaced by reco bin overlap method)
+#function get_Fij_factor(Fij, param)
+#    factor = 1 .+ Fij .* (1 - param)
+#end
+#
+#function get_Fij_factor_escale(Fij, masks, params)
+#    # Split energy scale by SK phase: SK I-III and SK IV-V bins get independent scales
+#    1 .+ Fij .* ((1 - params.sk_i_iii_energy_scale) .* masks.sk_i_iii_bins .+
+#                  (1 - params.sk_iv_v_energy_scale) .* masks.sk_iv_v_bins)
+#end
+#
+#function get_Fij_factor_updown(Fij_updown, masks, params)
+#    # Split up/down energy scale by SK phase
+#    1 .+ Fij_updown .* ((1 - params.sk_i_iii_updown_energy_scale) .* masks.sk_i_iii_bins .+
+#                         (1 - params.sk_iv_v_updown_energy_scale) .* masks.sk_iv_v_bins)
+#end
 
 function get_expected(params, physics, assets)
     expected = reweight(params, physics, assets)
@@ -538,13 +607,12 @@ function get_expected(params, physics, assets)
 
     factors = get_all_factors(params, assets, total)
 
-    nunc = expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .* get_Fij_factor_escale(assets.Fij.nunc, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nunc, assets.masks, params)
-
-    nue = expected.nue .* factors .* get_Fij_factor_escale(assets.Fij.nue, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nue, assets.masks, params)
-    numu = expected.numu .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numu, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.numu, assets.masks, params)
-    nutau = expected.nutau .* factors .* get_Fij_factor_escale(assets.Fij.nutau, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nutau, assets.masks, params)
-    nuebar = expected.nuebar .* factors .* get_Fij_factor_escale(assets.Fij.nuebar, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.nuebar, assets.masks, params)
-    numubar = expected.numubar .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .* get_Fij_factor_escale(assets.Fij.numubar, assets.masks, params) .* get_Fij_factor_updown(assets.Fij_updown.numubar, assets.masks, params)
+    nue = apply_all_energy_scales(expected.nue .* factors, assets, params)
+    numu = apply_all_energy_scales(expected.numu .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination), assets, params)
+    nutau = apply_all_energy_scales(expected.nutau .* factors, assets, params)
+    nuebar = apply_all_energy_scales(expected.nuebar .* factors, assets, params)
+    numubar = apply_all_energy_scales(expected.numubar .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination), assets, params)
+    nunc = apply_all_energy_scales(expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm), assets, params)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end
