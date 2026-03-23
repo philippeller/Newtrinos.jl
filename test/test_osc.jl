@@ -92,17 +92,13 @@ using StaticArrays
         L = [1000.0, 5000.0]    # km
 
         P = osc.osc_prob(E, L, osc.params)
-        # Shape: (n_L, n_E, n_flav_out, n_flav_in) but returned as permuted
-        # Actually returned as (n_flav_out, n_flav_in, n_E, n_L)
-        # Wait, let me check: permutedims(p, (3, 4, 1, 2)) in the code
-        # p has shape (n_flav, n_flav, n_E, n_L) before permutation
-        # after permutedims(p, (3, 4, 1, 2)) → (n_E, n_L, n_flav_out, n_flav_in)
+        # P[n_E, n_L, in, out]: P[i,j,α,β] = P(να → νβ)
 
         @test size(P) == (length(E), length(L), 3, 3)
 
         # Probability conservation: sum over output flavours = 1
         for i in 1:length(E), j in 1:length(L), k in 1:3
-            @test sum(P[i, j, :, k]) ≈ 1.0 atol=1e-10
+            @test sum(P[i, j, k, :]) ≈ 1.0 atol=1e-10
         end
 
         # All probabilities should be between 0 and 1
@@ -125,7 +121,7 @@ using StaticArrays
         # Anti-neutrino probabilities should also conserve probability
         P_anti = osc.osc_prob(E, L, osc.params; anti=true)
         for i in 1:length(E), j in 1:length(L), k in 1:3
-            @test sum(P_anti[i, j, :, k]) ≈ 1.0 atol=1e-10
+            @test sum(P_anti[i, j, k, :]) ≈ 1.0 atol=1e-10
         end
     end
 
@@ -159,7 +155,7 @@ using StaticArrays
         P_anti = osc.osc_prob(E, paths, layers, params; anti=true)
         @test size(P_anti) == (length(E), length(coszen), 3, 3)
         for i in 1:length(E), j in 1:length(coszen), k in 1:3
-            @test sum(P_anti[i, j, :, k]) ≈ 1.0 atol=1e-10
+            @test sum(P_anti[i, j, k, :]) ≈ 1.0 atol=1e-10
         end
         @test all(P_anti .>= -1e-10)
         @test all(P_anti .<= 1.0 + 1e-10)
@@ -167,7 +163,7 @@ using StaticArrays
         # Neutrino probability conservation with matter effects
         P_nu = osc.osc_prob(E, paths, layers, params; anti=false)
         for i in 1:length(E), j in 1:length(coszen), k in 1:3
-            @test sum(P_nu[i, j, :, k]) ≈ 1.0 atol=1e-10
+            @test sum(P_nu[i, j, k, :]) ≈ 1.0 atol=1e-10
         end
 
         # With non-zero δCP, neutrino and antineutrino should differ (CP violation)
@@ -198,7 +194,7 @@ using StaticArrays
 
         # Probability conservation still holds
         for i in 1:length(E), j in 1:length(L), k in 1:3
-            @test sum(P[i, j, :, k]) ≈ 1.0 atol=1e-6
+            @test sum(P[i, j, k, :]) ≈ 1.0 atol=1e-6
         end
 
         # All probabilities in valid range
@@ -215,7 +211,7 @@ using StaticArrays
 
         # Probability conservation
         for i in 1:length(E), j in 1:length(L), k in 1:3
-            @test sum(P[i, j, :, k]) ≈ 1.0 atol=1e-6
+            @test sum(P[i, j, k, :]) ≈ 1.0 atol=1e-6
         end
 
         @test all(P .>= -1e-6)

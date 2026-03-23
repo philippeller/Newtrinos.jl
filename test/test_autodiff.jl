@@ -51,7 +51,7 @@ using LinearAlgebra
         function prob_vs_dm(x)
             p = merge(osc.params, (Δm²₃₁=x[1],))
             P = osc.osc_prob(E, L, p)
-            P[1, 1, 1, 2]  # P(νμ→νe) at first E, first L
+            P[1, 1, 1, 2]  # P(νe→νμ) at first E, first L
         end
 
         x0 = [osc.params.Δm²₃₁]

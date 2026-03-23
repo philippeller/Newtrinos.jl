@@ -539,17 +539,27 @@ function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{L
     permutedims(p, (1, 2, 4, 3))
 end
 
-# Fuse rest addition + permutedims(p, (3,4,1,2)) into one pass
+# Fuse rest addition + permutedims + flavour transpose into one pass.
+# p_raw layout: [out, in, n_E, n_L] (from propagate, where out=detected, in=source)
+# result layout: [n_E, n_L, in, out] so that P[i, j, α, β] = P(να → νβ)
 function _add_rest_and_permute(p_raw, rest)
     n1, n2, n3, n4 = size(p_raw)
     result = similar(p_raw, n3, n4, n1, n2)
     @inbounds for b in 1:n2, a in 1:n1, j in 1:n4, i in 1:n3
-        result[i, j, a, b] = p_raw[a, b, i, j] + (rest isa AbstractArray ? rest[a, b] : rest)
+        result[i, j, b, a] = p_raw[a, b, i, j] + (rest isa AbstractArray ? rest[a, b] : rest)
     end
     result
 end
 
 function get_osc_prob(cfg::OscillationConfig)
+
+    # Returns P[i, j, α, β] = P(να → νβ), i.e.:
+    #   3rd index = input (source) flavour
+    #   4th index = output (detected) flavour
+    #   Flavour indices: 1=νe, 2=νμ, 3=ντ
+    #
+    # Example: P[:, :, 2, 1] = P(νμ → νe) — probability of detecting νe given initial νμ
+    # Probability conservation: sum(P[i, j, α, :]) ≈ 1 for any input flavour α.
 
     function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false)
         U, h_raw = get_matrices(cfg.flavour, cfg.eigen_method)(params)
@@ -558,10 +568,10 @@ function get_osc_prob(cfg::OscillationConfig)
 
         U, h, rest = select(Uc, h, cfg.states)
 
-        # propagate returns (n_flav, n_flav, n_E, n_L)
+        # propagate returns p_raw[out, in, n_E, n_L]
         p_raw = propagate(U, h, E, L, cfg.propagation)
 
-        # fuse rest addition + permutedims into (n_E, n_L, n_flav, n_flav)
+        # fuse rest addition + permutedims into P[n_E, n_L, in, out]
         return _add_rest_and_permute(p_raw, rest)
     end
 
@@ -572,10 +582,10 @@ function get_osc_prob(cfg::OscillationConfig)
 
         U, h, rest = select(Uc, h, cfg.states)
 
-        # propagate returns (n_flav, n_flav, n_E, n_cz)
+        # propagate returns p_raw[out, in, n_E, n_cz]
         p_raw = propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method)
 
-        # fuse rest addition + permutedims into (n_E, n_cz, n_flav, n_flav)
+        # fuse rest addition + permutedims into P[n_E, n_cz, in, out]
         return _add_rest_and_permute(p_raw, rest)
     end
 
