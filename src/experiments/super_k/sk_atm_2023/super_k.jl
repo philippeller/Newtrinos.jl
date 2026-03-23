@@ -55,11 +55,15 @@ function read_sk_file(filepath::String)
     return df
 end
 
-function make_log_e_cdf(bin)
+function make_log_e_cdf(bin; resolution_scale=1.0)
     log_e = log10.([bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent])  # extrapolate tails
 
-    log_energy_quantiles = [2*log_e[1] - log_e[2], log_e... , 2*log_e[end] - log_e[end-1]]  # extrapolate tails 
-    #log_energy_quantiles = [log_e[1] - mean(diff(log_e)), log_e... , log_e[end] + mean(diff(log_e))]  # extrapolate tails 
+    # Scale quantile distances from median to broaden/narrow the resolution
+    median = log_e[3]
+    log_e = median .+ resolution_scale .* (log_e .- median)
+
+    log_energy_quantiles = [2*log_e[1] - log_e[2], log_e... , 2*log_e[end] - log_e[end-1]]  # extrapolate tails
+    #log_energy_quantiles = [log_e[1] - mean(diff(log_e)), log_e... , log_e[end] + mean(diff(log_e))]  # extrapolate tails
     quantile_probs = [0.0, 0.023, 0.159, 0.5, 0.841, 0.977, 1.]  # corresponding probabilities
 
     dy_dx = MonotonicSplines.estimate_dYdX(log_energy_quantiles, quantile_probs)
@@ -82,11 +86,15 @@ function make_log_e_cdf(bin)
 end
 
 
-function make_cosz_cdf(bin)
+function make_cosz_cdf(bin; resolution_scale=1.0)
     cosz = [bin.CosZQuantile2_3Percent, bin.CosZQuantile15_9Percent, bin.CosZQuantile50_0Percent, bin.CosZQuantile84_1Percent, bin.CosZQuantile97_7Percent]  # extrapolate tails
 
-    cosz_quantiles = [-1, cosz..., 1]  # extrapolate tails 
-    cosz_quantiles = [min(-1, 2*cosz[1] - cosz[2]), cosz... , max(1, 2*cosz[end] - cosz[end-1])]  # extrapolate tails 
+    # Scale quantile distances from median to broaden/narrow the resolution
+    median = cosz[3]
+    cosz = median .+ resolution_scale .* (cosz .- median)
+
+    cosz_quantiles = [-1, cosz..., 1]  # extrapolate tails
+    cosz_quantiles = [min(-1, 2*cosz[1] - cosz[2]), cosz... , max(1, 2*cosz[end] - cosz[end-1])]  # extrapolate tails
     quantile_probs = [0., 0.023, 0.159, 0.5, 0.841, 0.977, 1.]  # corresponding probabilities
 
     dy_dx = MonotonicSplines.estimate_dYdX(cosz_quantiles, quantile_probs)
@@ -106,7 +114,7 @@ function make_cosz_cdf(bin)
     return f_save
 end
 
-function make_response_matrix(MC_component, logE_grid, cosZ_grid)
+function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_scale=1.0)
     n_bins = size(MC_component, 1)
     n_logE = length(logE_grid)
     n_cosZ = length(cosZ_grid)
@@ -120,8 +128,8 @@ function make_response_matrix(MC_component, logE_grid, cosZ_grid)
             continue
         end
 
-        log_e_cdf = make_log_e_cdf(bin)
-        cosz_cdf = make_cosz_cdf(bin)
+        log_e_cdf = make_log_e_cdf(bin; resolution_scale)
+        cosz_cdf = make_cosz_cdf(bin; resolution_scale)
 
         c_e = log_e_cdf.(logE_grid)
         p_e = diff(c_e)
@@ -306,7 +314,9 @@ function get_assets(physics; datadir = @__DIR__)
 
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
 
-    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid) for key in keys(MC))
+    # Build response matrices with 5% broadened quantile spreads to account for
+    # uncertainty in the reconstruction distribution (known only from 5 quantiles)
+    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.05) for key in keys(MC))
     R = flatten_R(R_3d)
     nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
 
