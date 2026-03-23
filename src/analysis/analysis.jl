@@ -49,9 +49,50 @@ function parse_command_line()
         help = "AD backend: auto, forwarddiff, polyester, mooncake"
         arg_type = String
         default = "auto"
+
+        "--profile-vars"
+        help = "Variables to profile/scan over (e.g. theta23 dm231). Uses default grid size unless specified as var:N"
+        nargs = '+'
+        default = String[]
     end
 
     return parse_args(s)
+end
+
+# Map CLI-friendly names to Julia symbols for oscillation parameters
+const PARAM_NAME_MAP = Dict(
+    "theta12" => :θ₁₂, "th12" => :θ₁₂, "θ₁₂" => :θ₁₂,
+    "theta13" => :θ₁₃, "th13" => :θ₁₃, "θ₁₃" => :θ₁₃,
+    "theta23" => :θ₂₃, "th23" => :θ₂₃, "θ₂₃" => :θ₂₃,
+    "dm221" => :Δm²₂₁, "dm21" => :Δm²₂₁, "Δm²₂₁" => :Δm²₂₁,
+    "dm231" => :Δm²₃₁, "dm31" => :Δm²₃₁, "Δm²₃₁" => :Δm²₃₁,
+    "dcp" => :δCP, "deltacp" => :δCP, "δCP" => :δCP,
+)
+
+"""
+    parse_profile_var(s, available_params)
+
+Parse a profile variable specification like "theta23" or "dm231:21".
+Returns (symbol, n_points). Falls back to direct Symbol match against available params.
+"""
+function parse_profile_var(s::String, available_params)
+    parts = split(s, ":")
+    name = parts[1]
+    n = length(parts) > 1 ? parse(Int, parts[2]) : 11
+
+    # Try the alias map first
+    sym = get(PARAM_NAME_MAP, name, nothing)
+    if sym !== nothing
+        return (sym, n)
+    end
+
+    # Try direct symbol match against available parameters
+    sym = Symbol(name)
+    if sym in keys(available_params)
+        return (sym, n)
+    end
+
+    error("Unknown parameter '$name'. Available: $(join(sort(collect(string.(keys(available_params)))), ", "))")
 end
 
 args = parse_command_line()
@@ -124,8 +165,16 @@ conditional_vars = Dict(:θ₁₂=>p.θ₁₂, :Δm²₂₁=>p.Δm²₂₁)
 
 # For profile / scan task only: choose scan grid
 vars_to_scan = OrderedDict()
-vars_to_scan[:θ₂₃] = 8
-vars_to_scan[:Δm²₃₁] = 8
+if !isempty(args["profile-vars"])
+    for v in args["profile-vars"]
+        sym, n = parse_profile_var(v, p)
+        vars_to_scan[sym] = n
+    end
+else
+    # Default: scan over θ₂₃ and Δm²₃₁
+    vars_to_scan[:θ₂₃] = 8
+    vars_to_scan[:Δm²₃₁] = 8
+end
 
 ###### END CONFIG ######
 

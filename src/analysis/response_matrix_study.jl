@@ -14,6 +14,7 @@ using Accessors
 using CairoMakie
 using Printf
 using Distributions: Normal, cdf as dist_cdf
+using CSV, DataFrames
 
 # ── Split-Gaussian CDF from quantiles ──────────────────────────────────────
 
@@ -474,6 +475,191 @@ function main()
     outpath = joinpath(@__DIR__, "response_matrix_study.png")
     save(outpath, fig, px_per_unit=2)
     println("\nSaved plot to $outpath")
+
+    # ── Part 5: NO vs IO quantile comparison ───────────────────────────
+
+    println("\n=== Part 5: Normal vs Inverted ordering quantile comparison ===")
+
+    datadir = joinpath(dirname(pathof(Newtrinos)), "experiments", "super_k", "sk_atm_2023")
+    read_sk = Newtrinos.super_k.read_sk_file
+
+    MC_IO = (
+        nue     = read_sk(joinpath(datadir, "bins/inverted/sk_2023_MCNueIO.txt")),
+        numu    = read_sk(joinpath(datadir, "bins/inverted/sk_2023_MCNumuIO.txt")),
+        nutau   = read_sk(joinpath(datadir, "bins/inverted/sk_2023_MCNutauIO.txt")),
+        nuebar  = read_sk(joinpath(datadir, "bins/inverted/sk_2023_MCNueBarIO.txt")),
+        numubar = read_sk(joinpath(datadir, "bins/inverted/sk_2023_MCNumuBarIO.txt")),
+        nunc    = read_sk(joinpath(datadir, "bins/inverted/sk_2023_MCNCIO.txt")),
+    )
+
+    # Compare quantiles bin-by-bin between NO and IO
+    e_quantile_cols = [:EnergyQuantile2_3Percent, :EnergyQuantile15_9Percent,
+                       :EnergyQuantile50_0Percent, :EnergyQuantile84_1Percent,
+                       :EnergyQuantile97_7Percent]
+    cz_quantile_cols = [:CosZQuantile2_3Percent, :CosZQuantile15_9Percent,
+                        :CosZQuantile50_0Percent, :CosZQuantile84_1Percent,
+                        :CosZQuantile97_7Percent]
+
+    # Collect fractional differences in energy quantiles and absolute diffs in cosZ
+    e_frac_diffs = Float64[]   # (IO - NO) / NO for energy quantiles
+    cz_abs_diffs = Float64[]   # IO - NO for cosZ quantiles
+    e_rms_frac_diffs = Float64[]  # (IO_RMS - NO_RMS) / NO_RMS
+    cz_rms_abs_diffs = Float64[]
+    counts_frac_diffs = Float64[]  # (IO_counts - NO_counts) / NO_counts
+
+    for key in keys(MC)
+        mc_no = MC[key]
+        mc_io = MC_IO[key]
+        for bin_idx in 1:size(mc_no, 1)
+            bin_no = mc_no[bin_idx, :]
+            bin_io = mc_io[bin_idx, :]
+            (bin_no.Counts == 0 || bin_io.Counts == 0) && continue
+
+            # Counts difference
+            push!(counts_frac_diffs, (bin_io.Counts - bin_no.Counts) / bin_no.Counts)
+
+            # Energy quantiles (fractional diff in linear E)
+            for col in e_quantile_cols
+                v_no = bin_no[col]
+                v_io = bin_io[col]
+                v_no > 0 && push!(e_frac_diffs, (v_io - v_no) / v_no)
+            end
+
+            # CosZ quantiles (absolute diff)
+            for col in cz_quantile_cols
+                push!(cz_abs_diffs, bin_io[col] - bin_no[col])
+            end
+
+            # RMS comparisons
+            if bin_no.EnergyRMS > 0
+                push!(e_rms_frac_diffs, (bin_io.EnergyRMS - bin_no.EnergyRMS) / bin_no.EnergyRMS)
+            end
+            if bin_no.CosZRMS > 0
+                push!(cz_rms_abs_diffs, bin_io.CosZRMS - bin_no.CosZRMS)
+            end
+        end
+    end
+
+    println("  Energy quantile fractional diff (IO-NO)/NO: $(@sprintf("%.6f ± %.6f", mean(e_frac_diffs), std(e_frac_diffs)))")
+    println("  CosZ quantile absolute diff (IO-NO):        $(@sprintf("%.6f ± %.6f", mean(cz_abs_diffs), std(cz_abs_diffs)))")
+    println("  Energy RMS fractional diff:                  $(@sprintf("%.6f ± %.6f", mean(e_rms_frac_diffs), std(e_rms_frac_diffs)))")
+    println("  CosZ RMS absolute diff:                     $(@sprintf("%.6f ± %.6f", mean(cz_rms_abs_diffs), std(cz_rms_abs_diffs)))")
+    println("  Counts fractional diff:                     $(@sprintf("%.6f ± %.6f", mean(counts_frac_diffs), std(counts_frac_diffs)))")
+
+    # Build IO response matrices and compare predictions
+    R_IO_3d = NamedTuple(key => Newtrinos.super_k.make_response_matrix(MC_IO[key], loge_grid, cz_grid) for key in keys(MC_IO))
+    R_IO = flatten_R(R_IO_3d)
+    assets_IO = merge(assets, (; R=R_IO, MC=MC_IO))
+    nominal_weights_IO = Newtrinos.super_k.calc_weights(params, assets_IO, physics)
+    weights_IO = Newtrinos.super_k.calc_weights(params, assets_IO, physics)
+    pred_IO = map((mc, w, nw) -> mc.Counts .* Newtrinos.super_k.safe_div.(w, nw),
+                  MC_IO, weights_IO, nominal_weights_IO)
+    total_IO = reduce(+, values(pred_IO))
+
+    println("\n  Total events (NO): $(@sprintf("%.1f", sum(total_spline)))")
+    println("  Total events (IO): $(@sprintf("%.1f", sum(total_IO)))")
+
+    frac_diff_io = (total_IO .- total_spline) ./ max.(total_spline, 1e-3)
+    println("  Bin prediction frac diff (IO-NO)/NO: mean=$(@sprintf("%+.4f", mean(frac_diff_io))), RMS=$(@sprintf("%.4f", sqrt(mean(frac_diff_io.^2)))), max=$(@sprintf("%.4f", maximum(abs.(frac_diff_io))))")
+
+    ll_IO = sum(obs .* log.(max.(total_IO, 1e-10)) .- total_IO)
+    println("  Log-likelihood (NO): $(@sprintf("%.1f", ll_spline))")
+    println("  Log-likelihood (IO): $(@sprintf("%.1f", ll_IO))")
+    println("  ΔLL (IO-NO): $(@sprintf("%+.1f", ll_IO - ll_spline))")
+
+    # ── Part 5 plots ──────────────────────────────────────────────────
+
+    fig2 = Figure(size=(1600, 1200))
+    Label(fig2[0, :], "Part 5: Normal vs Inverted ordering reconstruction comparison", fontsize=16, font=:bold)
+
+    # Energy quantile fractional differences
+    ax_eq = Axis(fig2[1, 1], xlabel="(IO - NO) / NO", ylabel="Count",
+                  title="Energy quantile fractional diff (all bins, all flavors)", titlesize=12)
+    hist!(ax_eq, e_frac_diffs, bins=100, color=(:steelblue, 0.7))
+    vlines!(ax_eq, [0.0], color=:black, linestyle=:dash)
+    text!(ax_eq, 0.02, 0.95, text=@sprintf("mean=%+.2e\nstd=%.2e", mean(e_frac_diffs), std(e_frac_diffs)),
+          space=:relative, fontsize=10, align=(:left, :top))
+
+    # CosZ quantile absolute differences
+    ax_cq = Axis(fig2[1, 2], xlabel="IO - NO", ylabel="Count",
+                  title="CosZ quantile absolute diff", titlesize=12)
+    hist!(ax_cq, cz_abs_diffs, bins=100, color=(:steelblue, 0.7))
+    vlines!(ax_cq, [0.0], color=:black, linestyle=:dash)
+    text!(ax_cq, 0.02, 0.95, text=@sprintf("mean=%+.2e\nstd=%.2e", mean(cz_abs_diffs), std(cz_abs_diffs)),
+          space=:relative, fontsize=10, align=(:left, :top))
+
+    # Counts fractional differences
+    ax_cc = Axis(fig2[1, 3], xlabel="(IO - NO) / NO", ylabel="Count",
+                  title="MC counts fractional diff", titlesize=12)
+    hist!(ax_cc, counts_frac_diffs, bins=100, color=(:steelblue, 0.7))
+    vlines!(ax_cc, [0.0], color=:black, linestyle=:dash)
+    text!(ax_cc, 0.02, 0.95, text=@sprintf("mean=%+.2e\nstd=%.2e", mean(counts_frac_diffs), std(counts_frac_diffs)),
+          space=:relative, fontsize=10, align=(:left, :top))
+
+    # Per-bin prediction comparison
+    ax_pb = Axis(fig2[2, 1:2], xlabel="Bin index", ylabel="(IO - NO) / NO",
+                  title="Fractional difference in predicted bin counts (IO vs NO)", titlesize=12)
+    scatter!(ax_pb, 1:nbins, frac_diff_io, markersize=3, color=:black)
+    hlines!(ax_pb, [0.0], color=:gray, linestyle=:dash)
+    text!(ax_pb, 0.02, 0.95, text=@sprintf("Mean: %+.4f\nRMS: %.4f\nMax |Δ|: %.4f",
+          mean(frac_diff_io), sqrt(mean(frac_diff_io.^2)), maximum(abs.(frac_diff_io))),
+          space=:relative, fontsize=10, align=(:left, :top))
+
+    # Histogram of per-bin prediction differences
+    ax_pbh = Axis(fig2[2, 3], xlabel="(IO - NO) / NO", ylabel="Count",
+                   title="Distribution", titlesize=12)
+    hist!(ax_pbh, frac_diff_io, bins=50, color=(:steelblue, 0.7))
+
+    # CDF comparison for a few representative bins: NO vs IO splines overlaid
+    for (i, rep) in enumerate(representative[1:min(3, nrep)])
+        bin_no = MC.numu[rep.idx, :]
+        bin_io = MC_IO.numu[rep.idx, :]
+
+        cdf_no = Newtrinos.super_k.make_log_e_cdf(bin_no)
+        cdf_io = Newtrinos.super_k.make_log_e_cdf(bin_io)
+
+        ax = Axis(fig2[3, i], xlabel="log₁₀(E/GeV)", ylabel="CDF",
+                   title=rep.label * " (NO vs IO)", titlesize=12)
+        lines!(ax, collect(loge_fine), cdf_no.(loge_fine), label="NO", color=:blue, linewidth=2)
+        lines!(ax, collect(loge_fine), cdf_io.(loge_fine), label="IO", color=:red, linewidth=2, linestyle=:dash)
+
+        # Show quantile points
+        q_no = log10.([bin_no[c] for c in e_quantile_cols])
+        q_io = log10.([bin_io[c] for c in e_quantile_cols])
+        q_probs = [0.023, 0.159, 0.5, 0.841, 0.977]
+        scatter!(ax, q_no, q_probs, color=:blue, markersize=8)
+        scatter!(ax, q_io, q_probs, color=:red, markersize=8, marker=:utriangle)
+        if i == 1
+            axislegend(ax, position=:rb, labelsize=10)
+        end
+    end
+
+    # CosZ CDF comparison
+    for (i, rep) in enumerate(representative[1:min(3, nrep)])
+        bin_no = MC.numu[rep.idx, :]
+        bin_io = MC_IO.numu[rep.idx, :]
+
+        cdf_no = Newtrinos.super_k.make_cosz_cdf(bin_no)
+        cdf_io = Newtrinos.super_k.make_cosz_cdf(bin_io)
+
+        ax = Axis(fig2[4, i], xlabel="cos(θ)", ylabel="CDF",
+                   title=rep.label * " cosZ (NO vs IO)", titlesize=12)
+        lines!(ax, collect(cosz_fine), cdf_no.(cosz_fine), label="NO", color=:blue, linewidth=2)
+        lines!(ax, collect(cosz_fine), cdf_io.(cosz_fine), label="IO", color=:red, linewidth=2, linestyle=:dash)
+
+        q_no = [bin_no[c] for c in cz_quantile_cols]
+        q_io = [bin_io[c] for c in cz_quantile_cols]
+        q_probs = [0.023, 0.159, 0.5, 0.841, 0.977]
+        scatter!(ax, q_no, q_probs, color=:blue, markersize=8)
+        scatter!(ax, q_io, q_probs, color=:red, markersize=8, marker=:utriangle)
+        if i == 1
+            axislegend(ax, position=:rb, labelsize=10)
+        end
+    end
+
+    outpath2 = joinpath(@__DIR__, "response_matrix_study_io.png")
+    save(outpath2, fig2, px_per_unit=2)
+    println("\nSaved IO comparison plot to $outpath2")
     println("Done.")
 end
 
