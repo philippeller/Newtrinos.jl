@@ -143,6 +143,37 @@ using StaticArrays
         end
     end
 
+    @testset "Antineutrino Matter Oscillations" begin
+        # Test with SI interaction and non-zero δCP to catch double-conjugation bugs
+        cfg = Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI())
+        osc = Newtrinos.osc.configure(cfg)
+        earth = Newtrinos.earth_layers.configure()
+        layers = earth.compute_layers()
+        coszen = [-1.0, -0.5, -0.2]
+        paths = earth.compute_paths(coszen, layers)
+
+        E = [1.0, 5.0, 10.0]
+        params = osc.params
+
+        # Antineutrino probability conservation with matter effects
+        P_anti = osc.osc_prob(E, paths, layers, params; anti=true)
+        @test size(P_anti) == (length(E), length(coszen), 3, 3)
+        for i in 1:length(E), j in 1:length(coszen), k in 1:3
+            @test sum(P_anti[i, j, :, k]) ≈ 1.0 atol=1e-10
+        end
+        @test all(P_anti .>= -1e-10)
+        @test all(P_anti .<= 1.0 + 1e-10)
+
+        # Neutrino probability conservation with matter effects
+        P_nu = osc.osc_prob(E, paths, layers, params; anti=false)
+        for i in 1:length(E), j in 1:length(coszen), k in 1:3
+            @test sum(P_nu[i, j, :, k]) ≈ 1.0 atol=1e-10
+        end
+
+        # With non-zero δCP, neutrino and antineutrino should differ (CP violation)
+        @test !isapprox(P_nu, P_anti, atol=1e-6)
+    end
+
     @testset "Select function" begin
         osc = Newtrinos.osc.configure()
         U, h = osc.matrices(osc.params)

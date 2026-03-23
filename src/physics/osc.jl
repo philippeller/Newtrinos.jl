@@ -531,11 +531,10 @@ function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{L
 end
 
 function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool, eigen_method::EigenMethod=DefaultEigen())
-    if anti
-        H_eff = conj.(U) * Diagonal(h) * transpose(U)
-    else
-        H_eff = U * Diagonal(h) * adjoint(U)
-    end
+    # U is already conj(U_PMNS) for antineutrinos, so this gives:
+    #   neutrino:     U_PMNS  × diag(h) × U_PMNS†
+    #   antineutrino: U_PMNS* × diag(h) × U_PMNS^T
+    H_eff = U * Diagonal(h) * adjoint(U)
     p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction, eigen_method), E))
     permutedims(p, (1, 2, 4, 3))
 end
