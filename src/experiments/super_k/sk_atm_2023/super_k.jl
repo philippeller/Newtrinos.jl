@@ -27,7 +27,7 @@ function default_physics()
     osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
-    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.Differential_H2O())
+    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.GENIE_H2O())
     (; osc, atm_flux, earth_layers, xsec)
 end
 
@@ -548,9 +548,9 @@ function get_double_factor(total, mask1, mask2, factor1)
 end
 
 function get_all_factors(params, assets, total)
-    # Additive/linearized formalism: expected_i = nominal_i × (1 + Σ_j f_ij × ε_j)
-    # Each factor returns 1 for unaffected bins, so (factor .- 1) gives 0 there.
-    return 1 .+ (
+    # Returns the sum of deviations Σ_j f_ij for the linearized formalism.
+    # Applied in get_expected as: expected_i × (1 + common_deviations + sample_deviations)
+    return (
         (get_factor(assets.masks.fc, params.sk_fc_norm * params.sk_fiducial_norm) .- 1) .+
         (get_factor(assets.masks.pc, params.sk_pc_norm * params.sk_fiducial_norm) .- 1) .+
         (get_factor(assets.masks.upmu, params.sk_upmu_norm) .- 1) .+
@@ -607,14 +607,16 @@ function get_expected(params, physics, assets)
 
     total = reduce(+, values(expected))
 
-    factors = get_all_factors(params, assets, total)
+    # Common systematic deviations (shared across all samples)
+    common = get_all_factors(params, assets, total)
 
-    nue = apply_all_energy_scales(expected.nue .* factors, assets, params)
-    numu = apply_all_energy_scales(expected.numu .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination), assets, params)
-    nutau = apply_all_energy_scales(expected.nutau .* factors, assets, params)
-    nuebar = apply_all_energy_scales(expected.nuebar .* factors, assets, params)
-    numubar = apply_all_energy_scales(expected.numubar .* factors .* get_factor(assets.masks.sk_elike, params.sk_nue_contamination), assets, params)
-    nunc = apply_all_energy_scales(expected.nunc .* factors .* get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .* get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm), assets, params)
+    # Per-sample scale: 1 + common_deviations + sample-specific deviations
+    nue = apply_all_energy_scales(expected.nue .* (1 .+ common), assets, params)
+    numu = apply_all_energy_scales(expected.numu .* (1 .+ common .+ (get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .- 1)), assets, params)
+    nutau = apply_all_energy_scales(expected.nutau .* (1 .+ common), assets, params)
+    nuebar = apply_all_energy_scales(expected.nuebar .* (1 .+ common), assets, params)
+    numubar = apply_all_energy_scales(expected.numubar .* (1 .+ common .+ (get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .- 1)), assets, params)
+    nunc = apply_all_energy_scales(expected.nunc .* (1 .+ common .+ (get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .- 1) .+ (get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .- 1)), assets, params)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end

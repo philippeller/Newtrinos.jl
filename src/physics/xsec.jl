@@ -5,6 +5,7 @@ using Distributions
 using CSV, DataFrames
 using Interpolations
 using FunctionChains
+using JLD2
 using ..Newtrinos
 
 abstract type XsecModel end
@@ -12,6 +13,8 @@ abstract type XsecModel end
 struct SimpleScaling <: XsecModel end
 
 struct Differential_H2O <: XsecModel end
+
+struct GENIE_H2O <: XsecModel end
 
 @kwdef struct Xsec <: Newtrinos.Physics
     cfg::XsecModel
@@ -172,6 +175,112 @@ function get_scale(cfg::Differential_H2O)
             else
                 return s
             end
+        end
+    end
+end
+
+function get_params(cfg::GENIE_H2O)
+    (
+        nc_norm = 1.,
+        nutau_cc_norm = 1.,
+        cc_norm = 1.,
+        xsec_pc1 = 0.,
+        xsec_pc2 = 0.,
+    )
+end
+
+function get_priors(cfg::GENIE_H2O)
+    (
+        nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
+        nutau_cc_norm = Truncated(Normal(1, 0.25), 0.3, 1.7),
+        cc_norm = Truncated(Normal(1, 0.15), 0.5, 1.5),
+        xsec_pc1 = Normal(0, 1),
+        xsec_pc2 = Normal(0, 1),
+    )
+end
+
+function get_scale(cfg::GENIE_H2O)
+    # Load precomputed GENIE data: nominal channel fractions + PCA components
+    data = load(joinpath(@__DIR__, "xsec_genie_data.jld2"))
+    E_grid = data["E_grid"]
+    nominal_fractions = data["nominal_fractions"]
+    pca_components = data["pca_components"]
+
+    cc_channels = ("CC1p1h", "CC2p2h", "CC1pi", "CCDIS", "CCother")
+
+    # Build interpolation functions for nominal fractions and PCA components
+    function make_itp(vals)
+        itp = interpolate((E_grid,), vals, Gridded(Linear()))
+        return extrapolate(itp, Flat())
+    end
+
+    # Precompute interpolations for each flavor × channel
+    flav_keys = ("nue", "nuebar", "numu", "numubar")
+    nom_itps = Dict(
+        fk => NamedTuple{Symbol.(cc_channels)}(
+            make_itp(nominal_fractions[fk][ch]) for ch in cc_channels
+        ) for fk in flav_keys
+    )
+    pc_itps = [
+        Dict(
+            fk => NamedTuple{Symbol.(cc_channels)}(
+                make_itp(pca_components[k][fk][ch]) for ch in cc_channels
+            ) for fk in flav_keys
+        ) for k in 1:length(pca_components)
+    ]
+
+    function get_flavor_key(flav::Symbol, anti::Bool)
+        if flav == :nue
+            return anti ? "nuebar" : "nue"
+        elseif flav == :numu || flav == :nutau
+            # nutau uses numu/numubar fractions (CC threshold ~3.5 GeV, fractions converge)
+            return anti ? "numubar" : "numu"
+        else
+            return anti ? "nuebar" : "nue"
+        end
+    end
+
+    function scale(E::AbstractArray, flav::Symbol, interaction::Symbol, anti::Bool, params::NamedTuple)
+        if interaction == :NC
+            return params.nc_norm
+        end
+
+        fk = get_flavor_key(flav, anti)
+        nom = nom_itps[fk]
+
+        # Evaluate nominal fractions at energies E
+        T = promote_type(eltype(E), typeof(params.cc_norm))
+        f_CC1p1h = nom.CC1p1h.(E)
+        f_CC2p2h = nom.CC2p2h.(E)
+        f_CC1pi  = nom.CC1pi.(E)
+        f_CCDIS  = nom.CCDIS.(E)
+        f_CCother = nom.CCother.(E)
+
+        # Apply PCA perturbations
+        pc_weights = (params.xsec_pc1, params.xsec_pc2)
+        for (k, w) in enumerate(pc_weights)
+            pc = pc_itps[k][fk]
+            f_CC1p1h = f_CC1p1h .+ w .* pc.CC1p1h.(E)
+            f_CC2p2h = f_CC2p2h .+ w .* pc.CC2p2h.(E)
+            f_CC1pi  = f_CC1pi  .+ w .* pc.CC1pi.(E)
+            f_CCDIS  = f_CCDIS  .+ w .* pc.CCDIS.(E)
+            f_CCother = f_CCother .+ w .* pc.CCother.(E)
+        end
+
+        # Clamp to non-negative (prevents unphysical fractions from large PCA perturbations)
+        f_CC1p1h = max.(zero(T), f_CC1p1h)
+        f_CC2p2h = max.(zero(T), f_CC2p2h)
+        f_CC1pi  = max.(zero(T), f_CC1pi)
+        f_CCDIS  = max.(zero(T), f_CCDIS)
+        f_CCother = max.(zero(T), f_CCother)
+
+        # Weighted sum (fractions sum to ~1 at nominal, PCA preserves sum)
+        s = (f_CC1p1h .+ f_CC2p2h .+ f_CC1pi .+ f_CCDIS .+ f_CCother) .* params.cc_norm
+
+        if flav == :nutau
+            return s .* params.nutau_cc_norm
+        else
+            return s
         end
     end
 end
