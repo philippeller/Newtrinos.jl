@@ -155,7 +155,7 @@ end
 function get_priors(cfg::ThreeFlavour)
     priors = OrderedDict()
     priors[:θ₁₂] = Uniform(atan(sqrt(0.2)), atan(sqrt(1)))
-    priors[:θ₁₃] = Uniform(ftype(0.1), ftype(0.2))
+    priors[:θ₁₃] = Uniform(ftype(0.05), ftype(0.3))
     priors[:θ₂₃] = Uniform(ftype(pi/4 *2/3), ftype(pi/4 *4/3))
     priors[:δCP] = Uniform(ftype(0), ftype(2*π))
     priors[:Δm²₂₁] = Uniform(ftype(6.5e-5), ftype(9e-5))
