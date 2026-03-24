@@ -153,6 +153,38 @@ function contract_R(R_flat, weighted_flux)
     R_flat * vec(weighted_flux)
 end
 
+function make_gaussian_kernel_matrix(n, sigma_bins)
+    # Precompute a banded Gaussian convolution matrix for 1D smoothing.
+    # K[i,j] = normalized Gaussian weight from bin j contributing to bin i.
+    # Truncate at 3σ for efficiency. Returns a dense Float64 matrix.
+    K = zeros(n, n)
+    hw = ceil(Int, 3 * sigma_bins)
+    for i in 1:n
+        s = 0.0
+        for j in max(1, i-hw):min(n, i+hw)
+            v = exp(-0.5 * ((i - j) / sigma_bins)^2)
+            K[i, j] = v
+            s += v
+        end
+        K[i, :] ./= s
+    end
+    return K
+end
+
+function smooth_osc_prob(p, K_E, K_CZ)
+    # Apply separable 2D Gaussian smoothing to oscillation probabilities.
+    # p is (n_E, n_CZ, n_flav_in, n_flav_out)
+    # K_E is (n_E, n_E) convolution matrix, K_CZ is (n_CZ, n_CZ).
+    # Smoothing: p_smooth = K_E * p * K_CZ'  (for each flavor pair)
+    n_E, n_CZ, n_in, n_out = size(p)
+    p_smooth = similar(p)
+    for a in 1:n_in, b in 1:n_out
+        # K_E * p[:,:,a,b] * K_CZ' — separable 2D convolution via matrix multiply
+        p_smooth[:, :, a, b] = K_E * p[:, :, a, b] * K_CZ'
+    end
+    return p_smooth
+end
+
 # Energy scale via reco bin overlap method
 struct EnergyGroup
     indices::Vector{Int}
@@ -229,6 +261,12 @@ function calc_weights(params, assets, physics)
 
     p = physics.osc.osc_prob(E, paths, layers, params);
     p_anti = physics.osc.osc_prob(E, paths, layers, params, anti=true);
+
+    # Smooth oscillation probabilities over E and CZ to account for finite resolution
+    if haskey(assets, :K_E) && haskey(assets, :K_CZ)
+        p = smooth_osc_prob(p, assets.K_E, assets.K_CZ)
+        p_anti = smooth_osc_prob(p_anti, assets.K_E, assets.K_CZ)
+    end
 
     flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
@@ -408,6 +446,15 @@ function get_assets(physics; datadir = @__DIR__)
     #weights_updown_minus = NamedTuple(key => weights_down[key] .+ weights_up_minus[key] for key in keys(weights_down))
     #Fij_updown = NamedTuple(key => safe_div.((weights_updown_plus[key] .- weights_updown_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
+    # Precompute Gaussian smoothing kernels for oscillation probabilities
+    # σ_logE ≈ 0.10 (energy resolution ~25%), σ_CZ ≈ 0.10 (angular resolution ~6°)
+    n_E = length(midpoints(loge_grid))
+    n_CZ = length(cz_midpoints)
+    dlogE = Float64(step(loge_grid))
+    dCZ = Float64(step(cz_grid))
+    K_E = make_gaussian_kernel_matrix(n_E, 0.05 / dlogE)
+    K_CZ = make_gaussian_kernel_matrix(n_CZ, 0.05 / dCZ)
+
     # Build energy groups for reco bin overlap energy scale method
     sk_i_iii_mask = masks.sk_i_iii_bins
     sk_iv_v_mask = masks.sk_iv_v_bins
@@ -419,7 +466,8 @@ function get_assets(physics; datadir = @__DIR__)
     energy_groups_sk_iv_v_up = build_energy_groups(bininfo, sk_iv_v_mask .& upgoing_mask)
 
     return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v, energy_groups_sk_i_iii_up, energy_groups_sk_iv_v_up)
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v, energy_groups_sk_i_iii_up, energy_groups_sk_iv_v_up,
+              K_E, K_CZ)
 
 end
 
