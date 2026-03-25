@@ -229,15 +229,18 @@ function apply_energy_scale(counts, energy_groups, delta)
 end
 
 function apply_all_energy_scales(counts, assets, params)
+    # Absolute energy scale: shifts events between momentum bins
     delta_i_iii = log10(params.sk_i_iii_energy_scale)
     delta_iv_v = log10(params.sk_iv_v_energy_scale)
     result = apply_energy_scale(counts, assets.energy_groups_sk_i_iii, delta_i_iii)
     result = apply_energy_scale(result, assets.energy_groups_sk_iv_v, delta_iv_v)
 
-    delta_ud_i_iii = log10(params.sk_i_iii_updown_energy_scale)
-    delta_ud_iv_v = log10(params.sk_iv_v_updown_energy_scale)
-    result = apply_energy_scale(result, assets.energy_groups_sk_i_iii_up, delta_ud_i_iii)
-    result = apply_energy_scale(result, assets.energy_groups_sk_iv_v_up, delta_ud_iv_v)
+    # Up/down energy scale: relative normalization of upgoing vs downgoing FC+PC events
+    # (Wester thesis Sec 5.2.3: "varies the normalization of upward-going and
+    # downward-going FC and PC events")
+    delta_ud_i_iii = params.sk_i_iii_updown_energy_scale - one(params.sk_i_iii_updown_energy_scale)
+    delta_ud_iv_v = params.sk_iv_v_updown_energy_scale - one(params.sk_iv_v_updown_energy_scale)
+    result = result .* (one(delta_ud_i_iii) .+ delta_ud_i_iii .* assets.masks.sk_i_iii_updown .+ delta_ud_iv_v .* assets.masks.sk_iv_v_updown)
     return result
 end
 
@@ -458,15 +461,23 @@ function get_assets(physics; datadir = @__DIR__)
     # Build energy groups for reco bin overlap energy scale method
     sk_i_iii_mask = masks.sk_i_iii_bins
     sk_iv_v_mask = masks.sk_iv_v_bins
-    upgoing_mask = bininfo.CosZMax .<= 0
 
     energy_groups_sk_i_iii = build_energy_groups(bininfo, sk_i_iii_mask)
     energy_groups_sk_iv_v = build_energy_groups(bininfo, sk_iv_v_mask)
-    energy_groups_sk_i_iii_up = build_energy_groups(bininfo, sk_i_iii_mask .& upgoing_mask)
-    energy_groups_sk_iv_v_up = build_energy_groups(bininfo, sk_iv_v_mask .& upgoing_mask)
+
+    # Up/down normalization masks for FC+PC bins:
+    # +1 for upgoing (CosZMax ≤ 0), -1 for downgoing (CosZMin ≥ 0), 0 otherwise
+    fc_pc_mask = masks.fc .| masks.pc
+    upgoing = bininfo.CosZMax .<= 0
+    downgoing = bininfo.CosZMin .>= 0
+
+    sk_i_iii_updown = Float64.(sk_i_iii_mask .& fc_pc_mask .& upgoing) .- Float64.(sk_i_iii_mask .& fc_pc_mask .& downgoing)
+    sk_iv_v_updown = Float64.(sk_iv_v_mask .& fc_pc_mask .& upgoing) .- Float64.(sk_iv_v_mask .& fc_pc_mask .& downgoing)
+
+    masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
     return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v, energy_groups_sk_i_iii_up, energy_groups_sk_iv_v_up,
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v,
               K_E, K_CZ)
 
 end
