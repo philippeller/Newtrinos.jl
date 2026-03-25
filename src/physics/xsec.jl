@@ -236,9 +236,20 @@ function get_scale(cfg::H2O_PCA)
     end
 
     # Get nominal σ/E per channel per flavor
+    # Wester CSV data only valid up to ~28 GeV. Above that, blend to GENIE G18_10a
+    # to avoid flat-extrapolation artifacts (banana CC, vanishing NC).
+    E_blend_lo = 20.0
+    E_blend_hi = 30.0
+    blend_weight = [(E_grid[i] < E_blend_lo ? 1.0 :
+                      E_grid[i] > E_blend_hi ? 0.0 :
+                      1.0 - (E_grid[i] - E_blend_lo) / (E_blend_hi - E_blend_lo))
+                     for i in 1:length(E_grid)]
+
     function get_nominal(flav, ch)
         if nominal_key == "Wester"
-            return wester_xsec[flav][ch]
+            w = wester_xsec[flav][ch]
+            g = all_xsec["G18_10a"][flav][ch]
+            return blend_weight .* w .+ (1.0 .- blend_weight) .* g
         else
             return all_xsec[nominal_key][flav][ch]
         end
