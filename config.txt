@@ -4,7 +4,7 @@
 
 # EXPERIMENT SELECTION
 
-experiments = gerda
+experiments = katrin
 
 # OSCILLATION MODEL
 
@@ -12,7 +12,7 @@ model = NND
 
 # MASS ORDERING
 # Choose ordering: NO (Normal) or IO (Inverted)
-ordering = NO
+ordering =IO
 
 # ============================================================
 # SCAN PARAMETERS

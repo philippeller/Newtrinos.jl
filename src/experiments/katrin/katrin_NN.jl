@@ -108,7 +108,7 @@ function get_posterior_SM(params)
 
 end    
 
-# function to get m0 posterior from m_nu posterior in NND-NND
+# function to get m0 posterior from m_nu posterior in NNM-NNM
 
 
 function get_posterior_NN(params, cfg)
@@ -232,8 +232,8 @@ end
 
 
 
-function get_neutrinomass_old(cfg=NND)
-    function NeutrinoMassNND_old(params::NamedTuple)
+function get_neutrinomass_old(cfg=NNM)
+    function NeutrinoMassNNM_old(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -315,14 +315,14 @@ function get_neutrinomass_old(cfg=NND)
         return sum
      
     end
-    return NeutrinoMassNND
+    return NeutrinoMassNNM
 end
 
 
 
 
 
-function get_neutrinomass(cfg=NND)
+function get_neutrinomass(cfg=NNM)
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -348,7 +348,7 @@ function get_neutrinomass(cfg=NND)
         N_m = length(mass_m)
         N_t = length(mass_t)
     
-        cut=(1.8*1e3)^2
+       cut=(18.6*1e3)^2
        if any(mass_e .> cut) 
            #=mass_e = mass_e[mass_e .<= cut]
             N_e = length(mass_e)
@@ -434,7 +434,7 @@ end
 
 
 
-function get_neutrinomass_a(cfg=NND)   #with analytical formula for eigenvalues
+function get_neutrinomass_a(cfg=NNM)   #with analytical formula for eigenvalues
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -515,7 +515,7 @@ function get_neutrinomass_a(cfg=NND)   #with analytical formula for eigenvalues
 end
 
 
-function mixing_angles(params::NamedTuple,cfg=NND)
+function mixing_angles(params::NamedTuple,cfg=NNM)
 
     U = Newtrinos.osc.get_PMNS(params)
     N = round(Int, params[:N])
@@ -544,8 +544,8 @@ function mixing_angles(params::NamedTuple,cfg=NND)
 end    
 
 
-function get_neutrinomass_new(cfg=NND)
-    function NeutrinoMassNND_new(params::NamedTuple)
+function get_neutrinomass_new(cfg=NNM)
+    function NeutrinoMassNNM_new(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -628,7 +628,7 @@ function get_neutrinomass_new(cfg=NND)
 
      
     end
-    return NeutrinoMassNND
+    return NeutrinoMassNNM
 end
 
 

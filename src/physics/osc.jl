@@ -789,8 +789,8 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(80)
-    params[:r] = ftype(1e-8)
+    params[:N] = ftype(20)
+    params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
 
     
@@ -815,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(50)
+    params[:N] = ftype(20)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
     
@@ -826,10 +826,10 @@ function get_priors(cfg::NNM)    #'New'
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
-    priors[:m₀] = LogUniform(ftype(1e-6),ftype(0.05))#Uniform(ftype(1e-6),ftype(0.4)) #Uniform(ftype(1e-7),ftype(2)) 
-    priors[:N] = DiscreteUniform(ftype(2),ftype(40))
+    priors[:m₀] = LogUniform(ftype(1e-6),ftype(1e-1))#Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
+    priors[:N] = DiscreteUniform(ftype(2),ftype(200))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
-    priors[:η] = Uniform(ftype(1.000000001),ftype(1.1))
+    priors[:η] =  Uniform(ftype(1.01),ftype(100))
 
     NamedTuple(priors)
 end
@@ -1371,7 +1371,7 @@ function get_matrices(cfg::NND) #full schur NND
 
         b=1/sqrt(N_dual) #choice of b
         
-        η=1+1/N_dual #params[:η]
+        η=1+1/N_dual #
         
         T = promote_type(
             typeof(params[:N]), 
@@ -1546,7 +1546,7 @@ function get_matrices(cfg::NNM) #full schur
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
        
-        η=1+1/N_dual #params[:η]
+        η=1+1/N_dual ##params[:η]##
         #b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
        
         #b=1/sqrt(N_dual) #choice of b 

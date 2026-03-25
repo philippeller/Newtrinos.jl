@@ -363,7 +363,7 @@ end
 
 
 
-function get_plot(physics, assets)
+function get_plotr(physics, assets)
     function plot(params, data=assets.observed)
         r_values = [1e-8, 0.25, 0.5, 1]
         colors = [:red, :blue, :green, :orange]  # Different colors for each r
@@ -481,5 +481,312 @@ function get_plot(physics, assets)
     
 end
 
+using CairoMakie
+using ColorSchemes
 
+function get_plot(physics, assets)
+
+    function plot(params, data = assets.observed)
+
+        r_values = [1e-8, 1e-4, 0.5, 1]
+
+        palette = cgrad(:Dark2_8, categorical=true)
+
+        c_1 = palette[1]
+        c_2 = palette[2]
+        c_3 = palette[3]
+        c_4 = palette[4]
+
+        colors = [c_1, c_2, c_3, c_4]
+
+        # --- compute means and variances ---
+        all_means = []
+        all_variances = []
+
+        forward = get_forward_model(physics, assets)
+
+        for r in r_values
+            p_r = merge(params, (r = Float64(r),))
+            m = mean(forward(p_r))
+            v = var(forward(p_r))
+
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+
+        # --- figure layout ---
+        f = Figure(resolution=(850,600))
+
+        ax = Axis(f[1,1], 
+            #xlabel = "Eₚ (MeV)",
+            ylabel = "Counts", 
+            title = "DayaBay Data and Predictions - Majorana - NO, N=20",
+            xlabelsize=28,
+            ylabelsize=28,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+
+        ax2 = Axis(
+            f[2,1],
+            xlabel = "Eₚ (MeV)",
+            ylabel = "Data / Predictions",
+            xlabelsize=28,
+            ylabelsize=22,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+        
+
+        rowsize!(f.layout, 1, Relative(3/4))
+        rowgap!(f.layout, 5)
+
+
+        # --- expected spectra ---
+        for (i, r) in enumerate(r_values)
+
+            m = all_means[i]
+            v = all_variances[i]
+            col = colors[i]
+
+            stephist!(
+                ax,
+                assets.energy,
+                weights = m,
+                bins = assets.energy_bins,
+                color = col,
+                linewidth = 2,
+                label = "Expected r = $(r)"
+            )
+
+            barplot!(
+                ax,
+                assets.energy,
+                m .+ sqrt.(v),
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = m .- sqrt.(v),
+                alpha = 0.25,
+                color = col
+            )
+
+            # --- ratio ---
+            stephist!(
+                ax2,
+                assets.energy,
+                weights = data ./ m,
+                bins = assets.energy_bins,
+                color = col
+            )
+
+            barplot!(
+                ax2,
+                assets.energy,
+                1 .+ sqrt.(v) ./ m,
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = 1 .- sqrt.(v) ./ m,
+                alpha = 0.25,
+                color = col
+            )
+        
+        end
+             
+        plot!(
+            ax,
+            assets.energy,
+            data,
+            color = :black,
+            label = "Observed"
+        )
+        hlines!(ax2, 1, color=:black, linestyle=:dash)
+
+        # --- axes cleanup ---
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+
+        ylims!(ax, 0, 60000)
+        ylims!(ax2, 0.9, 1.1)
+
+        axislegend(ax, framevisible=false, position=:rt, labelsize=28)
+
+        #display("image/png", f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NNM_NO_r.png",f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NNM_NO_r.svg", f)
+
+        # save("dayabay_r_comparison.pdf", f)
+
+    end
+end
+
+
+function get_plotNnew(physics, assets)
+
+    function plot(params, data = assets.observed)
+
+        N_values = [5, 10, 20, 50]
+
+        palette = cgrad(:Dark2_8, categorical=true)
+
+        c_1 = palette[1]
+        c_2 = palette[2]
+        c_3 = palette[3]
+        c_4 = palette[4]
+
+        colors = [c_1, c_2, c_3, c_4]
+
+        # --- compute means and variances ---
+        all_means = []
+        all_variances = []
+
+        forward = get_forward_model(physics, assets)
+
+       
+        for N in N_values
+            p_N = merge(params, (N = Float64(N),))
+            m = mean(get_forward_model(physics, assets)(p_N))
+            v = var(get_forward_model(physics, assets)(p_N))
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+
+
+        # --- figure layout ---
+        f = Figure(resolution=(850,600))
+
+        ax = Axis(f[1,1], 
+            #xlabel = "Eₚ (MeV)",
+            ylabel = "Counts", 
+            title = "DayaBay Data and Predictions - Dirac - NO, r=1",
+            xlabelsize=28,
+            ylabelsize=28,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+
+        ax2 = Axis(
+            f[2,1],
+            xlabel = "Eₚ (MeV)",
+            ylabel = "Data / Predictions",
+            xlabelsize=28,
+            ylabelsize=22,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+        
+
+        rowsize!(f.layout, 1, Relative(3/4))
+        rowgap!(f.layout, 5)
+
+
+        # --- expected spectra ---
+        for (i, N) in enumerate(N_values)
+
+            m = all_means[i]
+            v = all_variances[i]
+            col = colors[i]
+
+            stephist!(
+                ax,
+                assets.energy,
+                weights = m,
+                bins = assets.energy_bins,
+                color = col,
+                linewidth = 2,
+                label = "Expected N = $(N)"
+            )
+
+            barplot!(
+                ax,
+                assets.energy,
+                m .+ sqrt.(v),
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = m .- sqrt.(v),
+                alpha = 0.25,
+                color = col
+            )
+
+            # --- ratio ---
+            stephist!(
+                ax2,
+                assets.energy,
+                weights = data ./ m,
+                bins = assets.energy_bins,
+                color = col
+            )
+
+            barplot!(
+                ax2,
+                assets.energy,
+                1 .+ sqrt.(v) ./ m,
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = 1 .- sqrt.(v) ./ m,
+                alpha = 0.25,
+                color = col
+            )
+        
+        end
+             
+        plot!(
+            ax,
+            assets.energy,
+            data,
+            color = :black,
+            label = "Observed"
+        )
+        hlines!(ax2, 1, color=:black, linestyle=:dash)
+
+        # --- axes cleanup ---
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+
+        ylims!(ax, 0, 60000)
+        ylims!(ax2, 0.9, 1.1)
+
+        axislegend(ax, framevisible=false, position=:rt, labelsize=28)
+
+        #display("image/png", f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_N.png",f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_N.svg", f)
+
+        # save("dayabay_r_comparison.pdf", f)
+
+    end
+end
 end

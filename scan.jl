@@ -396,7 +396,7 @@ function run_scan_for_experiment(exp_name::String)
         vars_to_scan_3 = (m₀=scan_resolution, N=scan_resolution)
         
         modified_priors_3 = (
-            N = DiscreteUniform(2, 100),
+            N = DiscreteUniform(2, 200),
             m₀ = all_priors.m₀,
             r = p3.r,
             Δm²₂₁ = par.Δm²₂₁,
