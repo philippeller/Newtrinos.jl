@@ -260,6 +260,16 @@ function get_scale(cfg::H2O_PCA)
     # Per interaction process: compute shape PCA from tune spread
     # Combine nue + nuebar (ν + ν̄) for robust shape estimate
     # The shape PC is a fractional deviation, applied identically to all flavors
+    #
+    # Wester CSV data only extends to ~28 GeV. Above that, extrapolated values
+    # create artificial shape differences. Taper shape corrections to zero above
+    # the valid range using a smooth fade-out window.
+    E_valid_max = 30.0   # Wester data ends at ~28 GeV
+    E_fade_start = 20.0  # start tapering shape correction here
+    taper = [E_grid[i] < E_fade_start ? 1.0 :
+             E_grid[i] > E_valid_max ? 0.0 :
+             (1.0 - (E_grid[i] - E_fade_start) / (E_valid_max - E_fade_start))
+             for i in 1:length(E_grid)]
 
     alt_keys = [t for t in genie_tunes if t != nominal_key]
     if nominal_key != "Wester"
@@ -276,55 +286,59 @@ function get_scale(cfg::H2O_PCA)
         end
     end
 
+    # Only use E range where all sources have real data for shape PCA
+    E_pca_mask = E_grid .<= E_valid_max
+
     process_shape_itps = Dict{String, Any}()
     process_norm_sigmas = Dict{String, Float64}()
 
-    for ch in all_channels
-        nom = get_channel_curve(nominal_key == "Wester" ? "Wester" : nominal_key, ch)
+    function compute_shape_pca(nom, alt_curves)
         n_E = length(E_grid)
+        # Norm spread: use full E range
         nom_mean = sum(nom) / n_E
-
-        # Collect all curve means for norm spread
         all_means = Float64[nom_mean]
-        for k in alt_keys
-            push!(all_means, sum(get_channel_curve(k, ch)) / n_E)
+        for alt in alt_curves
+            push!(all_means, sum(alt) / n_E)
         end
         norm_sigma = std(all_means ./ nom_mean)
-        process_norm_sigmas[ch] = norm_sigma
 
-        # Shape PCA: normalize alts to same overall norm as nominal, fractional deviation
-        Delta = zeros(n_E, n_alt)
-        for (i, k) in enumerate(alt_keys)
-            alt = get_channel_curve(k, ch)
-            alt_mean = sum(alt) / n_E
-            alt_rescaled = alt .* (nom_mean / alt_mean)
-            frac_dev = (alt_rescaled .- nom) ./ nom
+        # Shape PCA: only use valid E range, then taper
+        n_pca = sum(E_pca_mask)
+        Delta = zeros(n_pca, length(alt_curves))
+        nom_pca = nom[E_pca_mask]
+        nom_pca_mean = sum(nom_pca) / n_pca
+        for (i, alt) in enumerate(alt_curves)
+            alt_pca = alt[E_pca_mask]
+            alt_pca_mean = sum(alt_pca) / n_pca
+            alt_rescaled = alt_pca .* (nom_pca_mean / alt_pca_mean)
+            frac_dev = (alt_rescaled .- nom_pca) ./ nom_pca
             frac_dev[isnan.(frac_dev) .| isinf.(frac_dev)] .= 0.0
             Delta[:, i] = frac_dev
         end
 
         U, S, _ = svd(Delta)
-        process_shape_itps[ch] = make_itp(U[:, 1] .* S[1])
+        # Embed back into full E grid with taper
+        pc_full = zeros(n_E)
+        pc_full[E_pca_mask] = U[:, 1] .* S[1]
+        pc_full .*= taper
+
+        return make_itp(pc_full), norm_sigma
+    end
+
+    for ch in all_channels
+        nom = get_channel_curve(nominal_key == "Wester" ? "Wester" : nominal_key, ch)
+        alts = [get_channel_curve(k, ch) for k in alt_keys]
+        itp, ns = compute_shape_pca(nom, alts)
+        process_shape_itps[ch] = itp
+        process_norm_sigmas[ch] = ns
     end
 
     # NC: ν and ν̄ have different shapes — compute separate NC shape PCs
-    for (label, nu_flav, nubar_flav) in [("NC_nu", "nue", "nue"), ("NC_nubar", "nuebar", "nuebar")]
-        nom = nominal_key == "Wester" ? wester_xsec[nu_flav]["NC"] : all_xsec[nominal_key][nu_flav]["NC"]
-        n_E = length(E_grid)
-        nom_mean = sum(nom) / n_E
-
-        Delta = zeros(n_E, n_alt)
-        for (i, k) in enumerate(alt_keys)
-            alt = k == "Wester" ? wester_xsec[nu_flav]["NC"] : all_xsec[k][nu_flav]["NC"]
-            alt_mean = sum(alt) / n_E
-            alt_rescaled = alt .* (nom_mean / alt_mean)
-            frac_dev = (alt_rescaled .- nom) ./ nom
-            frac_dev[isnan.(frac_dev) .| isinf.(frac_dev)] .= 0.0
-            Delta[:, i] = frac_dev
-        end
-
-        U, S, _ = svd(Delta)
-        process_shape_itps[label] = make_itp(U[:, 1] .* S[1])
+    for (label, flav) in [("NC_nu", "nue"), ("NC_nubar", "nuebar")]
+        nom = nominal_key == "Wester" ? wester_xsec[flav]["NC"] : all_xsec[nominal_key][flav]["NC"]
+        alts = [(k == "Wester" ? wester_xsec[flav]["NC"] : all_xsec[k][flav]["NC"]) for k in alt_keys]
+        itp, _ = compute_shape_pca(nom, alts)
+        process_shape_itps[label] = itp
     end
 
     @info "H2O_PCA xsec configured" nominal=cfg.nominal norm_sigmas=process_norm_sigmas
