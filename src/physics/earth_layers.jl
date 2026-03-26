@@ -153,4 +153,26 @@ function compute_paths(cz::AbstractArray, layers; r_detector = 6369)
     VectorOfVectors{Newtrinos.Path}(compute_paths.(cz, Ref(layers), r_detector));
 end
 
+"""
+    compute_dldcz(cz_values, layers; r_detector=6369, eps=1e-5)
+
+Compute dL/d(cosθ) for each section of each path by centered finite differences.
+Returns a vector of vectors matching the structure of compute_paths output.
+"""
+function compute_dldcz(cz_values, layers; r_detector=6369, eps=1e-5)
+    map(cz_values) do cz
+        path = compute_paths(cz, layers, r_detector)
+        path_plus = compute_paths(cz + eps, layers, r_detector)
+        path_minus = compute_paths(cz - eps, layers, r_detector)
+        n = length(path)
+        dldcz = zeros(n)
+        if length(path_plus) == n && length(path_minus) == n
+            for i in 1:n
+                dldcz[i] = (path_plus[i].length - path_minus[i].length) / (2eps)
+            end
+        end
+        dldcz
+    end
+end
+
 end

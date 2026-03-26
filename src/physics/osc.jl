@@ -11,7 +11,7 @@ using ..Newtrinos
 export ftype
 export Layer
 export Path
-export Decoherent, Damping, Basic
+export Decoherent, Damping, Basic, Spray
 export All, Cut
 export Vacuum, SI, NSI
 export ThreeFlavour, ThreeFlavourXYCP, Sterile, ADD
@@ -52,6 +52,9 @@ struct Basic <: PropagationModel end
 end
 @kwdef struct Damping <: PropagationModel
     σₑ::Float64=0.1
+end
+@kwdef struct Spray <: PropagationModel
+    averaging::Symbol = :gaussian  # :gaussian or :uniform (sinc)
 end
 
 abstract type StateSelector end
@@ -371,7 +374,210 @@ function compute_matter_matrices(H_eff::SMatrix{3,3}, e, layer, anti, interactio
     H = Hermitian(H_eff + H_mat)
     tmp = decompose(H, eigen_method)
     tmp.vectors, tmp.values
-end   
+end
+
+# --- Spray (ray-to-spray) averaging helpers ---
+
+# Normalized sinc: sinc(x) = sin(πx)/(πx), but here we use unnormalized: sin(x)/x
+function _sinc_unnorm(x)
+    abs(x) < 1e-8 ? one(x) - x^2/6 : sin(x) / x
+end
+
+# (exp(ix) - 1) / (ix) with Taylor expansion for small x (AD-safe)
+function _safe_C(x)
+    if abs(x) < 1e-6
+        # Taylor: 1 + ix/2 - x²/6 - ix³/24 + ...
+        return complex(one(real(x))) + 1im * x / 2 - x^2 / 6 - 1im * x^3 / 24
+    else
+        return (exp(1im * x) - 1) / (1im * x)
+    end
+end
+
+# dV/dE for standard matter interactions (SI) — same structure as V but without the E factor
+function compute_dVdE(layer, anti, interaction::SI, ::Val{3})
+    ve = A * 1e9
+    if anti
+        d1 = ve * (-2 * layer.p_density + layer.n_density)
+        dn = ve * layer.n_density
+    else
+        d1 = ve * (2 * layer.p_density - layer.n_density)
+        dn = ve * (-layer.n_density)
+    end
+    z = zero(d1)
+    @SMatrix [d1 z z; z dn z; z z dn]
+end
+
+# Generic fallback for non-SMatrix sizes
+function compute_dVdE(layer, anti, interaction::SI, ::Val{N}) where N
+    ve = A * 1e9
+    dVdE = zeros(typeof(ve), N, N)
+    if anti
+        dVdE[1,1] = ve * (-2 * layer.p_density + layer.n_density)
+        for i in 2:N
+            dVdE[i,i] = ve * layer.n_density
+        end
+    else
+        dVdE[1,1] = ve * (2 * layer.p_density - layer.n_density)
+        for i in 2:N
+            dVdE[i,i] = ve * (-layer.n_density)
+        end
+    end
+    dVdE
+end
+
+# Compute (S̄, K_E, K_Θ) for a single constant-density layer
+# K_E encodes energy perturbation; K_Θ encodes path-length (zenith) perturbation
+function compute_spray_layer(U_layer, h_layer, dVdE, e, l, dldcz)
+    n = length(h_layer)
+
+    # Effective frequencies: ω_n = F_units · h_n / E
+    omega = F_units .* h_layer ./ e
+
+    # Evolution matrix S̄
+    S = U_layer * Diagonal(exp.(-1im .* omega .* l)) * U_layer'
+
+    # --- K_E (energy perturbation) ---
+    # H'_E in eigenbasis: dω/dE = F_units/E · dV/dE_eig - diag(ω)/E
+    dVdE_eig = U_layer' * dVdE * U_layer
+    H_prime = F_units / e .* dVdE_eig - Diagonal(omega ./ e)
+
+    # C matrix (Eq. 2.5): C_ij = (exp(i·Δω·L)-1)/(i·Δω·L)
+    K_E_eig = similar(H_prime)
+    for j in 1:n, i in 1:n
+        x = (omega[i] - omega[j]) * l
+        K_E_eig[i, j] = l * H_prime[i, j] * _safe_C(x)
+    end
+    K_E = U_layer * K_E_eig * U_layer'
+
+    # --- K_Θ (zenith/path-length perturbation) ---
+    # Only L changes with cosθ, not the Hamiltonian. K_Θ is diagonal in eigenbasis:
+    # K̃_Θ = diag(ω_i · dL/dcosθ)
+    K_Theta = U_layer * Diagonal(omega .* dldcz) * U_layer'
+
+    return S, K_E, K_Theta
+end
+
+# Multi-layer composition for Spray (Eq. 2.9): S_total = S_N · ... · S_1 (physical order)
+# Both K_E and K_Θ follow the same composition rule: K_combined = S_acc†·K_new·S_acc + K_acc
+function osc_reduce(matter_matrices, spray_data, path, e, propagation::Spray, dldcz_path)
+    sec = first(path)
+    U1, h1 = matter_matrices[sec.layer_idx]
+    S_acc, KE_acc, KT_acc = compute_spray_layer(U1, h1, spray_data[sec.layer_idx], e, sec.length, dldcz_path[1])
+
+    for i in 2:length(path)
+        sec = path[i]
+        U_n, h_n = matter_matrices[sec.layer_idx]
+        S_n, KE_n, KT_n = compute_spray_layer(U_n, h_n, spray_data[sec.layer_idx], e, sec.length, dldcz_path[i])
+        KE_acc = S_acc' * KE_n * S_acc + KE_acc
+        KT_acc = S_acc' * KT_n * S_acc + KT_acc
+        S_acc = S_n * S_acc
+    end
+
+    return S_acc, KE_acc, KT_acc
+end
+
+# Compute damping factor for given x and averaging type
+_spray_damping(x, averaging) = averaging === :gaussian ? exp(-x^2 / 2) : _sinc_unnorm(x / 2)
+
+# Diagonalize K_E (and optionally K_Θ) and compute bin-averaged oscillation probabilities.
+# When Delta_CZ > 0: joint E+Θ averaging via density-matrix formalism (handles non-commuting K).
+function spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, averaging::Symbol)
+    n = size(S, 1)
+
+    # Diagonalize K_E
+    decomp_E = eigen(Hermitian((K_E + K_E') / 2))
+    V_E = decomp_E.vectors
+    λ_E = real.(decomp_E.values)
+    SV = S * V_E
+
+    # Energy damping matrix
+    G_E = similar(real.(S), n, n)
+    for j in 1:n, i in 1:n
+        G_E[i, j] = _spray_damping((λ_E[i] - λ_E[j]) * Delta_E, averaging)
+    end
+
+    if iszero(Delta_CZ)
+        # E-only averaging (fast path)
+        P = similar(G_E, n, n)
+        for α in 1:n, β in 1:n
+            s = zero(eltype(G_E))
+            for j in 1:n, i in 1:n
+                s += real(SV[β,i] * conj(V_E[α,i]) * V_E[α,j] * conj(SV[β,j]) * G_E[i,j])
+            end
+            P[β, α] = s
+        end
+        return P
+    end
+
+    # Joint E+Θ averaging: transform K_Θ into K_E eigenbasis, diagonalize there
+    K_Theta_VE = V_E' * Hermitian((K_Theta + K_Theta') / 2) * V_E
+    decomp_Θ = eigen(Hermitian((K_Theta_VE + K_Theta_VE') / 2))
+    W = decomp_Θ.vectors
+    λ_Θ = real.(decomp_Θ.values)
+
+    # Zenith damping matrix (in W basis within V_E basis)
+    G_Θ = similar(G_E, n, n)
+    for j in 1:n, i in 1:n
+        G_Θ[i, j] = _spray_damping((λ_Θ[i] - λ_Θ[j]) * Delta_CZ, averaging)
+    end
+
+    # Density-matrix formalism: for each input flavour α,
+    # apply E damping in V_E basis, then Θ damping in W basis
+    P = similar(G_E, n, n)
+    for α in 1:n
+        # E-damped density matrix in V_E basis: ρ_E[i,j] = G_E[i,j] · v*_i · v_j
+        # where v_i = conj(V_E[α,i])
+        # Transform to W basis, apply Θ damping, transform back
+        # A = W† ρ_E W, then ρ_EΘ = W (G_Θ ⊙ A) W†
+
+        # Compute A = W† ρ_E W  (3×3 matrix operations)
+        CT = complex(eltype(G_E))
+        A = zeros(CT, n, n)
+        for s in 1:n, r in 1:n
+            a = zero(CT)
+            for q in 1:n, p in 1:n
+                a += conj(W[p, r]) * W[q, s] * G_E[p, q] * conj(V_E[α, p]) * V_E[α, q]
+            end
+            A[r, s] = a
+        end
+
+        # ρ_EΘ = W (G_Θ ⊙ A) W†  (back to V_E basis)
+        ρ = zeros(CT, n, n)
+        for q in 1:n, p in 1:n
+            v = zero(CT)
+            for s in 1:n, r in 1:n
+                v += W[p, r] * conj(W[q, s]) * G_Θ[r, s] * A[r, s]
+            end
+            ρ[p, q] = v
+        end
+
+        # P[β,α] = [(SV) ρ_EΘ (SV)†]_ββ
+        for β in 1:n
+            s = zero(eltype(G_E))
+            for q in 1:n, p in 1:n
+                s += real(SV[β, p] * ρ[p, q] * conj(SV[β, q]))
+            end
+            P[β, α] = s
+        end
+    end
+    return P
+end
+
+function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Spray, interaction::SI,
+                           eigen_method::EigenMethod=DefaultEigen();
+                           Delta_E=zero(e), Delta_CZ=zero(e), dldcz_all=nothing)
+    matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti, Ref(interaction), Ref(eigen_method))
+    n_flav = size(H_eff, 1)
+    spray_data = map(layer -> compute_dVdE(layer, anti, interaction, Val(n_flav)), layers)
+
+    n_paths = length(paths)
+    p = stack(map(1:n_paths) do idx
+        path = paths[idx]
+        dldcz_path = dldcz_all !== nothing ? dldcz_all[idx] : zeros(length(path))
+        S, K_E, K_Theta = osc_reduce(matter_matrices, spray_data, path, e, propagation, dldcz_path)
+        spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, propagation.averaging)
+    end)
+end
 
 function osc_reduce(matter_matrices, path, e, propagation::Damping)
     res = map(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length, propagation.σₑ), path)
@@ -379,11 +585,24 @@ function osc_reduce(matter_matrices, path, e, propagation::Damping)
     # taking an average mixing matrix along the path to compute the decoherent sum, which is a bold approximation
     w = weights([section.length for section in path])
     P_ave  = mean([abs2.(matter_matrices[section.layer_idx][1]) for section in path], w)
-    p = abs2.(reduce(*, first.(res))) .+ P_ave * Diagonal(1 .- decay) * P_ave'
+    # Physical order: S_N · ... · S_1 (later layers multiply from the left)
+    S_matrices = first.(res)
+    S_total = S_matrices[1]
+    for i in 2:length(S_matrices)
+        S_total = S_matrices[i] * S_total
+    end
+    p = abs2.(S_total) .+ P_ave * Diagonal(1 .- decay) * P_ave'
 end
 
 function osc_reduce(matter_matrices, path, e, propagation::Basic)
-    p = abs2.(mapreduce(section -> osc_kernel(matter_matrices[section.layer_idx]..., e, section.length), *, path))
+    # Physical order: S_total = S_N · ... · S_1 (later layers multiply from the left)
+    # Path is entry→exit, so each new section's S multiplies from the left
+    sec = first(path)
+    S = osc_kernel(matter_matrices[sec.layer_idx]..., e, sec.length)
+    for sec in Iterators.drop(path, 1)
+        S = osc_kernel(matter_matrices[sec.layer_idx]..., e, sec.length) * S
+    end
+    abs2.(S)
 end
     
 
@@ -539,6 +758,25 @@ function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{L
     permutedims(p, (1, 2, 4, 3))
 end
 
+function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::Spray, interaction::Union{SI, NSI}, anti::Bool, eigen_method::EigenMethod=DefaultEigen(); Delta_E=nothing, Delta_CZ=nothing, dldcz=nothing)
+    H_eff = U * Diagonal(h) * adjoint(U)
+    deltas_E = _resolve_delta_E(Delta_E, E)
+    dcz = Delta_CZ === nothing ? zero(eltype(E)) : Delta_CZ
+    p = stack(map((e, de) -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction, eigen_method; Delta_E=de, Delta_CZ=dcz, dldcz_all=dldcz), E, deltas_E))
+    permutedims(p, (1, 2, 4, 3))
+end
+
+# Resolve Delta_E argument: nothing→zeros, scalar→broadcast, vector→pass through
+function _resolve_delta_E(Delta_E::Nothing, E)
+    zeros(eltype(E), length(E))
+end
+function _resolve_delta_E(Delta_E::Real, E)
+    fill(Delta_E, length(E))
+end
+function _resolve_delta_E(Delta_E::AbstractVector, E)
+    Delta_E
+end
+
 # Fuse rest addition + permutedims + flavour transpose into one pass.
 # p_raw layout: [out, in, n_E, n_L] (from propagate, where out=detected, in=source)
 # result layout: [n_E, n_L, in, out] so that P[i, j, α, β] = P(να → νβ)
@@ -575,7 +813,7 @@ function get_osc_prob(cfg::OscillationConfig)
         return _add_rest_and_permute(p_raw, rest)
     end
 
-    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, Delta_E=nothing, Delta_CZ=nothing, dldcz=nothing)
         U, h_raw = get_matrices(cfg.flavour, cfg.eigen_method)(params)
         h = h_raw .- minimum(h_raw)
         Uc = anti ? conj.(U) : U
@@ -583,7 +821,11 @@ function get_osc_prob(cfg::OscillationConfig)
         U, h, rest = select(Uc, h, cfg.states)
 
         # propagate returns p_raw[out, in, n_E, n_cz]
-        p_raw = propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method)
+        p_raw = if cfg.propagation isa Spray
+            propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method; Delta_E, Delta_CZ, dldcz)
+        else
+            propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method)
+        end
 
         # fuse rest addition + permutedims into P[n_E, n_cz, in, out]
         return _add_rest_and_permute(p_raw, rest)

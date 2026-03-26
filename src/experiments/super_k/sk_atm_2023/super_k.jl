@@ -24,7 +24,7 @@ using ..Newtrinos
 end
 
 function default_physics()
-    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
+    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=Newtrinos.osc.Spray()))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
     xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA())
@@ -262,14 +262,14 @@ function calc_weights(params, assets, physics)
     layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
 
-    p = physics.osc.osc_prob(E, paths, layers, params);
-    p_anti = physics.osc.osc_prob(E, paths, layers, params, anti=true);
+    # Spray averaging widths: ~5% smearing in energy and path length
+    # (Wester thesis describes finite resolution smearing in both E and L)
+    Delta_E = 0.05 .* E       # 5% Gaussian energy smearing
+    Delta_CZ = 0.05           # cosθ smearing width
+    dldcz = Newtrinos.earth_layers.compute_dldcz(assets.cz_midpoints, layers)
 
-    # Smooth oscillation probabilities over E and CZ to account for finite resolution
-    if haskey(assets, :K_E) && haskey(assets, :K_CZ)
-        p = smooth_osc_prob(p, assets.K_E, assets.K_CZ)
-        p_anti = smooth_osc_prob(p_anti, assets.K_E, assets.K_CZ)
-    end
+    p = physics.osc.osc_prob(E, paths, layers, params; Delta_E, Delta_CZ, dldcz);
+    p_anti = physics.osc.osc_prob(E, paths, layers, params; anti=true, Delta_E, Delta_CZ, dldcz);
 
     flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
@@ -415,7 +415,7 @@ function get_assets(physics; datadir = @__DIR__)
     # uncertainty in the reconstruction distribution (known only from 5 quantiles)
     R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.01) for key in keys(MC))
     R = flatten_R(R_3d)
-    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_midpoints), physics)
+    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints), physics)
 
     # Old F_ij method (commented out — replaced by reco bin overlap method)
     #loge_grid_plus = loge_grid .+ log10(1.02)
@@ -449,15 +449,6 @@ function get_assets(physics; datadir = @__DIR__)
     #weights_updown_minus = NamedTuple(key => weights_down[key] .+ weights_up_minus[key] for key in keys(weights_down))
     #Fij_updown = NamedTuple(key => safe_div.((weights_updown_plus[key] .- weights_updown_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
 
-    # Precompute Gaussian smoothing kernels for oscillation probabilities
-    # σ_logE ≈ 0.10 (energy resolution ~25%), σ_CZ ≈ 0.10 (angular resolution ~6°)
-    n_E = length(midpoints(loge_grid))
-    n_CZ = length(cz_midpoints)
-    dlogE = Float64(step(loge_grid))
-    dCZ = Float64(step(cz_grid))
-    K_E = make_gaussian_kernel_matrix(n_E, 0.05 / dlogE)
-    K_CZ = make_gaussian_kernel_matrix(n_CZ, 0.05 / dCZ)
-
     # Build energy groups for reco bin overlap energy scale method
     sk_i_iii_mask = masks.sk_i_iii_bins
     sk_iv_v_mask = masks.sk_iv_v_bins
@@ -477,8 +468,7 @@ function get_assets(physics; datadir = @__DIR__)
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
     return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v,
-              K_E, K_CZ)
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v)
 
 end
 
