@@ -442,11 +442,13 @@ function compute_spray_layer(U_layer, h_layer, dVdE, e, l, dldcz)
     H_prime = F_units / e .* dVdE_eig - Diagonal(omega ./ e)
 
     # C matrix (Eq. 2.5): C_ij = (exp(i·Δω·L)-1)/(i·Δω·L)
-    K_E_eig = similar(H_prime)
-    for j in 1:n, i in 1:n
-        x = (omega[i] - omega[j]) * l
-        K_E_eig[i, j] = l * H_prime[i, j] * _safe_C(x)
-    end
+    K_E_eig = SMatrix{n,n}(
+        ntuple(n*n) do idx
+            i, j = (idx - 1) % n + 1, (idx - 1) ÷ n + 1
+            x = (omega[i] - omega[j]) * l
+            l * H_prime[i, j] * _safe_C(x)
+        end
+    )
     K_E = U_layer * K_E_eig * U_layer'
 
     # --- K_Θ (zenith/path-length perturbation) ---
@@ -481,58 +483,60 @@ _spray_damping(x, averaging) = averaging === :gaussian ? exp(-x^2 / 2) : _sinc_u
 
 # Diagonalize K_E (and optionally K_Θ) and compute bin-averaged oscillation probabilities.
 # When Delta_CZ > 0: joint E+Θ averaging via density-matrix formalism (handles non-commuting K).
-function spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, averaging::Symbol)
+function spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, averaging::Symbol, eigen_method::EigenMethod=DefaultEigen())
     n = size(S, 1)
 
     # Diagonalize K_E
-    decomp_E = eigen(Hermitian((K_E + K_E') / 2))
-    V_E = decomp_E.vectors
-    λ_E = real.(decomp_E.values)
+    K_E_herm = Hermitian((K_E + K_E') / 2)
+    decomp_E = decompose(K_E_herm, eigen_method)
+    V_E = SMatrix{n,n}(decomp_E.vectors)
+    λ_E = SVector{n}(real.(decomp_E.values))
     SV = S * V_E
 
     # Energy damping matrix
-    G_E = similar(real.(S), n, n)
-    for j in 1:n, i in 1:n
-        G_E[i, j] = _spray_damping((λ_E[i] - λ_E[j]) * Delta_E, averaging)
-    end
+    G_E = SMatrix{n,n}(
+        ntuple(n*n) do idx
+            i, j = (idx - 1) % n + 1, (idx - 1) ÷ n + 1
+            _spray_damping((λ_E[i] - λ_E[j]) * Delta_E, averaging)
+        end
+    )
 
     if iszero(Delta_CZ)
         # E-only averaging (fast path)
-        P = similar(G_E, n, n)
-        for α in 1:n, β in 1:n
-            s = zero(eltype(G_E))
-            for j in 1:n, i in 1:n
-                s += real(SV[β,i] * conj(V_E[α,i]) * V_E[α,j] * conj(SV[β,j]) * G_E[i,j])
+        P = SMatrix{n,n}(
+            ntuple(n*n) do idx
+                β, α = (idx - 1) % n + 1, (idx - 1) ÷ n + 1
+                s = zero(eltype(G_E))
+                for j in 1:n, i in 1:n
+                    s += real(SV[β,i] * conj(V_E[α,i]) * V_E[α,j] * conj(SV[β,j]) * G_E[i,j])
+                end
+                s
             end
-            P[β, α] = s
-        end
+        )
         return P
     end
 
     # Joint E+Θ averaging: transform K_Θ into K_E eigenbasis, diagonalize there
     K_Theta_VE = V_E' * Hermitian((K_Theta + K_Theta') / 2) * V_E
-    decomp_Θ = eigen(Hermitian((K_Theta_VE + K_Theta_VE') / 2))
-    W = decomp_Θ.vectors
-    λ_Θ = real.(decomp_Θ.values)
+    decomp_Θ = decompose(Hermitian((K_Theta_VE + K_Theta_VE') / 2), eigen_method)
+    W = SMatrix{n,n}(decomp_Θ.vectors)
+    λ_Θ = SVector{n}(real.(decomp_Θ.values))
 
     # Zenith damping matrix (in W basis within V_E basis)
-    G_Θ = similar(G_E, n, n)
-    for j in 1:n, i in 1:n
-        G_Θ[i, j] = _spray_damping((λ_Θ[i] - λ_Θ[j]) * Delta_CZ, averaging)
-    end
+    G_Θ = SMatrix{n,n}(
+        ntuple(n*n) do idx
+            i, j = (idx - 1) % n + 1, (idx - 1) ÷ n + 1
+            _spray_damping((λ_Θ[i] - λ_Θ[j]) * Delta_CZ, averaging)
+        end
+    )
 
     # Density-matrix formalism: for each input flavour α,
     # apply E damping in V_E basis, then Θ damping in W basis
-    P = similar(G_E, n, n)
+    CT = complex(eltype(G_E))
+    P = MMatrix{n,n,eltype(G_E)}(undef)
     for α in 1:n
-        # E-damped density matrix in V_E basis: ρ_E[i,j] = G_E[i,j] · v*_i · v_j
-        # where v_i = conj(V_E[α,i])
-        # Transform to W basis, apply Θ damping, transform back
-        # A = W† ρ_E W, then ρ_EΘ = W (G_Θ ⊙ A) W†
-
         # Compute A = W† ρ_E W  (3×3 matrix operations)
-        CT = complex(eltype(G_E))
-        A = zeros(CT, n, n)
+        A = MMatrix{n,n,CT}(undef)
         for s in 1:n, r in 1:n
             a = zero(CT)
             for q in 1:n, p in 1:n
@@ -542,7 +546,7 @@ function spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, averaging::Symbol)
         end
 
         # ρ_EΘ = W (G_Θ ⊙ A) W†  (back to V_E basis)
-        ρ = zeros(CT, n, n)
+        ρ = MMatrix{n,n,CT}(undef)
         for q in 1:n, p in 1:n
             v = zero(CT)
             for s in 1:n, r in 1:n
@@ -560,7 +564,7 @@ function spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, averaging::Symbol)
             P[β, α] = s
         end
     end
-    return P
+    return SMatrix(P)
 end
 
 function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Spray, interaction::SI,
@@ -575,7 +579,7 @@ function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Spray, int
         path = paths[idx]
         dldcz_path = dldcz_all !== nothing ? dldcz_all[idx] : zeros(length(path))
         S, K_E, K_Theta = osc_reduce(matter_matrices, spray_data, path, e, propagation, dldcz_path)
-        spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, propagation.averaging)
+        spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, propagation.averaging, eigen_method)
     end)
 end
 
