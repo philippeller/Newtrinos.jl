@@ -33,21 +33,21 @@ p_basic_anti = osc_basic.osc_prob(E, paths, layers, params; anti=true)
 
 # 2) Gaussian blur (Basic + kernel smoothing, old Super-K method)
 println("Computing Gaussian blur...")
-K_E_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(E), 0.05 / dlogE)
-K_CZ_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(cz), 0.05 / dCZ)
+K_E_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(E), 0.10 / dlogE)
+K_CZ_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(cz), 0.10 / dCZ)
 p_gauss = Newtrinos.super_k.smooth_osc_prob(p_basic, K_E_mat, K_CZ_mat)
 p_gauss_anti = Newtrinos.super_k.smooth_osc_prob(p_basic_anti, K_E_mat, K_CZ_mat)
 
 # 3) Spray E-only
 println("Computing Spray (E only)...")
-Delta_E = E .* dlogE .* log(10)
+Delta_E = 0.10 .* E
 p_spray_E = osc_spray.osc_prob(E, paths, layers, params; Delta_E)
 p_spray_E_anti = osc_spray.osc_prob(E, paths, layers, params; anti=true, Delta_E)
 
 # 4) Spray E+CZ
 println("Computing Spray (E+CZ)...")
-p_spray_ECZ = osc_spray.osc_prob(E, paths, layers, params; Delta_E, Delta_CZ=dCZ, dldcz)
-p_spray_ECZ_anti = osc_spray.osc_prob(E, paths, layers, params; anti=true, Delta_E, Delta_CZ=dCZ, dldcz)
+p_spray_ECZ = osc_spray.osc_prob(E, paths, layers, params; Delta_E, Delta_CZ=0.10, dldcz)
+p_spray_ECZ_anti = osc_spray.osc_prob(E, paths, layers, params; anti=true, Delta_E, Delta_CZ=0.10, dldcz)
 
 # --- Plot ---
 logE_mid = midpoints(loge_grid)

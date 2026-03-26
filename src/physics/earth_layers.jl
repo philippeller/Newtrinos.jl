@@ -158,20 +158,22 @@ end
 
 Compute dL/d(cosθ) for each section of each path by centered finite differences.
 Returns a vector of vectors matching the structure of compute_paths output.
+
+Computes dL_total/dcz from the total path length (which is smooth across layer
+boundaries), then distributes to each section proportional to its fraction of
+the total path length. This avoids divergent per-section derivatives near layer
+boundaries where thin sections shrink rapidly.
 """
 function compute_dldcz(cz_values, layers; r_detector=6369, eps=1e-5)
     map(cz_values) do cz
         path = compute_paths(cz, layers, r_detector)
         path_plus = compute_paths(cz + eps, layers, r_detector)
         path_minus = compute_paths(cz - eps, layers, r_detector)
-        n = length(path)
-        dldcz = zeros(n)
-        if length(path_plus) == n && length(path_minus) == n
-            for i in 1:n
-                dldcz[i] = (path_plus[i].length - path_minus[i].length) / (2eps)
-            end
-        end
-        dldcz
+        L_total = sum(s.length for s in path)
+        L_plus = sum(s.length for s in path_plus)
+        L_minus = sum(s.length for s in path_minus)
+        dLdcz = (L_plus - L_minus) / (2eps)
+        [s.length / L_total * dLdcz for s in path]
     end
 end
 
