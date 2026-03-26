@@ -168,7 +168,7 @@ if args["seed"] !== nothing
     n_seeded = 0
     for k in keys(p)
         if haskey(seed_bf, k)
-            p = @set p[k] = seed_bf[k]
+            global p = @set p[k] = seed_bf[k]
             n_seeded += 1
         end
     end
