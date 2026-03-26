@@ -165,14 +165,10 @@ priors = Newtrinos.get_priors(experiments)
 if args["seed"] !== nothing
     seed_data = FileIO.load(args["seed"])
     seed_bf = Newtrinos.bestfit(seed_data["result"])
-    n_seeded = 0
-    for k in keys(p)
-        if haskey(seed_bf, k)
-            global p = @set p[k] = seed_bf[k]
-            n_seeded += 1
-        end
-    end
-    @info "Seeded $n_seeded parameters from $(args["seed"])"
+    matched = [k for k in keys(p) if haskey(seed_bf, k)]
+    seed_vals = NamedTuple{Tuple(matched)}(seed_bf[k] for k in matched)
+    p = merge(p, seed_vals)
+    @info "Seeded $(length(matched)) parameters from $(args["seed"])"
 end
 
 ad_backend = Symbol(args["ad"])
