@@ -198,6 +198,12 @@ function get_params(cfg::H2O_PCA)
         xsec_ccdis_shape = 0.,
         xsec_ccother_shape = 0.,
         xsec_nc_shape = 0.,
+        xsec_cc1p1h_nubar_ratio = 1.,
+        xsec_cc2p2h_nubar_ratio = 1.,
+        xsec_cc1pi_nubar_ratio = 1.,
+        xsec_ccdis_nubar_ratio = 1.,
+        xsec_ccother_nubar_ratio = 1.,
+        xsec_nc_nubar_ratio = 1.,
     )
 end
 
@@ -208,7 +214,7 @@ function get_priors(cfg::H2O_PCA)
         xsec_cc1pi_norm = Truncated(Normal(1, 0.15), 0.4, 1.6),
         xsec_ccdis_norm = Truncated(Normal(1, 0.10), 0.5, 1.5),
         xsec_ccother_norm = Truncated(Normal(1, 0.30), 0.2, 1.8),
-        xsec_nc_norm = Truncated(Normal(1, 0.15), 0.4, 1.6),
+        xsec_nc_norm = Truncated(Normal(1, 0.20), 0.4, 1.6),
         xsec_nutau_cc_norm = Truncated(Normal(1, 0.25), 0.3, 1.7),
         xsec_cc1p1h_shape = Normal(0, 1),
         xsec_cc2p2h_shape = Normal(0, 1),
@@ -216,6 +222,13 @@ function get_priors(cfg::H2O_PCA)
         xsec_ccdis_shape = Normal(0, 1),
         xsec_ccother_shape = Normal(0, 1),
         xsec_nc_shape = Normal(0, 1),
+        # ν̄/ν ratio priors: σ from GENIE tune spread of per-process ν̄/ν xsec ratio
+        xsec_cc1p1h_nubar_ratio = Truncated(Normal(1, 0.17), 0.3, 1.7),
+        xsec_cc2p2h_nubar_ratio = Truncated(Normal(1, 0.17), 0.3, 1.7),
+        xsec_cc1pi_nubar_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
+        xsec_ccdis_nubar_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
+        xsec_ccother_nubar_ratio = Truncated(Normal(1, 0.10), 0.5, 1.5),
+        xsec_nc_nubar_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
     )
 end
 
@@ -369,6 +382,13 @@ function get_scale(cfg::H2O_PCA)
         CCDIS  = :xsec_ccdis_shape,
         CCother = :xsec_ccother_shape,
     )
+    nubar_ratio_syms = (
+        CC1p1h = :xsec_cc1p1h_nubar_ratio,
+        CC2p2h = :xsec_cc2p2h_nubar_ratio,
+        CC1pi  = :xsec_cc1pi_nubar_ratio,
+        CCDIS  = :xsec_ccdis_nubar_ratio,
+        CCother = :xsec_ccother_nubar_ratio,
+    )
 
     function get_flavor_key(flav::Symbol, anti::Bool)
         if flav == :nue
@@ -385,15 +405,16 @@ function get_scale(cfg::H2O_PCA)
 
         if interaction == :NC
             # NC reweight: norm × (1 + ε × shape_PC(E)), clamped ≥ 0
-            # shape_PC differs for ν vs ν̄
+            # shape_PC differs for ν vs ν̄; nubar_ratio scales ν̄ relative to ν
             nc_shape = anti ? process_shape_itps["NC_nubar"] : process_shape_itps["NC_nu"]
-            return max.(zero(T), params.xsec_nc_norm .* (one(T) .+ params.xsec_nc_shape .* nc_shape.(E)))
+            w = max.(zero(T), params.xsec_nc_norm .* (one(T) .+ params.xsec_nc_shape .* nc_shape.(E)))
+            return anti ? w .* params.xsec_nc_nubar_ratio : w
         end
 
         fk = get_flavor_key(flav, anti)
         fracs = nom_frac_itps[fk]
 
-        # CC reweight = Σ_ch f_ch(E) × ch_norm × (1 + ε_ch × shape_PC_ch(E))
+        # CC reweight = Σ_ch f_ch(E) × ch_norm × [nubar_ratio if ν̄] × (1 + ε_ch × shape_PC_ch(E))
         # Each channel contribution clamped ≥ 0 before summing
         result = zeros(T, length(E))
         for ch in cc_channels
@@ -401,7 +422,11 @@ function get_scale(cfg::H2O_PCA)
             ch_norm = getfield(params, getfield(norm_syms, Symbol(ch)))
             ch_eps = getfield(params, getfield(shape_syms, Symbol(ch)))
             ch_shape = process_shape_itps[ch]
-            result .+= max.(zero(T), f_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
+            ch_w = max.(zero(T), f_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
+            if anti
+                ch_w = ch_w .* getfield(params, getfield(nubar_ratio_syms, Symbol(ch)))
+            end
+            result .+= ch_w
         end
 
         if flav == :nutau

@@ -54,6 +54,11 @@ function parse_command_line()
         help = "Variables to profile/scan over (e.g. theta23 dm231). Uses default grid size unless specified as var:N"
         nargs = '+'
         default = String[]
+
+        "--seed"
+        help = "JLD2 file containing a NewtrinosResult (under key 'result') to seed initial parameter values from its best-fit point"
+        arg_type = String
+        default = nothing
     end
 
     return parse_args(s)
@@ -155,6 +160,20 @@ end
 
 p = Newtrinos.get_params(experiments)
 priors = Newtrinos.get_priors(experiments)
+
+# Seed initial parameters from a previous result file
+if args["seed"] !== nothing
+    seed_data = FileIO.load(args["seed"])
+    seed_bf = Newtrinos.bestfit(seed_data["result"])
+    n_seeded = 0
+    for k in keys(p)
+        if haskey(seed_bf, k)
+            p = @set p[k] = seed_bf[k]
+            n_seeded += 1
+        end
+    end
+    @info "Seeded $n_seeded parameters from $(args["seed"])"
+end
 
 ad_backend = Symbol(args["ad"])
 Newtrinos.set_ad_backend(ad_backend)
