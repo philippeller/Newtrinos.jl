@@ -55,6 +55,8 @@ end
 end
 @kwdef struct Spray <: PropagationModel
     averaging::Symbol = :gaussian  # :gaussian or :uniform (sinc)
+    σ_E::Float64 = 0.15           # fractional energy smearing (ΔE/E)
+    σ_h::Float64 = 10.0           # production height uncertainty [km]
 end
 
 abstract type StateSelector end
@@ -569,7 +571,7 @@ end
 
 function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Spray, interaction::SI,
                            eigen_method::EigenMethod=DefaultEigen();
-                           Delta_E=zero(e), Delta_CZ=zero(e), dldcz_all=nothing)
+                           Delta_E=zero(e), Delta_h=zero(e), dldh_all=nothing)
     matter_matrices = compute_matter_matrices.(Ref(H_eff), e, layers, anti, Ref(interaction), Ref(eigen_method))
     n_flav = size(H_eff, 1)
     spray_data = map(layer -> compute_dVdE(layer, anti, interaction, Val(n_flav)), layers)
@@ -577,9 +579,9 @@ function matter_osc_per_e(H_eff, e, layers, paths, anti, propagation::Spray, int
     n_paths = length(paths)
     p = stack(map(1:n_paths) do idx
         path = paths[idx]
-        dldcz_path = dldcz_all !== nothing ? dldcz_all[idx] : zeros(length(path))
-        S, K_E, K_Theta = osc_reduce(matter_matrices, spray_data, path, e, propagation, dldcz_path)
-        spray_average(S, K_E, K_Theta, Delta_E, Delta_CZ, propagation.averaging, eigen_method)
+        dldh_path = dldh_all !== nothing ? dldh_all[idx] : zeros(length(path))
+        S, K_E, K_Theta = osc_reduce(matter_matrices, spray_data, path, e, propagation, dldh_path)
+        spray_average(S, K_E, K_Theta, Delta_E, Delta_h, propagation.averaging, eigen_method)
     end)
 end
 
@@ -762,11 +764,11 @@ function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{L
     permutedims(p, (1, 2, 4, 3))
 end
 
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::Spray, interaction::Union{SI, NSI}, anti::Bool, eigen_method::EigenMethod=DefaultEigen(); Delta_E=nothing, Delta_CZ=nothing, dldcz=nothing)
+function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::Spray, interaction::Union{SI, NSI}, anti::Bool, eigen_method::EigenMethod=DefaultEigen())
     H_eff = U * Diagonal(h) * adjoint(U)
-    deltas_E = _resolve_delta_E(Delta_E, E)
-    dcz = Delta_CZ === nothing ? zero(eltype(E)) : Delta_CZ
-    p = stack(map((e, de) -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction, eigen_method; Delta_E=de, Delta_CZ=dcz, dldcz_all=dldcz), E, deltas_E))
+    # Production height: only first (atmosphere) section varies, dL/dh = 1
+    dldh = [vcat([1.0], zeros(length(p) - 1)) for p in paths]
+    p = stack(map((e, de) -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction, eigen_method; Delta_E=de, Delta_h=propagation.σ_h, dldh_all=dldh), E, propagation.σ_E .* E))
     permutedims(p, (1, 2, 4, 3))
 end
 
@@ -817,7 +819,7 @@ function get_osc_prob(cfg::OscillationConfig)
         return _add_rest_and_permute(p_raw, rest)
     end
 
-    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false, Delta_E=nothing, Delta_CZ=nothing, dldcz=nothing)
+    function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
         U, h_raw = get_matrices(cfg.flavour, cfg.eigen_method)(params)
         h = h_raw .- minimum(h_raw)
         Uc = anti ? conj.(U) : U
@@ -825,11 +827,7 @@ function get_osc_prob(cfg::OscillationConfig)
         U, h, rest = select(Uc, h, cfg.states)
 
         # propagate returns p_raw[out, in, n_E, n_cz]
-        p_raw = if cfg.propagation isa Spray
-            propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method; Delta_E, Delta_CZ, dldcz)
-        else
-            propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method)
-        end
+        p_raw = propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.eigen_method)
 
         # fuse rest addition + permutedims into P[n_E, n_cz, in, out]
         return _add_rest_and_permute(p_raw, rest)

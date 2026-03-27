@@ -8,18 +8,18 @@ earth_layers = Newtrinos.earth_layers.configure()
 layers = earth_layers.compute_layers()
 
 osc_basic = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
-osc_spray = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=Newtrinos.osc.Spray()))
+osc_spray_E = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=Newtrinos.osc.Spray(σ_h=0.0)))
+osc_spray_Eh = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=Newtrinos.osc.Spray()))
 
 params = Newtrinos.get_params((; osc=osc_basic, earth_layers))
 
-# Grid: log10(E) from -1 to 2, cz from -1 to 0 (upgoing)
+# Grid: log10(E) from -1 to 2, cz from -1 to +1 (full range)
 loge_grid = LinRange(-1, 2, 301)
-cz_grid = LinRange(-1.0, 0.0, 201)
+cz_grid = LinRange(-1.0, 1.0, 401)
 
 E = 10.0 .^ midpoints(loge_grid)
 cz = midpoints(cz_grid)
 paths = earth_layers.compute_paths(cz, layers)
-dldcz = Newtrinos.earth_layers.compute_dldcz(cz, layers)
 
 dlogE = Float64(step(loge_grid))
 dCZ = Float64(step(cz_grid))
@@ -33,21 +33,20 @@ p_basic_anti = osc_basic.osc_prob(E, paths, layers, params; anti=true)
 
 # 2) Gaussian blur (Basic + kernel smoothing, old Super-K method)
 println("Computing Gaussian blur...")
-K_E_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(E), 0.10 / dlogE)
-K_CZ_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(cz), 0.10 / dCZ)
+K_E_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(E), 0.15 / dlogE)
+K_CZ_mat = Newtrinos.super_k.make_gaussian_kernel_matrix(length(cz), 0.15 / dCZ)
 p_gauss = Newtrinos.super_k.smooth_osc_prob(p_basic, K_E_mat, K_CZ_mat)
 p_gauss_anti = Newtrinos.super_k.smooth_osc_prob(p_basic_anti, K_E_mat, K_CZ_mat)
 
 # 3) Spray E-only
 println("Computing Spray (E only)...")
-Delta_E = 0.10 .* E
-p_spray_E = osc_spray.osc_prob(E, paths, layers, params; Delta_E)
-p_spray_E_anti = osc_spray.osc_prob(E, paths, layers, params; anti=true, Delta_E)
+p_spray_E = osc_spray_E.osc_prob(E, paths, layers, params)
+p_spray_E_anti = osc_spray_E.osc_prob(E, paths, layers, params; anti=true)
 
-# 4) Spray E+CZ
-println("Computing Spray (E+CZ)...")
-p_spray_ECZ = osc_spray.osc_prob(E, paths, layers, params; Delta_E, Delta_CZ=0.10, dldcz)
-p_spray_ECZ_anti = osc_spray.osc_prob(E, paths, layers, params; anti=true, Delta_E, Delta_CZ=0.10, dldcz)
+# 4) Spray E + production height
+println("Computing Spray (E + production height)...")
+p_spray_ECZ = osc_spray_Eh.osc_prob(E, paths, layers, params)
+p_spray_ECZ_anti = osc_spray_Eh.osc_prob(E, paths, layers, params; anti=true)
 
 # --- Plot ---
 logE_mid = midpoints(loge_grid)
@@ -63,7 +62,7 @@ function make_oscillogram_figure(probs_list, titles, channel_name, channel_idx; 
             title = title,
             titlesize = 14,
         )
-        hm = heatmap!(ax, logE_mid, cz_mid, p[:, :, channel_idx...]';
+        hm = heatmap!(ax, logE_mid, cz_mid, p[:, :, channel_idx...];
             colorrange = clims,
             colormap = :RdBu,
         )
@@ -76,7 +75,7 @@ end
 
 println("Plotting...")
 
-titles = ["No smoothing", "Gaussian blur", "Spray (E only)", "Spray (E+CZ)"]
+titles = ["No smoothing", "Gaussian blur", "Spray (E only)", "Spray (E+h)"]
 
 # νμ → νμ survival
 fig_surv = make_oscillogram_figure(
@@ -112,11 +111,11 @@ for (i, (channel_idx, channel_name, cl)) in enumerate([
     ax = Axis(fig_diff[1, 2*(i-1)+1];
         xlabel = "log₁₀(E / GeV)",
         ylabel = i == 1 ? "cos θ_z" : "",
-        title = "Spray(E+CZ) − Spray(E): $(channel_name)",
+        title = "Spray(E+h) − Spray(E): $(channel_name)",
         titlesize = 14,
     )
     diff = p_spray_ECZ[:, :, channel_idx...] .- p_spray_E[:, :, channel_idx...]
-    hm = heatmap!(ax, logE_mid, cz_mid, diff';
+    hm = heatmap!(ax, logE_mid, cz_mid, diff;
         colorrange = cl,
         colormap = :RdBu,
     )

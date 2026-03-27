@@ -24,7 +24,7 @@ using ..Newtrinos
 end
 
 function default_physics()
-    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=Newtrinos.osc.Spray()))
+    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=Newtrinos.osc.Spray(σ_E=0.25)))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
     xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA())
@@ -262,14 +262,8 @@ function calc_weights(params, assets, physics)
     layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
 
-    # Spray averaging widths: ~5% smearing in energy and path length
-    # (Wester thesis describes finite resolution smearing in both E and L)
-    Delta_E = 0.10 .* E       # 10% Gaussian energy smearing
-    Delta_CZ = 0.10           # cosθ smearing width
-    dldcz = assets.dldcz
-
-    p = physics.osc.osc_prob(E, paths, layers, params; Delta_E, Delta_CZ, dldcz);
-    p_anti = physics.osc.osc_prob(E, paths, layers, params; anti=true, Delta_E, Delta_CZ, dldcz);
+    p = physics.osc.osc_prob(E, paths, layers, params);
+    p_anti = physics.osc.osc_prob(E, paths, layers, params; anti=true);
 
     flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
@@ -407,7 +401,6 @@ function get_assets(physics; datadir = @__DIR__)
     nominal_layers = physics.earth_layers.compute_layers()
     cz_midpoints = midpoints(cz_grid)
     paths = physics.earth_layers.compute_paths(cz_midpoints, nominal_layers)
-    dldcz = Newtrinos.earth_layers.compute_dldcz(cz_midpoints, nominal_layers)
     flux_nominal = physics.atm_flux.nominal_flux(10. .^midpoints(loge_grid), cz_midpoints)
 
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
@@ -416,7 +409,7 @@ function get_assets(physics; datadir = @__DIR__)
     # uncertainty in the reconstruction distribution (known only from 5 quantiles)
     R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.01) for key in keys(MC))
     R = flatten_R(R_3d)
-    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, dldcz), physics)
+    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints), physics)
 
     # Old F_ij method (commented out — replaced by reco bin overlap method)
     #loge_grid_plus = loge_grid .+ log10(1.02)
@@ -468,7 +461,7 @@ function get_assets(physics; datadir = @__DIR__)
 
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
-    return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, dldcz, nominal_weights, observed, bininfo, masks,
+    return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
               energy_groups_sk_i_iii, energy_groups_sk_iv_v)
 
 end
