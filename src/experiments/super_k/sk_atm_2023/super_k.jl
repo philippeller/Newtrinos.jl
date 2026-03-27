@@ -342,7 +342,11 @@ function calc_weights(params, assets, physics)
     nutau   = contract_R(assets.R.nutau,   nutau_flux)
     nuebar  = contract_R(assets.R.nuebar,  nuebar_flux)
     numubar = contract_R(assets.R.numubar, numubar_flux)
-    nunc    = contract_R(assets.R.nunc,    ones(eltype(nue_flux), s) .* xsec_nc .* flux_norm)
+    # NC is flavor-blind: total flux is conserved under oscillations (unitarity),
+    # but still depends on flux systematics (Barr params, normalization)
+    flux_total_nc = (reshape(flux.nue, s) .+ reshape(flux.numu, s) .+
+                     reshape(flux.nuebar, s) .+ reshape(flux.numubar, s))
+    nunc    = contract_R(assets.R.nunc,    flux_total_nc .* xsec_nc .* flux_norm)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end
