@@ -342,14 +342,14 @@ function run_scan_for_experiment(exp_name::String)
         likelihood_1 = Newtrinos.generate_likelihood(experiments)
         result_1 = Newtrinos.scan(likelihood_1, modified_priors_1, vars_to_scan_1, p1)
         
-        filename_1 = joinpath(output_path_exp, "scan_$(exp_name)_rN_m0=$(m0_val)_$(model)_$(ordering).jld2")
+        filename_1 = joinpath(output_path_exp, "scan_$(exp_name)_rN_m0=$(m0_val)_$(model)_$(ordering)_200.jld2")
         JLD2.@save filename_1 result_1
         
         axes_1 = collect(keys(result_1.axes))
         fig_1 = create_contour_plot(result_1, exp_name, "r vs N", 
             Dict("m₀" => m0_val), axes_1; sigma=sigma)
         
-        plot_filename_1 = joinpath(output_path_exp, "scan_$(exp_name)_rN_m0=$(m0_val)_$(model)_$(ordering).png")
+        plot_filename_1 = joinpath(output_path_exp, "scan_$(exp_name)_rN_m0=$(m0_val)_$(model)_$(ordering)_200.png")
         save(plot_filename_1, fig_1)
         println("    ✓ Saved: $(basename(plot_filename_1))")
         
@@ -376,14 +376,14 @@ function run_scan_for_experiment(exp_name::String)
         likelihood_2 = Newtrinos.generate_likelihood(experiments)
         result_2 = Newtrinos.scan(likelihood_2, modified_priors_2, vars_to_scan_2, p2)
         
-        filename_2 = joinpath(output_path_exp, "scan_$(exp_name)_rm0_N=$(N_val)_$(model)_$(ordering).jld2")
+        filename_2 = joinpath(output_path_exp, "scan_$(exp_name)_rm0_N=$(N_val)_$(model)_$(ordering)_200.jld2")
         JLD2.@save filename_2 result_2
         
         axes_2 = collect(keys(result_2.axes))
         fig_2 = create_contour_plot(result_2, exp_name, "r vs m₀", 
             Dict("N" => N_val), axes_2; sigma=sigma)
         
-        plot_filename_2 = joinpath(output_path_exp, "scan_$(exp_name)_rm0_N=$(N_val)_$(model)_$(ordering).png")
+        plot_filename_2 = joinpath(output_path_exp, "scan_$(exp_name)_rm0_N=$(N_val)_$(model)_$(ordering)_200.png")
         save(plot_filename_2, fig_2)
         println("    ✓ Saved: $(basename(plot_filename_2))")
         
@@ -410,14 +410,14 @@ function run_scan_for_experiment(exp_name::String)
         likelihood_3 = Newtrinos.generate_likelihood(experiments)
         result_3 = Newtrinos.scan(likelihood_3, modified_priors_3, vars_to_scan_3, p3)
         
-        filename_3 = joinpath(output_path_exp, "scan_$(exp_name)_m0N_r=$(r_val)_$(model)_$(ordering).jld2")
+        filename_3 = joinpath(output_path_exp, "scan_$(exp_name)_m0N_r=$(r_val)_$(model)_$(ordering)_200.jld2")
         JLD2.@save filename_3 result_3
         
         axes_3 = collect(keys(result_3.axes))
         fig_3 = create_contour_plot(result_3, exp_name, "m₀ vs N", 
             Dict("r" => r_val), axes_3; sigma=sigma)
         
-        plot_filename_3 = joinpath(output_path_exp, "scan_$(exp_name)_m0N_r=$(r_val)_$(model)_$(ordering).png")
+        plot_filename_3 = joinpath(output_path_exp, "scan_$(exp_name)_m0N_r=$(r_val)_$(model)_$(ordering)_200.png")
         save(plot_filename_3, fig_3)
         println("    ✓ Saved: $(basename(plot_filename_3))")
         

@@ -42,8 +42,8 @@ function get_assets(physics; datadir = @__DIR__)
 
     assets = (
 
-        observed =1.8 *1e26, #gerda 
-        # 1*1e28,, # #legend 1000
+        observed =1.8 *1e27, #gerda 
+        # 1*1e27,, # #legend 1000
         
     )
     return assets
@@ -293,7 +293,7 @@ function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(order
 
 
 
-                factor=m_e*m_p* (194/5.28) #
+                factor=m_e*m_p* (194/5.27) #
 
                 if mass>= 1e8 && mass <= 1e12
                     integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)*factor/(factor + mass)*0.7
@@ -356,7 +356,7 @@ function get_halftime(cfg= Newtrinos.osc.NNM())
      
      Gg=3.37*(1e-15) #2.363*( 1e-15) #yr^-1
      g_a=1.27#1.25
-     M_sq=(5.28)^2
+     M_sq=(5.27)^2
      m_e=0.511*(1e6)
 
     
@@ -382,7 +382,7 @@ function comparing_times(physics,experiments, params)
     cfg = physics.osc.cfg.flavour
     predicted_value = get_halftime(cfg)(params)
     observed = experiments.gerda.assets.observed
-    dist_observed = Normal(observed, 0.01*1e28)
+    dist_observed = Normal(observed, 0.01*1e27)
     twosigma_level = quantile(dist_observed, 0.9772)
 
     return predicted_value, twosigma_level
@@ -395,7 +395,7 @@ function get_forward_model_correct(physics, assets)
     function forward_model(params)
         # Use the flavour model provided in physics to respect model and ordering from config
         cfg = physics.osc.cfg.flavour
-        observed = 1.8 * 1e26 # gerda
+        observed = 1.8 * 1e27 # gerda
         # Use the appropriate neutrinomass/halftime function for this flavour model
         fun = get_halftime(cfg)
         predicted_value_T = fun(params)
@@ -403,7 +403,7 @@ function get_forward_model_correct(physics, assets)
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma = 0.1*1e26 #0.1*1e26 #0.01*1e26#
+        sigma = 0.1*1e27 #0.1*1e27 #0.01*1e27#
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)
