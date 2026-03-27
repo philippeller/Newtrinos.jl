@@ -31,9 +31,9 @@ function default_physics()
     (; osc, atm_flux, earth_layers, xsec)
 end
 
-function configure(physics=default_physics())
+function configure(physics=default_physics(); energy_cdf=:logE)
     physics = (;physics.osc, physics.atm_flux, physics.earth_layers, physics.xsec)
-    assets = get_assets(physics)
+    assets = get_assets(physics; energy_cdf)
     return SuperKAtm(
         physics = physics,
         params = get_params(),
@@ -85,6 +85,46 @@ function make_log_e_cdf(bin; resolution_scale=1.0)
     return f_save
 end
 
+function make_e_cdf(bin; resolution_scale=1.0)
+    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
+
+    # Scale quantile distances from median to broaden/narrow the resolution
+    median = e[3]
+    e = median .+ resolution_scale .* (e .- median)
+
+    # Extrapolate tails, ensuring strict monotonicity
+    lo = max(0.0, 2*e[1] - e[2])
+    if lo >= e[1]
+        lo = e[1] * 0.5  # fallback: half the lowest quantile
+    end
+    hi = 2*e[end] - e[end-1]
+    energy_quantiles = [lo, e..., hi]
+    quantile_probs = [0.0, 0.023, 0.159, 0.5, 0.841, 0.977, 1.]
+
+    # Ensure strict monotonicity by nudging any non-increasing knots
+    for i in 2:length(energy_quantiles)
+        if energy_quantiles[i] <= energy_quantiles[i-1]
+            energy_quantiles[i] = energy_quantiles[i-1] + 1e-6
+        end
+    end
+
+    dy_dx = MonotonicSplines.estimate_dYdX(energy_quantiles, quantile_probs)
+    dy_dx[1] = 0
+    dy_dx[end] = 0
+    f = RQSpline(energy_quantiles, quantile_probs, dy_dx)
+
+    f_save = x -> begin
+        if x < energy_quantiles[1]
+            return 0.0
+        elseif x > energy_quantiles[end]
+            return 1.0
+        else
+            return f(x)
+        end
+    end
+
+    return f_save
+end
 
 function make_cosz_cdf(bin; resolution_scale=1.0)
     cosz = [bin.CosZQuantile2_3Percent, bin.CosZQuantile15_9Percent, bin.CosZQuantile50_0Percent, bin.CosZQuantile84_1Percent, bin.CosZQuantile97_7Percent]  # extrapolate tails
@@ -114,12 +154,15 @@ function make_cosz_cdf(bin; resolution_scale=1.0)
     return f_save
 end
 
-function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_scale=1.0)
+function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_scale=1.0, energy_cdf=:logE)
     n_bins = size(MC_component, 1)
     n_logE = length(logE_grid)
     n_cosZ = length(cosZ_grid)
 
     response_matrix = zeros(Float64, n_bins, n_logE-1, n_cosZ-1)
+
+    # For linear-E CDF, convert logE grid edges to linear E once
+    E_grid = energy_cdf == :linearE ? 10 .^ logE_grid : nothing
 
     for bin_idx in 1:n_bins
         bin = MC_component[bin_idx, :]
@@ -128,22 +171,21 @@ function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_sca
             continue
         end
 
-        log_e_cdf = make_log_e_cdf(bin; resolution_scale)
-        cosz_cdf = make_cosz_cdf(bin; resolution_scale)
-
-        c_e = log_e_cdf.(logE_grid)
+        if energy_cdf == :linearE
+            e_cdf = make_e_cdf(bin; resolution_scale)
+            c_e = e_cdf.(E_grid)
+        else
+            log_e_cdf = make_log_e_cdf(bin; resolution_scale)
+            c_e = log_e_cdf.(logE_grid)
+        end
         p_e = diff(c_e)
+
+        cosz_cdf = make_cosz_cdf(bin; resolution_scale)
 
         c_cosz = cosz_cdf.(cosZ_grid)
         p_cosz = diff(c_cosz)
 
         response_matrix[bin_idx, :, :] .= p_e * p_cosz'
-
-        sum_response = sum(response_matrix[bin_idx, :, :])
-        if sum_response == 0
-            continue
-        end
-        response_matrix[bin_idx, :, :] .= response_matrix[bin_idx, :, :] ./ sum_response #* bin.Counts
     end
     return response_matrix
 end
@@ -307,7 +349,7 @@ end
 
 safe_div(a, b, ε=1e-10) = a / (b + ε)
 
-function get_assets(physics; datadir = @__DIR__)
+function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
     @info "Loading Super-K Data"
 
     bininfo = CSV.read(joinpath(datadir, "bins/sk_2023_BinInfo.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false);
@@ -415,7 +457,7 @@ function get_assets(physics; datadir = @__DIR__)
 
     # Build response matrices with 1% broadened quantile spreads to account for
     # uncertainty in the reconstruction distribution (known only from 5 quantiles)
-    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.01) for key in keys(MC))
+    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.01, energy_cdf) for key in keys(MC))
     R = flatten_R(R_3d)
     nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, K_E_blur, K_CZ_blur), physics)
 
@@ -469,7 +511,7 @@ function get_assets(physics; datadir = @__DIR__)
 
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
-    return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, K_E_blur, K_CZ_blur, nominal_weights, observed, bininfo, masks,
+    return (; MC, R, R_3d, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, K_E_blur, K_CZ_blur, nominal_weights, observed, bininfo, masks,
               energy_groups_sk_i_iii, energy_groups_sk_iv_v)
 
 end
