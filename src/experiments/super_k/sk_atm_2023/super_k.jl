@@ -12,6 +12,8 @@ using LaTeXStrings
 using Accessors
 using StatsBase
 using Printf
+using SpecialFunctions: besseli
+using JLD2
 using ..Newtrinos
 
 @kwdef struct SuperKAtm <: Newtrinos.Experiment
@@ -24,7 +26,12 @@ using ..Newtrinos
 end
 
 function default_physics()
-    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
+    # Spray propagation: sigma_E matched to logE grid for Nyquist (no aliasing),
+    # sigma_h = 10 km atmospheric production height uncertainty
+    dlogE = 4.0 / 200.0  # logE grid step
+    sigma_E = 10.0^dlogE - 1.0  # ~ 0.047, fractional energy smearing
+    propagation = Newtrinos.osc.Spray(averaging=:gaussian, σ_E=sigma_E, σ_h=10.0)
+    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=propagation))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
     xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA())
@@ -53,6 +60,372 @@ function read_sk_file(filepath::String)
         :CosZQuantile50_0Percent, :CosZQuantile84_1Percent, :CosZQuantile97_7Percent
     ])
     return df
+end
+
+"""
+    fit_metalog(qv, qp)
+
+Fit a 5-term metalog distribution from 5 quantile points.
+The metalog quantile function is:
+  Q(y) = a₁ + a₂·ln(y/(1-y)) + a₃·(y-0.5)·ln(y/(1-y)) + a₄·(y-0.5) + a₅·(y-0.5)²
+
+This is a linear system in a₁...a₅, so the fit is exact (no optimization needed).
+The CDF is obtained by numerical root-finding of Q(y) = x.
+"""
+function fit_metalog(qv, qp)
+    # Build the 5×5 basis matrix
+    n = length(qv)
+    M = zeros(n, n)
+    for i in 1:n
+        y = qp[i]
+        logit = log(y / (1 - y))
+        M[i, 1] = 1.0
+        M[i, 2] = logit
+        M[i, 3] = (y - 0.5) * logit
+        M[i, 4] = y - 0.5
+        M[i, 5] = (y - 0.5)^2
+    end
+    a = M \ qv
+    return a
+end
+
+function metalog_quantile(a, y)
+    logit = log(y / (1 - y))
+    ymh = y - 0.5
+    a[1] + a[2] * logit + a[3] * ymh * logit + a[4] * ymh + a[5] * ymh^2
+end
+
+function metalog_cdf_at(a, x; tol=1e-10, maxiter=100)
+    # Find y such that Q(y) = x via bisection
+    lo, hi = 1e-8, 1.0 - 1e-8
+    # Check bounds
+    metalog_quantile(a, lo) >= x && return 0.0
+    metalog_quantile(a, hi) <= x && return 1.0
+
+    for _ in 1:maxiter
+        mid = (lo + hi) / 2
+        (hi - lo) < tol && return mid
+        metalog_quantile(a, mid) < x ? (lo = mid) : (hi = mid)
+    end
+    return (lo + hi) / 2
+end
+
+function make_metalog_e_cdf(bin; resolution_scale=1.0)
+    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
+
+    median_e = e[3]
+    e = median_e .+ resolution_scale .* (e .- median_e)
+
+    # Fit in log-space for better behavior on highly skewed energy distributions
+    log_e = log10.(max.(e, 1e-30))
+    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
+    a = fit_metalog(log_e, qp)
+
+    # CDF takes linear energy, converts to log10, then evaluates metalog CDF
+    f = x -> begin
+        x <= 0 && return 0.0
+        metalog_cdf_at(a, log10(x))
+    end
+    return f
+end
+
+
+
+# Double-sided Crystal Ball distribution in log(E)
+# PDF: Gaussian core with power-law tails on both sides
+# Parameters: mu, sigma, alphaL, nL, alphaR, nR
+# Transition: left tail at t < -alphaL, right tail at t > alphaR (t = (x-mu)/sigma)
+
+function dscb_pdf_unnorm(t, alphaL, nL, alphaR, nR)
+    if t < -alphaL
+        A = (nL / alphaL)^nL * exp(-alphaL^2 / 2)
+        B = nL / alphaL - alphaL
+        return A * (B - t)^(-nL)
+    elseif t > alphaR
+        A = (nR / alphaR)^nR * exp(-alphaR^2 / 2)
+        B = nR / alphaR - alphaR
+        return A * (B + t)^(-nR)
+    else
+        return exp(-t^2 / 2)
+    end
+end
+
+function dscb_cdf_unnorm(t, alphaL, nL, alphaR, nR)
+    # Integral of unnormalized PDF from -inf to t
+    if t < -alphaL
+        A = (nL / alphaL)^nL * exp(-alphaL^2 / 2)
+        B = nL / alphaL - alphaL
+        # Integral of A*(B-t')^(-nL) from -inf to t = A/(nL-1) * (B-t)^(1-nL)
+        return A / (nL - 1) * (B - t)^(1 - nL)
+    else
+        # Left tail integral from -inf to -alphaL
+        A_L = (nL / alphaL)^nL * exp(-alphaL^2 / 2)
+        B_L = nL / alphaL - alphaL
+        left_tail = A_L / (nL - 1) * (B_L + alphaL)^(1 - nL)
+
+        if t <= alphaR
+            # Gaussian core integral from -alphaL to t
+            # = sqrt(2pi) * (Phi(t) - Phi(-alphaL))
+            gauss_part = sqrt(2 * pi) * (cdf(Normal(), t) - cdf(Normal(), -alphaL))
+            return left_tail + gauss_part
+        else
+            # Full Gaussian core from -alphaL to alphaR
+            gauss_full = sqrt(2 * pi) * (cdf(Normal(), alphaR) - cdf(Normal(), -alphaL))
+            # Right tail integral from alphaR to t
+            A_R = (nR / alphaR)^nR * exp(-alphaR^2 / 2)
+            B_R = nR / alphaR - alphaR
+            right_part = A_R / (nR - 1) * ((B_R + alphaR)^(1 - nR) - (B_R + t)^(1 - nR))
+            return left_tail + gauss_full + right_part
+        end
+    end
+end
+
+function dscb_cdf(t, alphaL, nL, alphaR, nR)
+    # Normalized CDF: divide by total integral (from -inf to +inf)
+    total = dscb_cdf_unnorm(1e6, alphaL, nL, alphaR, nR)
+    return dscb_cdf_unnorm(t, alphaL, nL, alphaR, nR) / total
+end
+
+function fit_dscb(qv, qp)
+    # Fit DSCB in log-space: qv are energy quantiles, qp are probabilities
+    # Work in log10(E) space
+    log_q = log10.(max.(qv, 1e-30))
+
+    # Initial estimates: mu from median, sigma from IQR
+    mu = log_q[3]
+    sigma = (log_q[4] - log_q[2]) / 2.0
+    sigma = max(sigma, 1e-6)
+
+    best = (mu, sigma, 1.5, 5.0, 1.5, 5.0)
+    best_err = Inf
+
+    # Scan alphaL, alphaR, nL, nR
+    for alphaL in [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
+        for alphaR in [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
+            for nL in [1.5, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0]
+                for nR in [1.5, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0]
+                    err = 0.0
+                    valid = true
+                    for i in 1:5
+                        t = (log_q[i] - mu) / sigma
+                        c = dscb_cdf(t, alphaL, nL, alphaR, nR)
+                        (isnan(c) || c <= 0 || c >= 1) && (valid = false; break)
+                        err += (c - qp[i])^2
+                    end
+                    valid || continue
+                    if err < best_err
+                        best = (mu, sigma, alphaL, nL, alphaR, nR)
+                        best_err = err
+                    end
+                end
+            end
+        end
+    end
+
+    # Refine: also vary mu and sigma slightly
+    mu0, sigma0, aL0, nL0, aR0, nR0 = best
+    for mu_f in [0.98, 0.99, 1.0, 1.01, 1.02]
+        for sigma_f in [0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15]
+            mu_t = mu * mu_f
+            sigma_t = sigma * sigma_f
+            for alphaL in LinRange(max(0.3, aL0*0.7), aL0*1.4, 8)
+                for alphaR in LinRange(max(0.3, aR0*0.7), aR0*1.4, 8)
+                    for nL in LinRange(max(2.0, nL0*0.5), nL0*2.0, 8)
+                        for nR in LinRange(max(2.0, nR0*0.5), nR0*2.0, 8)
+                            err = 0.0
+                            valid = true
+                            for i in 1:5
+                                t = (log_q[i] - mu_t) / sigma_t
+                                c = dscb_cdf(t, alphaL, nL, alphaR, nR)
+                                (isnan(c) || c <= 0 || c >= 1) && (valid = false; break)
+                                err += (c - qp[i])^2
+                            end
+                            valid || continue
+                            if err < best_err
+                                best = (mu_t, sigma_t, alphaL, nL, alphaR, nR)
+                                best_err = err
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+function make_dscb_e_cdf(bin; resolution_scale=1.0)
+    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
+    median_e = e[3]
+    e = median_e .+ resolution_scale .* (e .- median_e)
+    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
+
+    mu, sigma, alphaL, nL, alphaR, nR = fit_dscb(e, qp)
+
+    f = x -> begin
+        x <= 0 && return 0.0
+        t = (log10(x) - mu) / sigma
+        dscb_cdf(t, alphaL, nL, alphaR, nR)
+    end
+    return f
+end
+
+
+
+# Novosibirsk function for energy CDF (in log10(E) space)
+# PDF: f(x) = A * exp(-0.5 * ln(1 + Lambda*tau*(x-x0))^2 / tau^2 - tau^2/2)
+# where Lambda = sinh(tau*sqrt(ln4)) / (sigma*tau*sqrt(ln4))
+# 3 parameters: x0 (peak), sigma (width), tau (tail asymmetry)
+# tau > 0: right tail heavier, tau < 0: left tail heavier, tau = 0: Gaussian
+
+function novosibirsk_log_pdf(x, x0, sigma, tau)
+    if abs(tau) < 1e-7
+        # Gaussian limit
+        return -0.5 * ((x - x0) / sigma)^2
+    end
+    sq2ln4 = sqrt(2 * log(2))  # sqrt(2*ln2) = sqrt(ln4)
+    arg = 1.0 + tau * sq2ln4 * (x - x0) / sigma
+    arg <= 0 && return -1e10  # outside support
+    lnarg = log(arg)
+    return -0.5 * (lnarg / tau)^2 - 0.5 * tau^2 + lnarg  # +lnarg is the Jacobian correction
+end
+
+function novosibirsk_cdf_table(x0, sigma, tau; x_range=(-1.0, 3.0), n_pts=500)
+    xs = collect(range(x_range[1], x_range[2], length=n_pts))
+    dx = (x_range[2] - x_range[1]) / (n_pts - 1)
+    lp = [novosibirsk_log_pdf(x, x0, sigma, tau) for x in xs]
+    lp_max = maximum(lp)
+    pdfs = exp.(lp .- lp_max)
+    cumul = zeros(n_pts)
+    for i in 2:n_pts
+        cumul[i] = cumul[i-1] + 0.5 * (pdfs[i] + pdfs[i-1]) * dx
+    end
+    cumul ./= cumul[end]
+    return xs, cumul
+end
+
+function novosibirsk_cdf_at(xt, ct, x)
+    x <= xt[1] && return 0.0
+    x >= xt[end] && return 1.0
+    i = searchsortedlast(xt, x)
+    i = clamp(i, 1, length(xt) - 1)
+    ct[i] + (x - xt[i]) / (xt[i+1] - xt[i]) * (ct[i+1] - ct[i])
+end
+
+function fit_novosibirsk(qv, qp)
+    # Fit in log10(E) space
+    log_q = log10.(max.(qv, 1e-30))
+
+    x0_init = log_q[3]  # median
+    sigma_init = (log_q[4] - log_q[2]) / 2.0
+    sigma_init = max(sigma_init, 0.01)
+
+    best = (x0_init, sigma_init, 0.0)
+    best_err = Inf
+
+    # Coarse scan
+    for tau in range(-2.0, 2.0, length=41)
+        for sigma_f in [0.7, 0.85, 1.0, 1.15, 1.3, 1.5]
+            for x0_f in [-0.1, -0.05, 0.0, 0.05, 0.1]
+                x0 = x0_init + x0_f
+                sigma = sigma_init * sigma_f
+                xt, ct = novosibirsk_cdf_table(x0, sigma, tau)
+                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), log_q) .- qp).^2)
+                if err < best_err
+                    best_err = err
+                    best = (x0, sigma, tau)
+                end
+            end
+        end
+    end
+
+    # Refine
+    x0_0, sig_0, tau_0 = best
+    for tau in range(tau_0 - 0.2, tau_0 + 0.2, length=15)
+        for sigma in range(max(0.01, sig_0 * 0.9), sig_0 * 1.1, length=10)
+            for x0 in range(x0_0 - 0.03, x0_0 + 0.03, length=10)
+                xt, ct = novosibirsk_cdf_table(x0, sigma, tau)
+                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), log_q) .- qp).^2)
+                if err < best_err
+                    best_err = err
+                    best = (x0, sigma, tau)
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+function make_novosibirsk_e_cdf(bin; resolution_scale=1.0)
+    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
+    median_e = e[3]
+    e = median_e .+ resolution_scale .* (e .- median_e)
+    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
+
+    x0, sigma, tau = fit_novosibirsk(e, qp)
+    xt, ct = novosibirsk_cdf_table(x0, sigma, tau)
+
+    f = x -> begin
+        x <= 0 && return 0.0
+        novosibirsk_cdf_at(xt, ct, log10(x))
+    end
+    return f
+end
+
+
+function make_novosibirsk_linE_e_cdf(bin; resolution_scale=1.0)
+    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
+    median_e = e[3]
+    e = median_e .+ resolution_scale .* (e .- median_e)
+    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
+
+    # Fit directly in linear E space
+    x0_init = e[3]
+    sigma_init = (e[4] - e[2]) / 2.0
+    sigma_init = max(sigma_init, 1e-6)
+
+    best = (x0_init, sigma_init, 0.0)
+    best_err = Inf
+
+    for tau in range(-2.0, 2.0, length=41)
+        for sigma_f in [0.7, 0.85, 1.0, 1.15, 1.3, 1.5]
+            for x0_f in [-0.1, -0.05, 0.0, 0.05, 0.1]
+                x0 = x0_init * (1 + x0_f)
+                sigma = sigma_init * sigma_f
+                xt, ct = novosibirsk_cdf_table(x0, sigma, tau; x_range=(0.0, maximum(e)*3), n_pts=500)
+                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), e) .- qp).^2)
+                if err < best_err
+                    best_err = err
+                    best = (x0, sigma, tau)
+                end
+            end
+        end
+    end
+
+    x0_0, sig_0, tau_0 = best
+    for tau in range(tau_0 - 0.2, tau_0 + 0.2, length=15)
+        for sigma in range(max(1e-6, sig_0 * 0.9), sig_0 * 1.1, length=10)
+            for x0 in range(x0_0 * 0.97, x0_0 * 1.03, length=10)
+                xt, ct = novosibirsk_cdf_table(x0, sigma, tau; x_range=(0.0, maximum(e)*3), n_pts=500)
+                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), e) .- qp).^2)
+                if err < best_err
+                    best_err = err
+                    best = (x0, sigma, tau)
+                end
+            end
+        end
+    end
+
+    x0, sigma, tau = best
+    xt, ct = novosibirsk_cdf_table(x0, sigma, tau; x_range=(0.0, maximum(e)*3), n_pts=500)
+
+    f = x -> begin
+        x <= 0 && return 0.0
+        novosibirsk_cdf_at(xt, ct, x)
+    end
+    return f
 end
 
 function make_log_e_cdf(bin; resolution_scale=1.0)
@@ -154,15 +527,148 @@ function make_cosz_cdf(bin; resolution_scale=1.0)
     return f_save
 end
 
-function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_scale=1.0, energy_cdf=:logE)
+
+
+# Von Mises-Fisher marginal distribution in cosZ
+# For vMF on S^2 with mean direction at zenith angle theta_0:
+# f(cz) proportional to exp(kappa * mu_z * cz) * I_0(kappa * sqrt(1-mu_z^2) * sqrt(1-cz^2))
+# where mu_z = cos(theta_0)
+
+function _log_besseli0(x)
+    x = abs(x)
+    x < 500.0 ? log(besseli(0, x)) : x - 0.5 * log(2 * pi * x)
+end
+
+function _vmf_marginal_log_pdf(cz, mu_z, kappa)
+    mu_perp = sqrt(max(0.0, 1.0 - mu_z^2))
+    kappa * mu_z * cz + _log_besseli0(kappa * mu_perp * sqrt(max(0.0, 1.0 - cz^2)))
+end
+
+function _vmf_cdf_table(mu_z, kappa; n_pts=500)
+    cz_pts = collect(range(-1.0, 1.0, length=n_pts))
+    dcz = 2.0 / (n_pts - 1)
+    lp = [_vmf_marginal_log_pdf(cz, mu_z, kappa) for cz in cz_pts]
+    pdfs = exp.(lp .- maximum(lp))
+    cumul = zeros(n_pts)
+    for i in 2:n_pts
+        cumul[i] = cumul[i-1] + 0.5 * (pdfs[i] + pdfs[i-1]) * dcz
+    end
+    cumul ./= cumul[end]
+    cz_pts, cumul
+end
+
+function _vmf_cdf_at(ct, cd, x)
+    x <= ct[1] && return 0.0
+    x >= ct[end] && return 1.0
+    i = searchsortedlast(ct, x)
+    i = clamp(i, 1, length(ct) - 1)
+    cd[i] + (x - ct[i]) / (ct[i+1] - ct[i]) * (cd[i+1] - cd[i])
+end
+
+function fit_vmf_cosz(cz_quantiles, qp)
+    # Stage 1: mu_z from median, 1D search over kappa
+    mu_z = clamp(cz_quantiles[3], -0.999, 0.999)
+
+    sigma_cz = (cz_quantiles[4] - cz_quantiles[2]) / 2.0
+    sigma_cz = max(sigma_cz, 0.001)
+
+    best_kappa = 1.0 / sigma_cz^2
+    best_mu = mu_z
+    best_err = Inf
+
+    for log_k in range(log(0.01), log(20000.0), length=50)
+        k = exp(log_k)
+        ct, cd = _vmf_cdf_table(mu_z, k)
+        err = sum((_vmf_cdf_at.(Ref(ct), Ref(cd), cz_quantiles) .- qp).^2)
+        if err < best_err
+            best_err = err
+            best_kappa = k
+            best_mu = mu_z
+        end
+    end
+
+    # Stage 2: 2D refinement around (mu_z, kappa)
+    for _ in 1:2
+        mu0, k0 = best_mu, best_kappa
+        mu_halfwidth = min(0.1, 3.0 / sqrt(max(k0, 1.0)))
+        for m in range(max(-0.999, mu0 - mu_halfwidth), min(0.999, mu0 + mu_halfwidth), length=11)
+            for log_k in range(log(max(0.01, k0 * 0.7)), log(k0 * 1.4), length=11)
+                k = exp(log_k)
+                ct, cd = _vmf_cdf_table(m, k)
+                err = sum((_vmf_cdf_at.(Ref(ct), Ref(cd), cz_quantiles) .- qp).^2)
+                if err < best_err
+                    best_err = err
+                    best_kappa = k
+                    best_mu = m
+                end
+            end
+        end
+    end
+
+    return best_mu, best_kappa
+end
+
+function make_vmf_cosz_cdf(bin; resolution_scale=1.0)
+    cosz = [bin.CosZQuantile2_3Percent, bin.CosZQuantile15_9Percent, bin.CosZQuantile50_0Percent, bin.CosZQuantile84_1Percent, bin.CosZQuantile97_7Percent]
+    med = cosz[3]
+    cosz = med .+ resolution_scale .* (cosz .- med)
+    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
+
+    mu_z, kappa = fit_vmf_cosz(cosz, qp)
+    ct, cd = _vmf_cdf_table(mu_z, kappa)
+
+    f = x -> _vmf_cdf_at(ct, cd, x)
+    return f
+end
+
+
+function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params)
+    # Build response matrix from precomputed DSCB energy + vMF cosZ parameters
+    n_bins = size(MC_component, 1)
+    n_logE = length(logE_grid) - 1
+    n_cosZ = length(cosZ_grid) - 1
+    E_grid = 10 .^ logE_grid
+
+    response_matrix = zeros(Float64, n_bins, n_logE, n_cosZ)
+
+    for bin_idx in 1:n_bins
+        MC_component[bin_idx, :].Counts == 0 && continue
+
+        # Energy: DSCB CDF in logE space
+        mu = dscb_params["mu"][bin_idx]
+        sigma = dscb_params["sigma"][bin_idx]
+        sigma == 0 && continue
+        aL = dscb_params["alphaL"][bin_idx]
+        nL = dscb_params["nL"][bin_idx]
+        aR = dscb_params["alphaR"][bin_idx]
+        nR = dscb_params["nR"][bin_idx]
+        c_e = [dscb_cdf((log10(e) - mu) / sigma, aL, nL, aR, nR) for e in E_grid]
+        p_e = diff(c_e)
+
+        # CosZ: vMF CDF
+        kappa = vmf_params["kappa"][bin_idx]
+        if kappa > 0
+            ct, cd = _vmf_cdf_table(vmf_params["mu_z"][bin_idx], kappa)
+            c_cosz = [_vmf_cdf_at(ct, cd, x) for x in cosZ_grid]
+        else
+            c_cosz = collect(range(0, 1, length=length(cosZ_grid)))
+        end
+        p_cosz = diff(c_cosz)
+
+        response_matrix[bin_idx, :, :] .= p_e * p_cosz'
+    end
+    return response_matrix
+end
+
+function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_scale=1.0, energy_cdf=:logE, vmf_mu_z=nothing, vmf_kappa=nothing)
     n_bins = size(MC_component, 1)
     n_logE = length(logE_grid)
     n_cosZ = length(cosZ_grid)
 
     response_matrix = zeros(Float64, n_bins, n_logE-1, n_cosZ-1)
 
-    # For linear-E CDF, convert logE grid edges to linear E once
-    E_grid = energy_cdf == :linearE ? 10 .^ logE_grid : nothing
+    # For linear-E / johnsonSU CDF, convert logE grid edges to linear E
+    E_grid = energy_cdf in (:linearE, :metalog, :dscb, :novosibirsk, :novosibirsk_linE) ? 10 .^ logE_grid : nothing
 
     for bin_idx in 1:n_bins
         bin = MC_component[bin_idx, :]
@@ -171,7 +677,19 @@ function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_sca
             continue
         end
 
-        if energy_cdf == :linearE
+        if energy_cdf == :novosibirsk_linE
+            e_cdf = make_novosibirsk_linE_e_cdf(bin; resolution_scale)
+            c_e = e_cdf.(E_grid)
+        elseif energy_cdf == :novosibirsk
+            e_cdf = make_novosibirsk_e_cdf(bin; resolution_scale)
+            c_e = e_cdf.(E_grid)
+        elseif energy_cdf == :dscb
+            e_cdf = make_dscb_e_cdf(bin; resolution_scale)
+            c_e = e_cdf.(E_grid)
+        elseif energy_cdf == :metalog
+            e_cdf = make_metalog_e_cdf(bin; resolution_scale)
+            c_e = e_cdf.(E_grid)
+        elseif energy_cdf == :linearE
             e_cdf = make_e_cdf(bin; resolution_scale)
             c_e = e_cdf.(E_grid)
         else
@@ -180,10 +698,17 @@ function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_sca
         end
         p_e = diff(c_e)
 
-        cosz_cdf = make_cosz_cdf(bin; resolution_scale)
-
-        c_cosz = cosz_cdf.(cosZ_grid)
-        p_cosz = diff(c_cosz)
+        if vmf_mu_z !== nothing && vmf_kappa !== nothing && vmf_kappa[bin_idx] > 0
+            # Use precomputed vMF parameters
+            ct, cd = _vmf_cdf_table(vmf_mu_z[bin_idx], vmf_kappa[bin_idx])
+            c_cosz = [_vmf_cdf_at(ct, cd, x) for x in cosZ_grid]
+            p_cosz = diff(c_cosz)
+        else
+            # Fallback to spline
+            cosz_fn = make_cosz_cdf(bin; resolution_scale)
+            c_cosz = cosz_fn.(cosZ_grid)
+            p_cosz = diff(c_cosz)
+        end
 
         response_matrix[bin_idx, :, :] .= p_e * p_cosz'
     end
@@ -304,8 +829,8 @@ function calc_weights(params, assets, physics)
     layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.cz_midpoints, layers)
 
-    p = smooth_osc_prob(physics.osc.osc_prob(E, paths, layers, params), assets.K_E_blur, assets.K_CZ_blur);
-    p_anti = smooth_osc_prob(physics.osc.osc_prob(E, paths, layers, params; anti=true), assets.K_E_blur, assets.K_CZ_blur);
+    p = physics.osc.osc_prob(E, paths, layers, params)
+    p_anti = physics.osc.osc_prob(E, paths, layers, params; anti=true)
 
     flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
@@ -449,21 +974,30 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
     paths = physics.earth_layers.compute_paths(cz_midpoints, nominal_layers)
     flux_nominal = physics.atm_flux.nominal_flux(10. .^midpoints(loge_grid), cz_midpoints)
 
-    # Gaussian blur kernels for oscillation probability smoothing (5% in logE and CZ)
-    n_E = length(midpoints(loge_grid))
-    n_CZ = length(cz_midpoints)
-    dlogE = Float64(step(loge_grid))
-    dCZ = Float64(step(cz_grid))
-    K_E_blur = make_gaussian_kernel_matrix(n_E, 0.05 / dlogE)
-    K_CZ_blur = make_gaussian_kernel_matrix(n_CZ, 0.05 / dCZ)
-
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
 
-    # Build response matrices with 1% broadened quantile spreads to account for
-    # uncertainty in the reconstruction distribution (known only from 5 quantiles)
-    R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid; resolution_scale=1.01, energy_cdf) for key in keys(MC))
+    # Load precomputed response parameters (from generate_cz_response.jl and generate_e_response.jl)
+    vmf_data = load(joinpath(datadir, "vmf_cosz_params.jld2"))
+    vmf_params = vmf_data["vmf_params"]
+
+    e_response_file = joinpath(datadir, "energy_response_params.jld2")
+    e_params = isfile(e_response_file) ? load(e_response_file) : nothing
+
+    # Build response matrices from precomputed distribution parameters
+    if e_params !== nothing && energy_cdf == :dscb && haskey(e_params, "dscb_logE")
+        # Use precomputed DSCB energy params + vMF cosZ params
+        dscb_params = e_params["dscb_logE"]
+        R_3d = NamedTuple(key => _build_R_from_params(
+            MC[key], loge_grid, cz_grid,
+            dscb_params[key], vmf_params[key]) for key in keys(MC))
+    else
+        # Fallback: fit energy CDF on the fly, use precomputed vMF cosZ
+        R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid;
+            resolution_scale=1.0, energy_cdf,
+            vmf_mu_z=vmf_params[key]["mu_z"], vmf_kappa=vmf_params[key]["kappa"]) for key in keys(MC))
+    end
     R = flatten_R(R_3d)
-    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, K_E_blur, K_CZ_blur), physics)
+    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints), physics)
 
     # Old F_ij method (commented out — replaced by reco bin overlap method)
     #loge_grid_plus = loge_grid .+ log10(1.02)
@@ -515,7 +1049,7 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
 
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
-    return (; MC, R, R_3d, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, K_E_blur, K_CZ_blur, nominal_weights, observed, bininfo, masks,
+    return (; MC, R, R_3d, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
               energy_groups_sk_i_iii, energy_groups_sk_iv_v)
 
 end
