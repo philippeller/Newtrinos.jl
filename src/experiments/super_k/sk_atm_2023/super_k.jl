@@ -623,17 +623,20 @@ function make_vmf_cosz_cdf(bin; resolution_scale=1.0)
 end
 
 
-function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params)
+function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params; mc_data_ratio=5.0)
     # Build response matrix from precomputed DSCB energy + vMF cosZ parameters
+    # mc_data_ratio: assumed ratio of raw MC events to reported (scaled) counts
     n_bins = size(MC_component, 1)
     n_logE = length(logE_grid) - 1
     n_cosZ = length(cosZ_grid) - 1
     E_grid = 10 .^ logE_grid
+    dlogE = Float64(logE_grid[2] - logE_grid[1])
 
     response_matrix = zeros(Float64, n_bins, n_logE, n_cosZ)
 
     for bin_idx in 1:n_bins
-        MC_component[bin_idx, :].Counts == 0 && continue
+        counts = MC_component[bin_idx, :].Counts
+        counts == 0 && continue
 
         # Energy: DSCB CDF in logE space
         mu = dscb_params["mu"][bin_idx]
@@ -645,6 +648,22 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, v
         nR = dscb_params["nR"][bin_idx]
         c_e = [dscb_cdf((log10(e) - mu) / sigma, aL, nL, aR, nR) for e in E_grid]
         p_e = diff(c_e)
+
+        # Per-bin energy blur based on MC statistics
+        # SK uses ~10 nearest neighbors for per-event osc prob averaging.
+        # With N_MC events spanning IQR, the effective smearing is:
+        #   sigma_blur ~ IQR / sqrt(12) * sqrt(min(10, N_MC) / N_MC)
+        # In logE bins: sigma_blur_bins = sigma_blur_logE / dlogE
+        n_mc = mc_data_ratio * counts
+        iqr_logE = dscb_params["sigma"][bin_idx] * 2.0  # rough: DSCB sigma ~ half IQR in logE
+        n_neighbors = min(10.0, n_mc)
+        sigma_blur_logE = iqr_logE / sqrt(12.0) * sqrt(n_neighbors / max(n_mc, 1.0))
+        sigma_blur_bins = sigma_blur_logE / dlogE
+
+        if sigma_blur_bins > 0.5  # only blur if significant (> half a bin)
+            K = make_gaussian_kernel_matrix(n_logE, sigma_blur_bins)
+            p_e = K * p_e
+        end
 
         # CosZ: vMF CDF
         kappa = vmf_params["kappa"][bin_idx]
