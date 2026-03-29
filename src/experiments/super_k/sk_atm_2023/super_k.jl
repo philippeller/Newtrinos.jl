@@ -873,12 +873,14 @@ function calc_weights(params, assets, physics)
     xsec_nc      = physics.xsec.scale(E, :nue,   :NC, false, params)
 
     # HKKM flux is differential: Φ(E) in (m² s sr GeV)⁻¹.
-    # On our logE grid, bin content ∝ Φ(E) × E (Jacobian dE/dlogE = E ln10).
-    # Multiply by E after reshape to properly weight the energy integration.
-    flux_nue    = reshape(flux.nue,    s) .* E
-    flux_numu   = reshape(flux.numu,   s) .* E
-    flux_nuebar = reshape(flux.nuebar, s) .* E
-    flux_numubar= reshape(flux.numubar,s) .* E
+    # Cross-section data is stored as σ/E; xsec.scale() returns dimensionless ratios.
+    # On our logE grid: event rate ∝ Φ(E) × σ(E) × dE = Φ(E) × (σ/E × E) × (E × dlogE × ln10)
+    # = Φ(E) × σ/E × E² × dlogE × ln10
+    # So we need E² after reshape: one E from the Jacobian, one E from σ/E → σ.
+    flux_nue    = reshape(flux.nue,    s) .* E .* E
+    flux_numu   = reshape(flux.numu,   s) .* E .* E
+    flux_nuebar = reshape(flux.nuebar, s) .* E .* E
+    flux_numubar= reshape(flux.numubar,s) .* E .* E
 
     nue_flux   = (flux_nue .* p[:, :, 1, 1] .+
                   flux_numu .* p[:, :, 2, 1]) .* xsec_nue .* flux_norm
