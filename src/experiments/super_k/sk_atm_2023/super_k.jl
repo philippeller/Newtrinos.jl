@@ -623,7 +623,7 @@ function make_vmf_cosz_cdf(bin; resolution_scale=1.0)
 end
 
 
-function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params; mc_data_ratio=5.0)
+function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params, reco_logP_width, reco_cz_width; mc_data_ratio=5.0)
     # Build response matrix from precomputed DSCB energy + vMF cosZ parameters
     # mc_data_ratio: assumed ratio of raw MC events to reported (scaled) counts
     n_bins = size(MC_component, 1)
@@ -1016,9 +1016,11 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
     if e_params !== nothing && energy_cdf == :dscb && haskey(e_params, "dscb_logE")
         # Use precomputed DSCB energy params + vMF cosZ params
         dscb_params = e_params["dscb_logE"]
+        reco_logP_width = bininfo.logPMax .- bininfo.logPMin
+        reco_cz_width = abs.(bininfo.CosZMax .- bininfo.CosZMin)
         R_3d = NamedTuple(key => _build_R_from_params(
             MC[key], loge_grid, cz_grid,
-            dscb_params[key], vmf_params[key]) for key in keys(MC))
+            dscb_params[key], vmf_params[key], reco_logP_width, reco_cz_width) for key in keys(MC))
     else
         # Fallback: fit energy CDF on the fly, use precomputed vMF cosZ
         R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid;
