@@ -650,20 +650,16 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, v
         p_e = diff(c_e)
 
         # Per-bin energy blur based on MC statistics
-        # SK uses ~10 nearest neighbors for per-event osc prob averaging.
-        # With N_MC events spanning IQR, the effective smearing is:
-        #   sigma_blur ~ IQR / sqrt(12) * sqrt(min(10, N_MC) / N_MC)
-        # In logE bins: sigma_blur_bins = sigma_blur_logE / dlogE
+        # SK uses ~10 nearest neighbors in energy for per-event osc prob averaging.
+        # With N_MC events distributed across a reco bin of width delta_logP,
+        # the 10 nearest neighbors span ~ delta_logP * min(10, N_MC) / N_MC.
+        # sigma ~ that span / sqrt(12).
         n_mc = mc_data_ratio * counts
-        iqr_logE = dscb_params["sigma"][bin_idx] * 2.0  # rough: DSCB sigma ~ half IQR in logE
         n_neighbors = min(10.0, n_mc)
-        sigma_blur_logE = iqr_logE / sqrt(12.0) * sqrt(n_neighbors / max(n_mc, 1.0))
+        sigma_blur_logE = reco_logP_width[bin_idx] * sqrt(n_neighbors / max(n_mc, 1.0)) / sqrt(12.0)
         sigma_blur_bins = sigma_blur_logE / dlogE
-
-        if sigma_blur_bins > 0.5  # only blur if significant (> half a bin)
-            K = make_gaussian_kernel_matrix(n_logE, sigma_blur_bins)
-            p_e = K * p_e
-        end
+        K_e = make_gaussian_kernel_matrix(n_logE, sigma_blur_bins)
+        p_e = K_e * p_e
 
         # CosZ: vMF CDF
         kappa = vmf_params["kappa"][bin_idx]
@@ -674,6 +670,13 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, v
             c_cosz = collect(range(0, 1, length=length(cosZ_grid)))
         end
         p_cosz = diff(c_cosz)
+
+        # CosZ blur: same logic with reco cosZ bin width
+        sigma_blur_cz = reco_cz_width[bin_idx] * sqrt(n_neighbors / max(n_mc, 1.0)) / sqrt(12.0)
+        dCZ = Float64(cosZ_grid[2] - cosZ_grid[1])
+        sigma_blur_cz_bins = sigma_blur_cz / dCZ
+        K_cz = make_gaussian_kernel_matrix(n_cosZ, sigma_blur_cz_bins)
+        p_cosz = K_cz * p_cosz
 
         response_matrix[bin_idx, :, :] .= p_e * p_cosz'
     end
@@ -869,18 +872,26 @@ function calc_weights(params, assets, physics)
     xsec_nutaubar= physics.xsec.scale(E, :nutau, :CC, true,  params)
     xsec_nc      = physics.xsec.scale(E, :nue,   :NC, false, params)
 
-    nue_flux   = (reshape(flux.nue,    s) .* p[:, :, 1, 1] .+
-                  reshape(flux.numu,   s) .* p[:, :, 2, 1]) .* xsec_nue .* flux_norm
-    numu_flux  = (reshape(flux.nue,    s) .* p[:, :, 1, 2] .+
-                  reshape(flux.numu,   s) .* p[:, :, 2, 2]) .* xsec_numu .* flux_norm
-    nutau_flux = (reshape(flux.nue,    s) .* p[:, :, 1, 3] .+
-                  reshape(flux.numu,   s) .* p[:, :, 2, 3]) .* xsec_nutau .* flux_norm
-    nuebar_flux  = (reshape(flux.nuebar,  s) .* p_anti[:, :, 1, 1] .+
-                    reshape(flux.numubar, s) .* p_anti[:, :, 2, 1]) .* xsec_nuebar .* flux_norm
-    numubar_flux = (reshape(flux.nuebar,  s) .* p_anti[:, :, 1, 2] .+
-                    reshape(flux.numubar, s) .* p_anti[:, :, 2, 2]) .* xsec_numubar .* flux_norm
-    nutaubar_flux = (reshape(flux.nuebar,  s) .* p_anti[:, :, 1, 3] .+
-                     reshape(flux.numubar, s) .* p_anti[:, :, 2, 3]) .* xsec_nutaubar .* flux_norm
+    # HKKM flux is differential: Φ(E) in (m² s sr GeV)⁻¹.
+    # On our logE grid, bin content ∝ Φ(E) × E (Jacobian dE/dlogE = E ln10).
+    # Multiply by E after reshape to properly weight the energy integration.
+    flux_nue    = reshape(flux.nue,    s) .* E
+    flux_numu   = reshape(flux.numu,   s) .* E
+    flux_nuebar = reshape(flux.nuebar, s) .* E
+    flux_numubar= reshape(flux.numubar,s) .* E
+
+    nue_flux   = (flux_nue .* p[:, :, 1, 1] .+
+                  flux_numu .* p[:, :, 2, 1]) .* xsec_nue .* flux_norm
+    numu_flux  = (flux_nue .* p[:, :, 1, 2] .+
+                  flux_numu .* p[:, :, 2, 2]) .* xsec_numu .* flux_norm
+    nutau_flux = (flux_nue .* p[:, :, 1, 3] .+
+                  flux_numu .* p[:, :, 2, 3]) .* xsec_nutau .* flux_norm
+    nuebar_flux  = (flux_nuebar .* p_anti[:, :, 1, 1] .+
+                    flux_numubar .* p_anti[:, :, 2, 1]) .* xsec_nuebar .* flux_norm
+    numubar_flux = (flux_nuebar .* p_anti[:, :, 1, 2] .+
+                    flux_numubar .* p_anti[:, :, 2, 2]) .* xsec_numubar .* flux_norm
+    nutaubar_flux = (flux_nuebar .* p_anti[:, :, 1, 3] .+
+                     flux_numubar .* p_anti[:, :, 2, 3]) .* xsec_nutaubar .* flux_norm
 
     nue     = contract_R(assets.R.nue,     nue_flux)
     numu    = contract_R(assets.R.numu,    numu_flux)
@@ -895,8 +906,8 @@ function calc_weights(params, assets, physics)
     # NC: SK MC lumps all NC (nu + nubar, all flavors) into one channel.
     # Use precomputed nu/nubar mixture fractions with proper cross-sections.
     xsec_nc_anti = physics.xsec.scale(E, :nue, :NC, true, params)
-    flux_nu_total = reshape(flux.nue, s) .+ reshape(flux.numu, s)
-    flux_nubar_total = reshape(flux.nuebar, s) .+ reshape(flux.numubar, s)
+    flux_nu_total = flux_nue .+ flux_numu
+    flux_nubar_total = flux_nuebar .+ flux_numubar
     nc_nu_flux = flux_nu_total .* xsec_nc
     nc_nubar_flux = flux_nubar_total .* xsec_nc_anti
     nc_combined = nc_nu_flux .* assets.nc_nu_frac .+ nc_nubar_flux .* (1 .- assets.nc_nu_frac)
