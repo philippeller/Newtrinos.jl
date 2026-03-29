@@ -11,6 +11,7 @@ using BAT
 using LaTeXStrings
 using Accessors
 using StatsBase
+using Statistics: mean
 using Printf
 using SpecialFunctions: besseli
 using JLD2
@@ -864,14 +865,23 @@ function calc_weights(params, assets, physics)
 
     nue     = contract_R(assets.R.nue,     nue_flux)
     numu    = contract_R(assets.R.numu,    numu_flux)
-    nutau   = contract_R(assets.R.nutau,   nutau_flux)
     nuebar  = contract_R(assets.R.nuebar,  nuebar_flux)
     numubar = contract_R(assets.R.numubar, numubar_flux)
-    # NC is flavor-blind: total flux is conserved under oscillations (unitarity),
-    # but still depends on flux systematics (Barr params, normalization)
-    flux_total_nc = (reshape(flux.nue, s) .+ reshape(flux.numu, s) .+
-                     reshape(flux.nuebar, s) .+ reshape(flux.numubar, s))
-    nunc    = contract_R(assets.R.nunc,    flux_total_nc .* xsec_nc .* flux_norm)
+
+    # nutau: SK MC lumps nutau + nutaubar CC into one channel.
+    # Use precomputed nu/nubar mixture fractions to combine with correct proportions.
+    nutau_combined = nutau_flux .* assets.nutau_nu_frac .+ nutaubar_flux .* (1 .- assets.nutau_nu_frac)
+    nutau   = contract_R(assets.R.nutau,   nutau_combined)
+
+    # NC: SK MC lumps all NC (nu + nubar, all flavors) into one channel.
+    # Use precomputed nu/nubar mixture fractions with proper cross-sections.
+    xsec_nc_anti = physics.xsec.scale(E, :nue, :NC, true, params)
+    flux_nu_total = reshape(flux.nue, s) .+ reshape(flux.numu, s)
+    flux_nubar_total = reshape(flux.nuebar, s) .+ reshape(flux.numubar, s)
+    nc_nu_flux = flux_nu_total .* xsec_nc
+    nc_nubar_flux = flux_nubar_total .* xsec_nc_anti
+    nc_combined = nc_nu_flux .* assets.nc_nu_frac .+ nc_nubar_flux .* (1 .- assets.nc_nu_frac)
+    nunc    = contract_R(assets.R.nunc,    nc_combined .* flux_norm)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end
@@ -997,7 +1007,54 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
             vmf_mu_z=vmf_params[key]["mu_z"], vmf_kappa=vmf_params[key]["kappa"]) for key in keys(MC))
     end
     R = flatten_R(R_3d)
-    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints), physics)
+
+    # Compute nu/nubar mixture fractions for nutau CC and NC channels.
+    # The SK MC lumps nutau+nutaubar CC, and all NC, into single channels.
+    # We estimate the nu vs nubar fraction from nominal flux * actual cross-sections.
+    # For nutau CC, use numu cross-sections (nutau xsec not available separately).
+    E_mid = 10.0 .^ midpoints(loge_grid)
+
+    # Get actual cross-section curves from the xsec data file
+    xsec_data = load(joinpath(dirname(dirname(dirname(datadir))), "physics", "xsec_genie_data.jld2"))
+    xsec_E = xsec_data["E_grid"]
+    wester = xsec_data["wester_xsec"]
+    cc_channels = ("CC1p1h", "CC2p2h", "CC1pi", "CCDIS", "CCother")
+
+    # Total CC xsec (sigma/E) for numu and numubar (used for nutau since nutau xsec ~ numu xsec)
+    numu_cc_total = sum(wester["numu"][ch] for ch in cc_channels)
+    numubar_cc_total = sum(wester["numubar"][ch] for ch in cc_channels)
+    # NC xsec for nu and nubar
+    numu_nc = wester["numu"]["NC"]
+    numubar_nc = wester["numubar"]["NC"]
+
+    # Interpolate to our energy grid
+    itp_numu_cc = extrapolate(interpolate((xsec_E,), numu_cc_total, Gridded(Linear())), Flat())
+    itp_numubar_cc = extrapolate(interpolate((xsec_E,), numubar_cc_total, Gridded(Linear())), Flat())
+    itp_nu_nc = extrapolate(interpolate((xsec_E,), numu_nc, Gridded(Linear())), Flat())
+    itp_nubar_nc = extrapolate(interpolate((xsec_E,), numubar_nc, Gridded(Linear())), Flat())
+
+    sigma_numu_cc = itp_numu_cc.(E_mid) .* E_mid      # sigma = (sigma/E) * E
+    sigma_numubar_cc = itp_numubar_cc.(E_mid) .* E_mid
+    sigma_nu_nc = itp_nu_nc.(E_mid) .* E_mid
+    sigma_nubar_nc = itp_nubar_nc.(E_mid) .* E_mid
+
+    # Atmospheric flux averaged over cosZ
+    flux_nom = physics.atm_flux.nominal_flux(E_mid, cz_midpoints)
+    s_flux = (length(E_mid), length(cz_midpoints))
+    flux_nu_E = vec(mean(reshape(flux_nom.nue, s_flux) .+ reshape(flux_nom.numu, s_flux), dims=2))
+    flux_nubar_E = vec(mean(reshape(flux_nom.nuebar, s_flux) .+ reshape(flux_nom.numubar, s_flux), dims=2))
+
+    # nutau CC mixture: use numu xsec as proxy for nutau
+    nutau_nu_rate = flux_nu_E .* sigma_numu_cc
+    nutau_nubar_rate = flux_nubar_E .* sigma_numubar_cc
+    nutau_nu_frac = nutau_nu_rate ./ (nutau_nu_rate .+ nutau_nubar_rate .+ 1e-30)
+
+    # NC mixture
+    nc_nu_rate = flux_nu_E .* sigma_nu_nc
+    nc_nubar_rate = flux_nubar_E .* sigma_nubar_nc
+    nc_nu_frac = nc_nu_rate ./ (nc_nu_rate .+ nc_nubar_rate .+ 1e-30)
+
+    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, nutau_nu_frac, nc_nu_frac), physics)
 
     # Old F_ij method (commented out — replaced by reco bin overlap method)
     #loge_grid_plus = loge_grid .+ log10(1.02)
@@ -1049,8 +1106,9 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
 
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
+
     return (; MC, R, R_3d, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v)
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac)
 
 end
 
