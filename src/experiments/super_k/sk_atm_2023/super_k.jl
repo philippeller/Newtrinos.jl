@@ -1126,8 +1126,12 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
 
+    # Compute per-bin, per-flavor R matrix coverage fraction (sum of R row).
+    # Events outside the energy grid have coverage < 1 and should not be reweighted.
+    R_coverage = NamedTuple(key => vec(sum(R_3d[key], dims=(2,3))) for key in keys(R_3d))
+
     return (; MC, R, R_3d, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac)
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac, R_coverage)
 
 end
 
@@ -1236,7 +1240,14 @@ end
 
 function reweight(params, physics, assets)
     weights = calc_weights(params, assets, physics)
-    return map((mc, w, nw) -> mc.Counts .* safe_div.(w, nw), assets.MC, weights, assets.nominal_weights)
+    if haskey(assets, :R_coverage)
+        # Account for events outside the energy grid: they keep weight 1.0
+        # reweighted = MC * [f * (w_new/w_nom) + (1-f)]
+        return map((mc, w, nw, cov) -> mc.Counts .* (cov .* safe_div.(w, nw) .+ (1 .- cov)),
+                   assets.MC, weights, assets.nominal_weights, assets.R_coverage)
+    else
+        return map((mc, w, nw) -> mc.Counts .* safe_div.(w, nw), assets.MC, weights, assets.nominal_weights)
+    end
 end
 
 function get_factor(mask, factor)
