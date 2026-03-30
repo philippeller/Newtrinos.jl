@@ -937,6 +937,14 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
         upmu = occursin.("_upmu_", bininfo.Sample),
         pc_stop = occursin.("_pc_stop", bininfo.Sample),
         pc_thru = occursin.("_pc_thru", bininfo.Sample),
+        # Directional PC stop/thru masks (top/barrel/bottom exit)
+        # cosZ midpoint: bottom < -0.22, barrel in [-0.22, 0.22], top > 0.22
+        pc_stop_bottom = occursin.("_pc_stop", bininfo.Sample) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .< -0.22),
+        pc_thru_bottom = occursin.("_pc_thru", bininfo.Sample) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .< -0.22),
+        pc_stop_barrel = occursin.("_pc_stop", bininfo.Sample) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .>= -0.22) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .<= 0.22),
+        pc_thru_barrel = occursin.("_pc_thru", bininfo.Sample) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .>= -0.22) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .<= 0.22),
+        pc_stop_top = occursin.("_pc_stop", bininfo.Sample) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .> 0.22),
+        pc_thru_top = occursin.("_pc_thru", bininfo.Sample) .& ((bininfo.CosZMin .+ bininfo.CosZMax) ./ 2 .> 0.22),
         umpmu_stop = occursin.("_upmu_stop", bininfo.Sample),
         upmu_thru = occursin.("_upmu_thru", bininfo.Sample),
         upmu_shower = occursin.(r"_upmu_.*_showering",  bininfo.Sample),
@@ -1164,7 +1172,9 @@ function get_params()
         sk_upmu_norm = 1.0,
         sk_fiducial_norm = 1.0,
         sk_nc_mu_norm = 1.0,
-        sk_pc_stopping_vs_througoing = 1.0,
+        sk_pc_stop_thru_top = 1.0,
+        sk_pc_stop_thru_barrel = 1.0,
+        sk_pc_stop_thru_bottom = 1.0,
         sk_upmu_stopping_vs_througoing = 1.0,
         sk_upmu_nonshower_vs_shower = 1.0,
         sk_i_iii_decay_e_tag_eff = 1.0,
@@ -1214,7 +1224,9 @@ function get_priors()
         sk_upmu_norm = Normal(1.0, 0.01),
         sk_fiducial_norm = Normal(1.0, 0.02),
         sk_nc_mu_norm = Normal(1.0, 0.1),
-        sk_pc_stopping_vs_througoing = Normal(1.0, 0.2),
+        sk_pc_stop_thru_top = Normal(1.0, 0.2),
+        sk_pc_stop_thru_barrel = Normal(1.0, 0.2),
+        sk_pc_stop_thru_bottom = Normal(1.0, 0.2),
         sk_upmu_stopping_vs_througoing = Normal(1.0, 0.01),
         sk_upmu_nonshower_vs_shower = Normal(1.0, 0.04),
         sk_i_iii_decay_e_tag_eff = Normal(1.0, 0.015),
@@ -1281,7 +1293,9 @@ function get_all_factors(params, assets, total)
         (get_factor(assets.masks.fc, params.sk_fc_norm * params.sk_fiducial_norm) .- 1) .+
         (get_factor(assets.masks.pc, params.sk_pc_norm * params.sk_fiducial_norm) .- 1) .+
         (get_factor(assets.masks.upmu, params.sk_upmu_norm) .- 1) .+
-        (get_double_factor(total, assets.masks.pc_stop, assets.masks.pc_thru, params.sk_pc_stopping_vs_througoing) .- 1) .+
+        (get_double_factor(total, assets.masks.pc_stop_top, assets.masks.pc_thru_top, params.sk_pc_stop_thru_top) .- 1) .+
+        (get_double_factor(total, assets.masks.pc_stop_barrel, assets.masks.pc_thru_barrel, params.sk_pc_stop_thru_barrel) .- 1) .+
+        (get_double_factor(total, assets.masks.pc_stop_bottom, assets.masks.pc_thru_bottom, params.sk_pc_stop_thru_bottom) .- 1) .+
         (get_double_factor(total, assets.masks.umpmu_stop, assets.masks.upmu_thru, params.sk_upmu_stopping_vs_througoing) .- 1) .+
         (get_double_factor(total, assets.masks.upmu_nonshower, assets.masks.upmu_shower, params.sk_upmu_nonshower_vs_shower) .- 1) .+
         (get_double_factor(total, assets.masks.sk_i_iii_elike_1decay_e, assets.masks.sk_i_iii_elike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
