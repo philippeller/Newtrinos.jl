@@ -408,7 +408,9 @@ function get_scale(cfg::H2O_PCA)
             # shape_PC differs for ν vs ν̄; nubar_ratio scales ν̄ relative to ν
             nc_shape = anti ? process_shape_itps["NC_nubar"] : process_shape_itps["NC_nu"]
             w = max.(zero(T), params.xsec_nc_norm .* (one(T) .+ params.xsec_nc_shape .* nc_shape.(E)))
-            return anti ? w .* params.xsec_nc_nubar_ratio : w
+            # Normalization-conserving nu/nubar ratio: at r=1, factor=1 for both
+            r_nc = params.xsec_nc_nubar_ratio
+            return anti ? w .* (2 * r_nc / (1 + r_nc)) : w .* (2 / (1 + r_nc))
         end
 
         fk = get_flavor_key(flav, anti)
@@ -423,8 +425,12 @@ function get_scale(cfg::H2O_PCA)
             ch_eps = getfield(params, getfield(shape_syms, Symbol(ch)))
             ch_shape = process_shape_itps[ch]
             ch_w = max.(zero(T), f_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
+            # Normalization-conserving nu/nubar ratio: scale both sides symmetrically
+            r = getfield(params, getfield(nubar_ratio_syms, Symbol(ch)))
             if anti
-                ch_w = ch_w .* getfield(params, getfield(nubar_ratio_syms, Symbol(ch)))
+                ch_w = ch_w .* (2 * r / (1 + r))
+            else
+                ch_w = ch_w .* (2 / (1 + r))
             end
             result .+= ch_w
         end
