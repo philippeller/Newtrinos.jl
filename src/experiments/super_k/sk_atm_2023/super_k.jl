@@ -1255,14 +1255,7 @@ end
 
 function reweight(params, physics, assets)
     weights = calc_weights(params, assets, physics)
-    if haskey(assets, :R_coverage)
-        # Account for events outside the energy grid: they keep weight 1.0
-        # reweighted = MC * [f * (w_new/w_nom) + (1-f)]
-        return map((mc, w, nw, cov) -> mc.Counts .* (cov .* safe_div.(w, nw) .+ (1 .- cov)),
-                   assets.MC, weights, assets.nominal_weights, assets.R_coverage)
-    else
-        return map((mc, w, nw) -> mc.Counts .* safe_div.(w, nw), assets.MC, weights, assets.nominal_weights)
-    end
+    return map((mc, w, nw) -> mc.Counts .* safe_div.(w, nw), assets.MC, weights, assets.nominal_weights)
 end
 
 function get_factor(mask, factor)
