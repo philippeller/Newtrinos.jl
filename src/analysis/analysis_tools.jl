@@ -23,6 +23,7 @@ using ProgressMeter
 using Dates
 using LibGit2
 import Mooncake
+import Random
 using ..Newtrinos
 
 const AD_BACKEND = Ref{Symbol}(:auto)
@@ -494,7 +495,7 @@ function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, n
 
     expanded_scanpoints = Vector{eltype(flat_scanpoints)}(undef, n_jobs)
     expanded_params = Vector{typeof(params)}(undef, n_jobs)
-    rng = Xoshiro(42)
+    rng = Random.Xoshiro(42)
     for i in 1:n_points
         for s in 1:nseeds
             j = (s - 1) * n_points + i
