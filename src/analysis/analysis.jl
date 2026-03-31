@@ -59,6 +59,11 @@ function parse_command_line()
         help = "JLD2 file containing a NewtrinosResult (under key 'result') to seed initial parameter values from its best-fit point"
         arg_type = String
         default = nothing
+
+        "--nseeds"
+        help = "Number of fits per scan point from randomized starting values (best fit is kept)"
+        arg_type = Int
+        default = 1
     end
 
     return parse_args(s)
@@ -136,8 +141,8 @@ if use_distributed
         Newtrinos.find_mle_cached(likelihood, scanpoint, deepcopy(params), cache_dir)
     end
 
-    map_func = (work, scanpoints, params, cache_dir) -> pmap(work) do i
-        _do_work(scanpoints[i], params, cache_dir)
+    map_func = (work, scanpoints, params_list, cache_dir) -> pmap(work) do i
+        _do_work(scanpoints[i], params_list[i], cache_dir)
     end
 end
 
@@ -223,7 +228,7 @@ elseif lowercase(args["task"]) == "importancesampling"
     FileIO.save(name * ".jld2", Dict(String(a)=>whack_samples[a] for a in keys(whack_samples)))
 else
     if lowercase(args["task"]) == "profile"
-        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p; cache_dir=name, map_func=map_func)
+        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p; cache_dir=name, map_func=map_func, nseeds=args["nseeds"])
     elseif lowercase(args["task"]) == "scan"
         result = Newtrinos.scan(likelihood, priors, vars_to_scan, p)
     end

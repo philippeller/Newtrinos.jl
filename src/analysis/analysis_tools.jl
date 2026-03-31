@@ -454,31 +454,77 @@ function assemble_profile_results(opt_results, result_size)
     NamedTuple(s)
 end
 
-function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing)
+"""
+    randomize_params(rng, params, prior)
+
+Sample free parameters from their prior distributions to create randomized starting points.
+Parameters fixed via `ConstValueDist` are left unchanged.
+"""
+function randomize_params(rng, params, prior)
+    p = deepcopy(params)
+    for key in keys(p)
+        d = prior[key]
+        if !(d isa ValueShapes.ConstValueDist)
+            @reset p[key] = rand(rng, d)
+        end
+    end
+    return p
+end
+
+function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, nseeds=1)
+    n_points = length(scanpoints)
+    flat_scanpoints = vec(scanpoints)
+    n_jobs = n_points * nseeds
+
+    # Build expanded job arrays: seed 1 = nominal params, seeds 2..nseeds = randomized
+    expanded_scanpoints = Vector{eltype(flat_scanpoints)}(undef, n_jobs)
+    expanded_params = Vector{typeof(params)}(undef, n_jobs)
+    rng = Xoshiro(42)
+    for i in 1:n_points
+        for s in 1:nseeds
+            j = (s - 1) * n_points + i
+            expanded_scanpoints[j] = flat_scanpoints[i]
+            expanded_params[j] = s == 1 ? deepcopy(params) : randomize_params(rng, params, flat_scanpoints[i])
+        end
+    end
+
+    if nseeds > 1
+        @info "Running $n_jobs jobs ($n_points scan points × $nseeds seeds)"
+    end
+
     if isnothing(map_func)
-        # Default: threaded execution
-        opt_results = Array{Any}(undef, size(scanpoints))
-        @showprogress Threads.@threads for i in eachindex(scanpoints)
-            opt_results[i] = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+        opt_results = Vector{Any}(undef, n_jobs)
+        @showprogress Threads.@threads for j in 1:n_jobs
+            opt_results[j] = find_mle_cached(likelihood, expanded_scanpoints[j], deepcopy(expanded_params[j]), cache_dir)
         end
     else
-        # Distributed: pass scanpoints, params, cache_dir as data
-        # map_func is responsible for calling find_mle with its own likelihood
-        work = collect(eachindex(scanpoints))
-        opt_results_flat = map_func(work, scanpoints, params, cache_dir)
-        opt_results = reshape(opt_results_flat, size(scanpoints))
+        work = collect(1:n_jobs)
+        opt_results = collect(map_func(work, expanded_scanpoints, expanded_params, cache_dir))
     end
-    assemble_profile_results(opt_results, size(scanpoints))
+
+    # Select best fit per scan point (highest log_posterior)
+    if nseeds > 1
+        best_results = Vector{Any}(undef, n_points)
+        for i in 1:n_points
+            seed_indices = [(s - 1) * n_points + i for s in 1:nseeds]
+            posteriors = [let p = opt_results[j][2]; isnan(p) ? -Inf : p end for j in seed_indices]
+            best_results[i] = opt_results[seed_indices[argmax(posteriors)]]
+        end
+        return assemble_profile_results(reshape(best_results, size(scanpoints)), size(scanpoints))
+    end
+
+    assemble_profile_results(reshape(opt_results, size(scanpoints)), size(scanpoints))
 end
 
 """
-    profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing)
+    profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1)
 
 Run a profile likelihood scan. At each grid point defined by `vars_to_scan`,
 optimizes over all other parameters. Use `cache_dir` to cache and resume results.
 Use `map_func=pmap` for distributed parallelism (default: `Threads.@threads`).
+Use `nseeds > 1` to run multiple fits per point from randomized starting values and keep the best.
 """
-function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing)
+function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1)
     t1 = time()
     # check if there is actually any variable to be profiled over, or if they are all just Numbers
     if all([isa(priors[var], Number) for var in setdiff(keys(priors), keys(vars_to_scan))])
@@ -493,9 +539,9 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, ma
             mkdir(cache_dir)
         end
     end
-    res = _profile(likelihood, scanpoints, params, cache_dir; map_func=map_func)
+    res = _profile(likelihood, scanpoints, params, cache_dir; map_func=map_func, nseeds=nseeds)
     t2 = time()
-    meta = Dict("task"=> "profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan, "params"=>params, "exec_time"=>t2-t1, "cache_dir"=>cache_dir)
+    meta = Dict("task"=> "profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan, "params"=>params, "exec_time"=>t2-t1, "cache_dir"=>cache_dir, "nseeds"=>nseeds)
     add_meta!(meta)
     axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
     result = NewtrinosResult(axes=axes, values=res, meta=meta)
