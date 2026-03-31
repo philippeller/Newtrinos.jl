@@ -65,6 +65,7 @@ function get_params(cfg::Differential_H2O)
         xsec_I12 = 1.30,
         xsec_fsi = 1.,
         cc_norm = 1.,
+        nubar_ratio = 1.,
     )
 end
 
@@ -82,6 +83,7 @@ function get_priors(cfg::Differential_H2O)
         xsec_I12 = Normal(1.30, 0.20),
         xsec_fsi = Normal(1, 0.1),
         cc_norm = Truncated(Normal(1, 0.15), 0.5, 1.5),
+        nubar_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
     )
 end
 
@@ -173,6 +175,10 @@ function get_scale(cfg::Differential_H2O)
             fsi_1pi = 1 .+ 0.1 .* (params.xsec_fsi - 1)
 
             s = (rs.CC1p1h .* params.cc1p1h_norm .* ma_qe .* fsi_1p1h .+ rs.CC2p2h * params.cc2p2h_norm .+ rs.CC1pi .* params.cc1pi_norm .* ma_res .* fsi_1pi .+ rs.CCother * params.ccother_norm * params.xsec_I12 .+ rs.CCDIS * params.ccdis_norm) .* params.cc_norm
+
+            # Normalization-conserving nu/nubar ratio
+            r = params.nubar_ratio
+            s = anti ? s .* (2 * r / (1 + r)) : s .* (2 / (1 + r))
 
             if flav == :nutau
                 return s * params.nutau_cc_norm
