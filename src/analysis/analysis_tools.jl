@@ -472,11 +472,26 @@ function randomize_params(rng, params, prior)
 end
 
 function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, nseeds=1)
+    if nseeds <= 1
+        # Original single-seed path: no randomization
+        if isnothing(map_func)
+            opt_results = Array{Any}(undef, size(scanpoints))
+            @showprogress Threads.@threads for i in eachindex(scanpoints)
+                opt_results[i] = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+            end
+        else
+            work = collect(eachindex(scanpoints))
+            opt_results_flat = map_func(work, scanpoints, params, cache_dir)
+            opt_results = reshape(opt_results_flat, size(scanpoints))
+        end
+        return assemble_profile_results(opt_results, size(scanpoints))
+    end
+
+    # Multi-seed path: expand each scan point into nseeds independent jobs
     n_points = length(scanpoints)
     flat_scanpoints = vec(scanpoints)
     n_jobs = n_points * nseeds
 
-    # Build expanded job arrays: seed 1 = nominal params, seeds 2..nseeds = randomized
     expanded_scanpoints = Vector{eltype(flat_scanpoints)}(undef, n_jobs)
     expanded_params = Vector{typeof(params)}(undef, n_jobs)
     rng = Xoshiro(42)
@@ -484,13 +499,11 @@ function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, n
         for s in 1:nseeds
             j = (s - 1) * n_points + i
             expanded_scanpoints[j] = flat_scanpoints[i]
-            expanded_params[j] = s == 1 ? deepcopy(params) : randomize_params(rng, params, flat_scanpoints[i])
+            expanded_params[j] = randomize_params(rng, params, flat_scanpoints[i])
         end
     end
 
-    if nseeds > 1
-        @info "Running $n_jobs jobs ($n_points scan points × $nseeds seeds)"
-    end
+    @info "Running $n_jobs jobs ($n_points scan points × $nseeds seeds)"
 
     if isnothing(map_func)
         opt_results = Vector{Any}(undef, n_jobs)
@@ -503,17 +516,13 @@ function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, n
     end
 
     # Select best fit per scan point (highest log_posterior)
-    if nseeds > 1
-        best_results = Vector{Any}(undef, n_points)
-        for i in 1:n_points
-            seed_indices = [(s - 1) * n_points + i for s in 1:nseeds]
-            posteriors = [let p = opt_results[j][2]; isnan(p) ? -Inf : p end for j in seed_indices]
-            best_results[i] = opt_results[seed_indices[argmax(posteriors)]]
-        end
-        return assemble_profile_results(reshape(best_results, size(scanpoints)), size(scanpoints))
+    best_results = Vector{Any}(undef, n_points)
+    for i in 1:n_points
+        seed_indices = [(s - 1) * n_points + i for s in 1:nseeds]
+        posteriors = [let p = opt_results[j][2]; isnan(p) ? -Inf : p end for j in seed_indices]
+        best_results[i] = opt_results[seed_indices[argmax(posteriors)]]
     end
-
-    assemble_profile_results(reshape(opt_results, size(scanpoints)), size(scanpoints))
+    assemble_profile_results(reshape(best_results, size(scanpoints)), size(scanpoints))
 end
 
 """

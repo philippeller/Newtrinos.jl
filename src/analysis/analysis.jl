@@ -141,8 +141,9 @@ if use_distributed
         Newtrinos.find_mle_cached(likelihood, scanpoint, deepcopy(params), cache_dir)
     end
 
-    map_func = (work, scanpoints, params_list, cache_dir) -> pmap(work) do i
-        _do_work(scanpoints[i], params_list[i], cache_dir)
+    map_func = (work, scanpoints, params_or_list, cache_dir) -> pmap(work) do i
+        p = params_or_list isa AbstractVector ? params_or_list[i] : params_or_list
+        _do_work(scanpoints[i], p, cache_dir)
     end
 end
 
