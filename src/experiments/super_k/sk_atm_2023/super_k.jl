@@ -39,7 +39,7 @@ function default_physics()
     (; osc, atm_flux, earth_layers, xsec)
 end
 
-function configure(physics=default_physics(); energy_cdf=:logE)
+function configure(physics=default_physics(); energy_cdf=:dscb)
     physics = (;physics.osc, physics.atm_flux, physics.earth_layers, physics.xsec)
     assets = get_assets(physics; energy_cdf)
     return SuperKAtm(
