@@ -14,8 +14,8 @@ using PairPlots
 
 import Newtrinos.NewtrinosResult
 
-function plot!(ax, result::NewtrinosResult; max_llh=maximum(result.values.llh), levels=1 .- 2*ccdf(Normal(), 1:3), label=nothing, color=:blue, linestyle=:solid, cmap=:Blues, filled=false, edge=true, transform_x=identity, transform_y=identity)
-    neg2dllh = 2*(max_llh .- result.values.llh)
+function plot!(ax, result::NewtrinosResult; max_llh=maximum(result.values.log_posterior), levels=1 .- 2*ccdf(Normal(), 1:3), label=nothing, color=:blue, linestyle=:solid, cmap=:Blues, filled=false, edge=true, transform_x=identity, transform_y=identity)
+    neg2dllh = 2*(max_llh .- result.values.log_posterior)
 
     if length(result.axes) == 1
         x = transform_x(result.axes[1])
