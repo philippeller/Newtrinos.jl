@@ -32,7 +32,7 @@ function default_physics()
     osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=propagation))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
-    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.Differential_H2O())
+    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA())
     (; osc, atm_flux, earth_layers, xsec)
 end
 

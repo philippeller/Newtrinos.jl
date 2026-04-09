@@ -173,6 +173,9 @@ function _apply_h2o_systematics(E, funs, flav, anti, params)
     r = params.nubar_ratio
     s = anti ? s .* (2 * r / (1 + r)) : s .* (2 / (1 + r))
 
+    # TODO: nutau CC cross-sections are not yet handled correctly — they use numu
+    # curves as proxy, but nutau has a kinematic threshold at ~3.5 GeV (tau mass)
+    # and different channel fractions at low energy.
     if flav == :nutau
         return s .* params.nutau_cc_norm
     end
