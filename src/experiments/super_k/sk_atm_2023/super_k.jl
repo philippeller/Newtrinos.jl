@@ -39,9 +39,9 @@ function default_physics()
     (; osc, atm_flux, earth_layers, xsec)
 end
 
-function configure(physics=default_physics(); energy_cdf=:dscb)
+function configure(physics=default_physics())
     physics = (;physics.osc, physics.atm_flux, physics.earth_layers, physics.xsec)
-    assets = get_assets(physics; energy_cdf)
+    assets = get_assets(physics)
     return SuperKAtm(
         physics = physics,
         params = get_params(),
@@ -62,74 +62,6 @@ function read_sk_file(filepath::String)
     ])
     return df
 end
-
-"""
-    fit_metalog(qv, qp)
-
-Fit a 5-term metalog distribution from 5 quantile points.
-The metalog quantile function is:
-  Q(y) = a₁ + a₂·ln(y/(1-y)) + a₃·(y-0.5)·ln(y/(1-y)) + a₄·(y-0.5) + a₅·(y-0.5)²
-
-This is a linear system in a₁...a₅, so the fit is exact (no optimization needed).
-The CDF is obtained by numerical root-finding of Q(y) = x.
-"""
-function fit_metalog(qv, qp)
-    # Build the 5×5 basis matrix
-    n = length(qv)
-    M = zeros(n, n)
-    for i in 1:n
-        y = qp[i]
-        logit = log(y / (1 - y))
-        M[i, 1] = 1.0
-        M[i, 2] = logit
-        M[i, 3] = (y - 0.5) * logit
-        M[i, 4] = y - 0.5
-        M[i, 5] = (y - 0.5)^2
-    end
-    a = M \ qv
-    return a
-end
-
-function metalog_quantile(a, y)
-    logit = log(y / (1 - y))
-    ymh = y - 0.5
-    a[1] + a[2] * logit + a[3] * ymh * logit + a[4] * ymh + a[5] * ymh^2
-end
-
-function metalog_cdf_at(a, x; tol=1e-10, maxiter=100)
-    # Find y such that Q(y) = x via bisection
-    lo, hi = 1e-8, 1.0 - 1e-8
-    # Check bounds
-    metalog_quantile(a, lo) >= x && return 0.0
-    metalog_quantile(a, hi) <= x && return 1.0
-
-    for _ in 1:maxiter
-        mid = (lo + hi) / 2
-        (hi - lo) < tol && return mid
-        metalog_quantile(a, mid) < x ? (lo = mid) : (hi = mid)
-    end
-    return (lo + hi) / 2
-end
-
-function make_metalog_e_cdf(bin; resolution_scale=1.0)
-    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
-
-    median_e = e[3]
-    e = median_e .+ resolution_scale .* (e .- median_e)
-
-    # Fit in log-space for better behavior on highly skewed energy distributions
-    log_e = log10.(max.(e, 1e-30))
-    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
-    a = fit_metalog(log_e, qp)
-
-    # CDF takes linear energy, converts to log10, then evaluates metalog CDF
-    f = x -> begin
-        x <= 0 && return 0.0
-        metalog_cdf_at(a, log10(x))
-    end
-    return f
-end
-
 
 
 # Double-sided Crystal Ball distribution in log(E)
@@ -256,277 +188,6 @@ function fit_dscb(qv, qp)
     return best
 end
 
-function make_dscb_e_cdf(bin; resolution_scale=1.0)
-    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
-    median_e = e[3]
-    e = median_e .+ resolution_scale .* (e .- median_e)
-    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
-
-    mu, sigma, alphaL, nL, alphaR, nR = fit_dscb(e, qp)
-
-    f = x -> begin
-        x <= 0 && return 0.0
-        t = (log10(x) - mu) / sigma
-        dscb_cdf(t, alphaL, nL, alphaR, nR)
-    end
-    return f
-end
-
-
-
-# Novosibirsk function for energy CDF (in log10(E) space)
-# PDF: f(x) = A * exp(-0.5 * ln(1 + Lambda*tau*(x-x0))^2 / tau^2 - tau^2/2)
-# where Lambda = sinh(tau*sqrt(ln4)) / (sigma*tau*sqrt(ln4))
-# 3 parameters: x0 (peak), sigma (width), tau (tail asymmetry)
-# tau > 0: right tail heavier, tau < 0: left tail heavier, tau = 0: Gaussian
-
-function novosibirsk_log_pdf(x, x0, sigma, tau)
-    if abs(tau) < 1e-7
-        # Gaussian limit
-        return -0.5 * ((x - x0) / sigma)^2
-    end
-    sq2ln4 = sqrt(2 * log(2))  # sqrt(2*ln2) = sqrt(ln4)
-    arg = 1.0 + tau * sq2ln4 * (x - x0) / sigma
-    arg <= 0 && return -1e10  # outside support
-    lnarg = log(arg)
-    return -0.5 * (lnarg / tau)^2 - 0.5 * tau^2 + lnarg  # +lnarg is the Jacobian correction
-end
-
-function novosibirsk_cdf_table(x0, sigma, tau; x_range=(-1.0, 3.0), n_pts=500)
-    xs = collect(range(x_range[1], x_range[2], length=n_pts))
-    dx = (x_range[2] - x_range[1]) / (n_pts - 1)
-    lp = [novosibirsk_log_pdf(x, x0, sigma, tau) for x in xs]
-    lp_max = maximum(lp)
-    pdfs = exp.(lp .- lp_max)
-    cumul = zeros(n_pts)
-    for i in 2:n_pts
-        cumul[i] = cumul[i-1] + 0.5 * (pdfs[i] + pdfs[i-1]) * dx
-    end
-    cumul ./= cumul[end]
-    return xs, cumul
-end
-
-function novosibirsk_cdf_at(xt, ct, x)
-    x <= xt[1] && return 0.0
-    x >= xt[end] && return 1.0
-    i = searchsortedlast(xt, x)
-    i = clamp(i, 1, length(xt) - 1)
-    ct[i] + (x - xt[i]) / (xt[i+1] - xt[i]) * (ct[i+1] - ct[i])
-end
-
-function fit_novosibirsk(qv, qp)
-    # Fit in log10(E) space
-    log_q = log10.(max.(qv, 1e-30))
-
-    x0_init = log_q[3]  # median
-    sigma_init = (log_q[4] - log_q[2]) / 2.0
-    sigma_init = max(sigma_init, 0.01)
-
-    best = (x0_init, sigma_init, 0.0)
-    best_err = Inf
-
-    # Coarse scan
-    for tau in range(-2.0, 2.0, length=41)
-        for sigma_f in [0.7, 0.85, 1.0, 1.15, 1.3, 1.5]
-            for x0_f in [-0.1, -0.05, 0.0, 0.05, 0.1]
-                x0 = x0_init + x0_f
-                sigma = sigma_init * sigma_f
-                xt, ct = novosibirsk_cdf_table(x0, sigma, tau)
-                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), log_q) .- qp).^2)
-                if err < best_err
-                    best_err = err
-                    best = (x0, sigma, tau)
-                end
-            end
-        end
-    end
-
-    # Refine
-    x0_0, sig_0, tau_0 = best
-    for tau in range(tau_0 - 0.2, tau_0 + 0.2, length=15)
-        for sigma in range(max(0.01, sig_0 * 0.9), sig_0 * 1.1, length=10)
-            for x0 in range(x0_0 - 0.03, x0_0 + 0.03, length=10)
-                xt, ct = novosibirsk_cdf_table(x0, sigma, tau)
-                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), log_q) .- qp).^2)
-                if err < best_err
-                    best_err = err
-                    best = (x0, sigma, tau)
-                end
-            end
-        end
-    end
-
-    return best
-end
-
-function make_novosibirsk_e_cdf(bin; resolution_scale=1.0)
-    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
-    median_e = e[3]
-    e = median_e .+ resolution_scale .* (e .- median_e)
-    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
-
-    x0, sigma, tau = fit_novosibirsk(e, qp)
-    xt, ct = novosibirsk_cdf_table(x0, sigma, tau)
-
-    f = x -> begin
-        x <= 0 && return 0.0
-        novosibirsk_cdf_at(xt, ct, log10(x))
-    end
-    return f
-end
-
-
-function make_novosibirsk_linE_e_cdf(bin; resolution_scale=1.0)
-    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
-    median_e = e[3]
-    e = median_e .+ resolution_scale .* (e .- median_e)
-    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
-
-    # Fit directly in linear E space
-    x0_init = e[3]
-    sigma_init = (e[4] - e[2]) / 2.0
-    sigma_init = max(sigma_init, 1e-6)
-
-    best = (x0_init, sigma_init, 0.0)
-    best_err = Inf
-
-    for tau in range(-2.0, 2.0, length=41)
-        for sigma_f in [0.7, 0.85, 1.0, 1.15, 1.3, 1.5]
-            for x0_f in [-0.1, -0.05, 0.0, 0.05, 0.1]
-                x0 = x0_init * (1 + x0_f)
-                sigma = sigma_init * sigma_f
-                xt, ct = novosibirsk_cdf_table(x0, sigma, tau; x_range=(0.0, maximum(e)*3), n_pts=500)
-                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), e) .- qp).^2)
-                if err < best_err
-                    best_err = err
-                    best = (x0, sigma, tau)
-                end
-            end
-        end
-    end
-
-    x0_0, sig_0, tau_0 = best
-    for tau in range(tau_0 - 0.2, tau_0 + 0.2, length=15)
-        for sigma in range(max(1e-6, sig_0 * 0.9), sig_0 * 1.1, length=10)
-            for x0 in range(x0_0 * 0.97, x0_0 * 1.03, length=10)
-                xt, ct = novosibirsk_cdf_table(x0, sigma, tau; x_range=(0.0, maximum(e)*3), n_pts=500)
-                err = sum((novosibirsk_cdf_at.(Ref(xt), Ref(ct), e) .- qp).^2)
-                if err < best_err
-                    best_err = err
-                    best = (x0, sigma, tau)
-                end
-            end
-        end
-    end
-
-    x0, sigma, tau = best
-    xt, ct = novosibirsk_cdf_table(x0, sigma, tau; x_range=(0.0, maximum(e)*3), n_pts=500)
-
-    f = x -> begin
-        x <= 0 && return 0.0
-        novosibirsk_cdf_at(xt, ct, x)
-    end
-    return f
-end
-
-function make_log_e_cdf(bin; resolution_scale=1.0)
-    log_e = log10.([bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent])  # extrapolate tails
-
-    # Scale quantile distances from median to broaden/narrow the resolution
-    median = log_e[3]
-    log_e = median .+ resolution_scale .* (log_e .- median)
-
-    log_energy_quantiles = [2*log_e[1] - log_e[2], log_e... , 2*log_e[end] - log_e[end-1]]  # extrapolate tails
-    #log_energy_quantiles = [log_e[1] - mean(diff(log_e)), log_e... , log_e[end] + mean(diff(log_e))]  # extrapolate tails
-    quantile_probs = [0.0, 0.023, 0.159, 0.5, 0.841, 0.977, 1.]  # corresponding probabilities
-
-    dy_dx = MonotonicSplines.estimate_dYdX(log_energy_quantiles, quantile_probs)
-    dy_dx[1] = 0
-    dy_dx[end] = 0
-    f = RQSpline(log_energy_quantiles, quantile_probs, dy_dx)
-
-
-    f_save = x -> begin
-        if x < log_energy_quantiles[1]
-            return 0.0
-        elseif x > log_energy_quantiles[end]
-            return 1.0
-        else
-            return f(x)
-        end
-    end
-
-    return f_save
-end
-
-function make_e_cdf(bin; resolution_scale=1.0)
-    e = [bin.EnergyQuantile2_3Percent, bin.EnergyQuantile15_9Percent, bin.EnergyQuantile50_0Percent, bin.EnergyQuantile84_1Percent, bin.EnergyQuantile97_7Percent]
-
-    # Scale quantile distances from median to broaden/narrow the resolution
-    median = e[3]
-    e = median .+ resolution_scale .* (e .- median)
-
-    # Extrapolate tails, ensuring strict monotonicity
-    lo = max(0.0, 2*e[1] - e[2])
-    if lo >= e[1]
-        lo = e[1] * 0.5  # fallback: half the lowest quantile
-    end
-    hi = 2*e[end] - e[end-1]
-    energy_quantiles = [lo, e..., hi]
-    quantile_probs = [0.0, 0.023, 0.159, 0.5, 0.841, 0.977, 1.]
-
-    # Ensure strict monotonicity by nudging any non-increasing knots
-    for i in 2:length(energy_quantiles)
-        if energy_quantiles[i] <= energy_quantiles[i-1]
-            energy_quantiles[i] = energy_quantiles[i-1] + 1e-6
-        end
-    end
-
-    dy_dx = MonotonicSplines.estimate_dYdX(energy_quantiles, quantile_probs)
-    dy_dx[1] = 0
-    dy_dx[end] = 0
-    f = RQSpline(energy_quantiles, quantile_probs, dy_dx)
-
-    f_save = x -> begin
-        if x < energy_quantiles[1]
-            return 0.0
-        elseif x > energy_quantiles[end]
-            return 1.0
-        else
-            return f(x)
-        end
-    end
-
-    return f_save
-end
-
-function make_cosz_cdf(bin; resolution_scale=1.0)
-    cosz = [bin.CosZQuantile2_3Percent, bin.CosZQuantile15_9Percent, bin.CosZQuantile50_0Percent, bin.CosZQuantile84_1Percent, bin.CosZQuantile97_7Percent]  # extrapolate tails
-
-    # Scale quantile distances from median to broaden/narrow the resolution
-    median = cosz[3]
-    cosz = median .+ resolution_scale .* (cosz .- median)
-
-    cosz_quantiles = [-1, cosz..., 1]  # extrapolate tails
-    cosz_quantiles = [min(-1, 2*cosz[1] - cosz[2]), cosz... , max(1, 2*cosz[end] - cosz[end-1])]  # extrapolate tails
-    quantile_probs = [0., 0.023, 0.159, 0.5, 0.841, 0.977, 1.]  # corresponding probabilities
-
-    dy_dx = MonotonicSplines.estimate_dYdX(cosz_quantiles, quantile_probs)
-    #dy_dx[1] = 0
-    #dy_dx[end] = 0
-    f = RQSpline(cosz_quantiles, quantile_probs, dy_dx)
-    f_save = x -> begin
-        if x <= cosz_quantiles[1]
-            return 0.0
-        elseif x > cosz_quantiles[end]
-            return 1.0
-        else
-            return f(x)
-        end
-    end
-
-    return f_save
-end
 
 
 
@@ -609,18 +270,6 @@ function fit_vmf_cosz(cz_quantiles, qp)
     return best_mu, best_kappa
 end
 
-function make_vmf_cosz_cdf(bin; resolution_scale=1.0)
-    cosz = [bin.CosZQuantile2_3Percent, bin.CosZQuantile15_9Percent, bin.CosZQuantile50_0Percent, bin.CosZQuantile84_1Percent, bin.CosZQuantile97_7Percent]
-    med = cosz[3]
-    cosz = med .+ resolution_scale .* (cosz .- med)
-    qp = [0.023, 0.159, 0.5, 0.841, 0.977]
-
-    mu_z, kappa = fit_vmf_cosz(cosz, qp)
-    ct, cd = _vmf_cdf_table(mu_z, kappa)
-
-    f = x -> _vmf_cdf_at(ct, cd, x)
-    return f
-end
 
 
 function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params, reco_logP_width, reco_cz_width; mc_data_ratio=5.0)
@@ -683,60 +332,6 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, v
     return response_matrix
 end
 
-function make_response_matrix(MC_component, logE_grid, cosZ_grid; resolution_scale=1.0, energy_cdf=:logE, vmf_mu_z=nothing, vmf_kappa=nothing)
-    n_bins = size(MC_component, 1)
-    n_logE = length(logE_grid)
-    n_cosZ = length(cosZ_grid)
-
-    response_matrix = zeros(Float64, n_bins, n_logE-1, n_cosZ-1)
-
-    # For linear-E / johnsonSU CDF, convert logE grid edges to linear E
-    E_grid = energy_cdf in (:linearE, :metalog, :dscb, :novosibirsk, :novosibirsk_linE) ? 10 .^ logE_grid : nothing
-
-    for bin_idx in 1:n_bins
-        bin = MC_component[bin_idx, :]
-
-        if bin.Counts == 0
-            continue
-        end
-
-        if energy_cdf == :novosibirsk_linE
-            e_cdf = make_novosibirsk_linE_e_cdf(bin; resolution_scale)
-            c_e = e_cdf.(E_grid)
-        elseif energy_cdf == :novosibirsk
-            e_cdf = make_novosibirsk_e_cdf(bin; resolution_scale)
-            c_e = e_cdf.(E_grid)
-        elseif energy_cdf == :dscb
-            e_cdf = make_dscb_e_cdf(bin; resolution_scale)
-            c_e = e_cdf.(E_grid)
-        elseif energy_cdf == :metalog
-            e_cdf = make_metalog_e_cdf(bin; resolution_scale)
-            c_e = e_cdf.(E_grid)
-        elseif energy_cdf == :linearE
-            e_cdf = make_e_cdf(bin; resolution_scale)
-            c_e = e_cdf.(E_grid)
-        else
-            log_e_cdf = make_log_e_cdf(bin; resolution_scale)
-            c_e = log_e_cdf.(logE_grid)
-        end
-        p_e = diff(c_e)
-
-        if vmf_mu_z !== nothing && vmf_kappa !== nothing && vmf_kappa[bin_idx] > 0
-            # Use precomputed vMF parameters
-            ct, cd = _vmf_cdf_table(vmf_mu_z[bin_idx], vmf_kappa[bin_idx])
-            c_cosz = [_vmf_cdf_at(ct, cd, x) for x in cosZ_grid]
-            p_cosz = diff(c_cosz)
-        else
-            # Fallback to spline
-            cosz_fn = make_cosz_cdf(bin; resolution_scale)
-            c_cosz = cosz_fn.(cosZ_grid)
-            p_cosz = diff(c_cosz)
-        end
-
-        response_matrix[bin_idx, :, :] .= p_e * p_cosz'
-    end
-    return response_matrix
-end
 
 function contract_R(R_flat, weighted_flux)
     # R_flat is (n_bins, n_E*n_cz), weighted_flux is (n_E, n_cz)
@@ -759,20 +354,6 @@ function make_gaussian_kernel_matrix(n, sigma_bins)
         K[i, :] ./= s
     end
     return K
-end
-
-function smooth_osc_prob(p, K_E, K_CZ)
-    # Apply separable 2D Gaussian smoothing to oscillation probabilities.
-    # p is (n_E, n_CZ, n_flav_in, n_flav_out)
-    # K_E is (n_E, n_E) convolution matrix, K_CZ is (n_CZ, n_CZ).
-    # Smoothing: p_smooth = K_E * p * K_CZ'  (for each flavor pair)
-    n_E, n_CZ, n_in, n_out = size(p)
-    p_smooth = similar(p)
-    for a in 1:n_in, b in 1:n_out
-        # K_E * p[:,:,a,b] * K_CZ' — separable 2D convolution via matrix multiply
-        p_smooth[:, :, a, b] = K_E * p[:, :, a, b] * K_CZ'
-    end
-    return p_smooth
 end
 
 # Energy scale via reco bin overlap method
@@ -920,7 +501,7 @@ end
 
 safe_div(a, b, ε=1e-10) = a / (b + ε)
 
-function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
+function get_assets(physics; datadir = @__DIR__)
     @info "Loading Super-K Data"
 
     bininfo = CSV.read(joinpath(datadir, "bins/sk_2023_BinInfo.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false);
@@ -1026,28 +607,19 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
 
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
 
-    # Load precomputed response parameters (from generate_cz_response.jl and generate_e_response.jl)
+    # Load precomputed response parameters (from generate_response_params.jl)
     vmf_data = load(joinpath(datadir, "vmf_cosz_params.jld2"))
     vmf_params = vmf_data["vmf_params"]
 
-    e_response_file = joinpath(datadir, "energy_response_params.jld2")
-    e_params = isfile(e_response_file) ? load(e_response_file) : nothing
+    e_params = load(joinpath(datadir, "energy_response_params.jld2"))
+    dscb_params = e_params["dscb_logE"]
 
-    # Build response matrices from precomputed distribution parameters
-    if e_params !== nothing && energy_cdf == :dscb && haskey(e_params, "dscb_logE")
-        # Use precomputed DSCB energy params + vMF cosZ params
-        dscb_params = e_params["dscb_logE"]
-        reco_logP_width = bininfo.logPMax .- bininfo.logPMin
-        reco_cz_width = abs.(bininfo.CosZMax .- bininfo.CosZMin)
-        R_3d = NamedTuple(key => _build_R_from_params(
-            MC[key], loge_grid, cz_grid,
-            dscb_params[key], vmf_params[key], reco_logP_width, reco_cz_width) for key in keys(MC))
-    else
-        # Fallback: fit energy CDF on the fly, use precomputed vMF cosZ
-        R_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid, cz_grid;
-            resolution_scale=1.0, energy_cdf,
-            vmf_mu_z=vmf_params[key]["mu_z"], vmf_kappa=vmf_params[key]["kappa"]) for key in keys(MC))
-    end
+    # Build response matrices from precomputed DSCB energy + vMF cosZ parameters
+    reco_logP_width = bininfo.logPMax .- bininfo.logPMin
+    reco_cz_width = abs.(bininfo.CosZMax .- bininfo.CosZMin)
+    R_3d = NamedTuple(key => _build_R_from_params(
+        MC[key], loge_grid, cz_grid,
+        dscb_params[key], vmf_params[key], reco_logP_width, reco_cz_width) for key in keys(MC))
     R = flatten_R(R_3d)
 
     # Compute nu/nubar mixture fractions for nutau CC and NC channels.
