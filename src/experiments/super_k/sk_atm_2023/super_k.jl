@@ -1,14 +1,11 @@
 module super_k
 
 using CSV, DataFrames
-using MonotonicSplines
 using Interpolations
 using CairoMakie
-using DataStructures
 using Distributions
 using DensityInterface
 using BAT
-using LaTeXStrings
 using Accessors
 using StatsBase
 using Statistics: mean
@@ -68,20 +65,6 @@ end
 # PDF: Gaussian core with power-law tails on both sides
 # Parameters: mu, sigma, alphaL, nL, alphaR, nR
 # Transition: left tail at t < -alphaL, right tail at t > alphaR (t = (x-mu)/sigma)
-
-function dscb_pdf_unnorm(t, alphaL, nL, alphaR, nR)
-    if t < -alphaL
-        A = (nL / alphaL)^nL * exp(-alphaL^2 / 2)
-        B = nL / alphaL - alphaL
-        return A * (B - t)^(-nL)
-    elseif t > alphaR
-        A = (nR / alphaR)^nR * exp(-alphaR^2 / 2)
-        B = nR / alphaR - alphaR
-        return A * (B + t)^(-nR)
-    else
-        return exp(-t^2 / 2)
-    end
-end
 
 function dscb_cdf_unnorm(t, alphaL, nL, alphaR, nR)
     # Integral of unnormalized PDF from -inf to t
@@ -682,12 +665,8 @@ function get_assets(physics; datadir = @__DIR__)
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
 
-    # Compute per-bin, per-flavor R matrix coverage fraction (sum of R row).
-    # Events outside the energy grid have coverage < 1 and should not be reweighted.
-    R_coverage = NamedTuple(key => vec(sum(R_3d[key], dims=(2,3))) for key in keys(R_3d))
-
-    return (; MC, R, R_3d, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac, R_coverage)
+    return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac)
 
 end
 
