@@ -35,7 +35,7 @@ function default_physics()
     osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=propagation))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure(Newtrinos.earth_layers.VariableDensity())
-    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA())
+    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.Differential_H2O())
     (; osc, atm_flux, earth_layers, xsec)
 end
 
@@ -864,16 +864,16 @@ function calc_weights(params, assets, physics)
     fnh = haskey(params, :sk_flux_norm_high) ? params.sk_flux_norm_high : zero(eltype(E))
     flux_norm = 1 .+ fnl .* flux_norm_sigma_low.(logE) .+ fnh .* flux_norm_sigma_high.(logE)
 
-    xsec_nue     = physics.xsec.scale(E, :nue,   :CC, false, params)
-    xsec_numu    = physics.xsec.scale(E, :numu,  :CC, false, params)
-    xsec_nutau   = physics.xsec.scale(E, :nutau, :CC, false, params)
-    xsec_nuebar  = physics.xsec.scale(E, :nue,   :CC, true,  params)
-    xsec_numubar = physics.xsec.scale(E, :numu,  :CC, true,  params)
-    xsec_nutaubar= physics.xsec.scale(E, :nutau, :CC, true,  params)
-    xsec_nc      = physics.xsec.scale(E, :nue,   :NC, false, params)
+    xsec_nue     = physics.xsec.dσdE(E, :nue,   :CC, false, params)
+    xsec_numu    = physics.xsec.dσdE(E, :numu,  :CC, false, params)
+    xsec_nutau   = physics.xsec.dσdE(E, :nutau, :CC, false, params)
+    xsec_nuebar  = physics.xsec.dσdE(E, :nue,   :CC, true,  params)
+    xsec_numubar = physics.xsec.dσdE(E, :numu,  :CC, true,  params)
+    xsec_nutaubar= physics.xsec.dσdE(E, :nutau, :CC, true,  params)
+    xsec_nc      = physics.xsec.dσdE(E, :nue,   :NC, false, params)
 
     # HKKM flux is differential: Φ(E) in (m² s sr GeV)⁻¹.
-    # Cross-section data is stored as σ/E; xsec.scale() returns dimensionless ratios.
+    # dσdE returns σ/E (cross-section per nucleon per GeV, divided by E).
     # On our logE grid: event rate ∝ Φ(E) × σ(E) × dE = Φ(E) × (σ/E × E) × (E × dlogE × ln10)
     # = Φ(E) × σ/E × E² × dlogE × ln10
     # So we need E² after reshape: one E from the Jacobian, one E from σ/E → σ.
@@ -907,7 +907,7 @@ function calc_weights(params, assets, physics)
 
     # NC: SK MC lumps all NC (nu + nubar, all flavors) into one channel.
     # Use precomputed nu/nubar mixture fractions with proper cross-sections.
-    xsec_nc_anti = physics.xsec.scale(E, :nue, :NC, true, params)
+    xsec_nc_anti = physics.xsec.dσdE(E, :nue, :NC, true, params)
     flux_nu_total = flux_nue .+ flux_numu
     flux_nubar_total = flux_nuebar .+ flux_numubar
     nc_nu_flux = flux_nu_total .* xsec_nc
