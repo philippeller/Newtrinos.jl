@@ -298,34 +298,27 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, v
         c_e = [dscb_cdf((log10(e) - mu) / sigma, aL, nL, aR, nR) for e in E_grid]
         p_e = diff(c_e)
 
-        # Per-bin energy blur based on MC statistics
-        # SK uses ~10 nearest neighbors in energy for per-event osc prob averaging.
-        # With N_MC events distributed across a reco bin of width delta_logP,
-        # the 10 nearest neighbors span ~ delta_logP * min(10, N_MC) / N_MC.
-        # sigma ~ that span / sqrt(12).
+        # Per-bin energy blur: account for MC statistical uncertainty in quantiles.
+        # With N_MC events in a reco bin of width delta_logP, the quantile estimates
+        # have uncertainty ~ delta_logP / sqrt(N_MC). Blur the energy PDF accordingly.
         n_mc = mc_data_ratio * counts
-        n_neighbors = min(10.0, n_mc)
-        sigma_blur_logE = reco_logP_width[bin_idx] * sqrt(n_neighbors / max(n_mc, 1.0)) / sqrt(12.0)
+        sigma_blur_logE = reco_logP_width[bin_idx] / sqrt(n_mc)
         sigma_blur_bins = sigma_blur_logE / dlogE
         K_e = make_gaussian_kernel_matrix(n_logE, sigma_blur_bins)
         p_e = K_e * p_e
 
-        # CosZ: vMF CDF
+        # CosZ: vMF CDF with kappa reduced for MC statistical blur.
+        # Lower kappa = wider distribution, accounting for quantile uncertainty.
         kappa = vmf_params["kappa"][bin_idx]
         if kappa > 0
-            ct, cd = _vmf_cdf_table(vmf_params["mu_z"][bin_idx], kappa)
+            kappa_blur = reco_cz_width[bin_idx]^2 * kappa / n_mc
+            kappa_eff = kappa / (1 + kappa_blur)
+            ct, cd = _vmf_cdf_table(vmf_params["mu_z"][bin_idx], kappa_eff)
             c_cosz = [_vmf_cdf_at(ct, cd, x) for x in cosZ_grid]
         else
             c_cosz = collect(range(0, 1, length=length(cosZ_grid)))
         end
         p_cosz = diff(c_cosz)
-
-        # CosZ blur: same logic with reco cosZ bin width
-        sigma_blur_cz = reco_cz_width[bin_idx] * sqrt(n_neighbors / max(n_mc, 1.0)) / sqrt(12.0)
-        dCZ = Float64(cosZ_grid[2] - cosZ_grid[1])
-        sigma_blur_cz_bins = sigma_blur_cz / dCZ
-        K_cz = make_gaussian_kernel_matrix(n_cosZ, sigma_blur_cz_bins)
-        p_cosz = K_cz * p_cosz
 
         response_matrix[bin_idx, :, :] .= p_e * p_cosz'
     end
