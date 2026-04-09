@@ -133,7 +133,7 @@ function _load_h2o_interpolations()
         y = collect(skipmissing(df[:,idx+1]))
         itp = interpolate((x,), y, Gridded(Linear()))
         m(x) = max.(0, x)
-        return m ∘ extrapolate(itp, Linear())
+        return m ∘ extrapolate(itp, Flat())
     end
 
     nue = (
@@ -471,6 +471,157 @@ function get_scale(cfg::H2O_PCA)
             ch_shape = process_shape_itps[ch]
             ch_w = max.(zero(T), f_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
             # Normalization-conserving nu/nubar ratio: scale both sides symmetrically
+            r = getfield(params, getfield(nubar_ratio_syms, Symbol(ch)))
+            if anti
+                ch_w = ch_w .* (2 * r / (1 + r))
+            else
+                ch_w = ch_w .* (2 / (1 + r))
+            end
+            result .+= ch_w
+        end
+
+        if flav == :nutau
+            return result .* params.xsec_nutau_cc_norm
+        end
+        return result
+    end
+end
+
+function get_dσdE(cfg::H2O_PCA)
+    data = load(joinpath(@__DIR__, "xsec_genie_data.jld2"))
+    E_grid = data["E_grid"]
+    wester_xsec = data["wester_xsec"]
+    all_xsec = data["all_xsec"]
+
+    nominal_key = string(cfg.nominal)
+    cc_channels = ("CC1p1h", "CC2p2h", "CC1pi", "CCDIS", "CCother")
+
+    function make_itp(vals)
+        itp = interpolate((E_grid,), vals, Gridded(Linear()))
+        return extrapolate(itp, Flat())
+    end
+
+    # Blend Wester → GENIE above 20-30 GeV (same as get_scale)
+    E_blend_lo = 20.0
+    E_blend_hi = 30.0
+    blend_weight = [(E_grid[i] < E_blend_lo ? 1.0 :
+                      E_grid[i] > E_blend_hi ? 0.0 :
+                      1.0 - (E_grid[i] - E_blend_lo) / (E_blend_hi - E_blend_lo))
+                     for i in 1:length(E_grid)]
+
+    function get_nominal(flav, ch)
+        if nominal_key == "Wester"
+            w = wester_xsec[flav][ch]
+            g = all_xsec["G18_10a"][flav][ch]
+            return blend_weight .* w .+ (1.0 .- blend_weight) .* g
+        else
+            return all_xsec[nominal_key][flav][ch]
+        end
+    end
+
+    # Precompute absolute σ/E interpolations per channel per flavor
+    flav_keys = ("nue", "nuebar", "numu", "numubar")
+    nom_xsec_itps = Dict{String, NamedTuple}()
+    for fk in flav_keys
+        xsecs = NamedTuple{Symbol.(cc_channels)}(make_itp(get_nominal(fk, ch)) for ch in cc_channels)
+        nom_xsec_itps[fk] = xsecs
+    end
+
+    # NC σ/E per flavor
+    nc_itps = Dict{String, Any}()
+    for fk in flav_keys
+        nc_itps[fk] = make_itp(get_nominal(fk, "NC"))
+    end
+
+    # Reuse shape PCA and sym mappings from get_scale (computed at configure time)
+    # We need to recompute here since get_scale's closures aren't accessible
+    E_valid_max = 30.0
+    E_fade_start = 20.0
+    taper = [E_grid[i] < E_fade_start ? 1.0 :
+             E_grid[i] > E_valid_max ? 0.0 :
+             (1.0 - (E_grid[i] - E_fade_start) / (E_valid_max - E_fade_start))
+             for i in 1:length(E_grid)]
+
+    genie_tunes = ["G18_10a", "G21_11a", "G18_02a"]
+    alt_keys = [t for t in genie_tunes if t != nominal_key]
+    if nominal_key != "Wester"; push!(alt_keys, "Wester"); end
+
+    function get_channel_curve(source, ch)
+        src = source == "Wester" ? wester_xsec : all_xsec[source]
+        return (src["nue"][ch] .+ src["nuebar"][ch]) ./ 2
+    end
+
+    E_pca_mask = E_grid .<= E_valid_max
+
+    function compute_shape_pca(nom, alt_curves)
+        n_E = length(E_grid)
+        n_pca = sum(E_pca_mask)
+        Delta = zeros(n_pca, length(alt_curves))
+        nom_pca = nom[E_pca_mask]
+        nom_pca_mean = sum(nom_pca) / n_pca
+        for (i, alt) in enumerate(alt_curves)
+            alt_pca = alt[E_pca_mask]
+            alt_pca_mean = sum(alt_pca) / n_pca
+            alt_rescaled = alt_pca .* (nom_pca_mean / alt_pca_mean)
+            frac_dev = (alt_rescaled .- nom_pca) ./ nom_pca
+            frac_dev[isnan.(frac_dev) .| isinf.(frac_dev)] .= 0.0
+            Delta[:, i] = frac_dev
+        end
+        U, S, _ = svd(Delta)
+        pc_full = zeros(n_E)
+        pc_full[E_pca_mask] = U[:, 1] .* S[1]
+        pc_full .*= taper
+        return make_itp(pc_full)
+    end
+
+    process_shape_itps = Dict{String, Any}()
+    all_channels = (cc_channels..., "NC")
+    for ch in all_channels
+        nom = get_channel_curve(nominal_key == "Wester" ? "Wester" : nominal_key, ch)
+        alts = [get_channel_curve(k, ch) for k in alt_keys]
+        process_shape_itps[ch] = compute_shape_pca(nom, alts)
+    end
+    for (label, flav) in [("NC_nu", "nue"), ("NC_nubar", "nuebar")]
+        nom = nominal_key == "Wester" ? wester_xsec[flav]["NC"] : all_xsec[nominal_key][flav]["NC"]
+        alts = [(k == "Wester" ? wester_xsec[flav]["NC"] : all_xsec[k][flav]["NC"]) for k in alt_keys]
+        process_shape_itps[label] = compute_shape_pca(nom, alts)
+    end
+
+    norm_syms = (CC1p1h=:xsec_cc1p1h_norm, CC2p2h=:xsec_cc2p2h_norm, CC1pi=:xsec_cc1pi_norm, CCDIS=:xsec_ccdis_norm, CCother=:xsec_ccother_norm)
+    shape_syms = (CC1p1h=:xsec_cc1p1h_shape, CC2p2h=:xsec_cc2p2h_shape, CC1pi=:xsec_cc1pi_shape, CCDIS=:xsec_ccdis_shape, CCother=:xsec_ccother_shape)
+    nubar_ratio_syms = (CC1p1h=:xsec_cc1p1h_nubar_ratio, CC2p2h=:xsec_cc2p2h_nubar_ratio, CC1pi=:xsec_cc1pi_nubar_ratio, CCDIS=:xsec_ccdis_nubar_ratio, CCother=:xsec_ccother_nubar_ratio)
+
+    function get_flavor_key(flav::Symbol, anti::Bool)
+        if flav == :nue
+            return anti ? "nuebar" : "nue"
+        elseif flav == :numu || flav == :nutau
+            return anti ? "numubar" : "numu"
+        else
+            return anti ? "nuebar" : "nue"
+        end
+    end
+
+    function dσdE(E::AbstractArray, flav::Symbol, interaction::Symbol, anti::Bool, params::NamedTuple)
+        T = promote_type(eltype(E), typeof(params.xsec_nc_norm))
+
+        if interaction == :NC
+            fk = get_flavor_key(flav, anti)
+            nc_shape = anti ? process_shape_itps["NC_nubar"] : process_shape_itps["NC_nu"]
+            w = max.(zero(T), nc_itps[fk].(E) .* params.xsec_nc_norm .* (one(T) .+ params.xsec_nc_shape .* nc_shape.(E)))
+            r_nc = params.xsec_nc_nubar_ratio
+            return anti ? w .* (2 * r_nc / (1 + r_nc)) : w .* (2 / (1 + r_nc))
+        end
+
+        fk = get_flavor_key(flav, anti)
+        xsecs = nom_xsec_itps[fk]
+
+        result = zeros(T, length(E))
+        for ch in cc_channels
+            σ_ch = getfield(xsecs, Symbol(ch)).(E)
+            ch_norm = getfield(params, getfield(norm_syms, Symbol(ch)))
+            ch_eps = getfield(params, getfield(shape_syms, Symbol(ch)))
+            ch_shape = process_shape_itps[ch]
+            ch_w = max.(zero(T), σ_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
             r = getfield(params, getfield(nubar_ratio_syms, Symbol(ch)))
             if anti
                 ch_w = ch_w .* (2 * r / (1 + r))
