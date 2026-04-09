@@ -277,11 +277,34 @@ function get_priors(cfg::H2O_PCA)
     )
 end
 
-function get_scale(cfg::H2O_PCA)
+function _load_genie_data()
     data = load(joinpath(@__DIR__, "xsec_genie_data.jld2"))
     E_grid = data["E_grid"]
     wester_xsec = data["wester_xsec"]
     all_xsec = data["all_xsec"]
+
+    # Trim last 2 E_grid points: GENIE has boundary artifacts there
+    # (CCDIS drops ~3% in the final grid step vs ~0.1%/step trend)
+    n_trim = findlast(E_grid .<= 950.0)
+    E_grid = E_grid[1:n_trim]
+    for (_, flav_dict) in wester_xsec
+        for (ch, vals) in flav_dict
+            flav_dict[ch] = vals[1:n_trim]
+        end
+    end
+    for (_, tune_dict) in all_xsec
+        for (_, flav_dict) in tune_dict
+            for (ch, vals) in flav_dict
+                flav_dict[ch] = vals[1:n_trim]
+            end
+        end
+    end
+
+    return E_grid, wester_xsec, all_xsec
+end
+
+function get_scale(cfg::H2O_PCA)
+    E_grid, wester_xsec, all_xsec = _load_genie_data()
 
     nominal_key = string(cfg.nominal)
     genie_tunes = ["G18_10a", "G21_11a", "G18_02a"]
@@ -294,30 +317,26 @@ function get_scale(cfg::H2O_PCA)
     end
 
     # Get nominal σ/E per channel per flavor
-    # Wester CSV data only valid up to ~26 GeV. The JLD2 values above that are
-    # linearly extrapolated artifacts. Clamp Wester values above E_wester_max to
-    # the last valid value (flat extrapolation), then blend to GENIE G18_10a.
+    # Wester CSV data only valid up to ~26 GeV. Above that, extend using GENIE
+    # G18_10a shape scaled to match Wester at the boundary (no discontinuity).
     E_wester_max = 26.0
-    E_blend_lo = 20.0
-    E_blend_hi = 30.0
     i_wester_last = findlast(E_grid .<= E_wester_max)
-    blend_weight = [(E_grid[i] < E_blend_lo ? 1.0 :
-                      E_grid[i] > E_blend_hi ? 0.0 :
-                      1.0 - (E_grid[i] - E_blend_lo) / (E_blend_hi - E_blend_lo))
-                     for i in 1:length(E_grid)]
 
-    function clamp_wester(vals)
-        # Replace linearly-extrapolated values above E_wester_max with last valid value
-        clamped = copy(vals)
-        clamped[i_wester_last+1:end] .= vals[i_wester_last]
-        return clamped
+    function extend_wester(wester_vals, genie_vals)
+        # Above E_wester_max: use GENIE shape scaled to match Wester at boundary
+        extended = copy(wester_vals)
+        g_at_boundary = genie_vals[i_wester_last]
+        w_at_boundary = wester_vals[i_wester_last]
+        if g_at_boundary > 0 && w_at_boundary > 0
+            scale = w_at_boundary / g_at_boundary
+            extended[i_wester_last+1:end] .= genie_vals[i_wester_last+1:end] .* scale
+        end
+        return extended
     end
 
     function get_nominal(flav, ch)
         if nominal_key == "Wester"
-            w = clamp_wester(wester_xsec[flav][ch])
-            g = all_xsec["G18_10a"][flav][ch]
-            return blend_weight .* w .+ (1.0 .- blend_weight) .* g
+            return extend_wester(wester_xsec[flav][ch], all_xsec["G18_10a"][flav][ch])
         else
             return all_xsec[nominal_key][flav][ch]
         end
@@ -358,7 +377,9 @@ function get_scale(cfg::H2O_PCA)
 
     function get_channel_curve(source, ch)
         if source == "Wester"
-            return (clamp_wester(wester_xsec["nue"][ch]) .+ clamp_wester(wester_xsec["nuebar"][ch])) ./ 2
+            g_nue = all_xsec["G18_10a"]["nue"][ch]
+            g_nuebar = all_xsec["G18_10a"]["nuebar"][ch]
+            return (extend_wester(wester_xsec["nue"][ch], g_nue) .+ extend_wester(wester_xsec["nuebar"][ch], g_nuebar)) ./ 2
         else
             return (all_xsec[source]["nue"][ch] .+ all_xsec[source]["nuebar"][ch]) ./ 2
         end
@@ -413,8 +434,8 @@ function get_scale(cfg::H2O_PCA)
 
     # NC: ν and ν̄ have different shapes — compute separate NC shape PCs
     for (label, flav) in [("NC_nu", "nue"), ("NC_nubar", "nuebar")]
-        nom = nominal_key == "Wester" ? clamp_wester(wester_xsec[flav]["NC"]) : all_xsec[nominal_key][flav]["NC"]
-        alts = [(k == "Wester" ? clamp_wester(wester_xsec[flav]["NC"]) : all_xsec[k][flav]["NC"]) for k in alt_keys]
+        nom = nominal_key == "Wester" ? extend_wester(wester_xsec[flav]["NC"], all_xsec["G18_10a"][flav]["NC"]) : all_xsec[nominal_key][flav]["NC"]
+        alts = [(k == "Wester" ? extend_wester(wester_xsec[flav]["NC"], all_xsec["G18_10a"][flav]["NC"]) : all_xsec[k][flav]["NC"]) for k in alt_keys]
         itp, _ = compute_shape_pca(nom, alts)
         process_shape_itps[label] = itp
     end
@@ -497,10 +518,7 @@ function get_scale(cfg::H2O_PCA)
 end
 
 function get_dσdE(cfg::H2O_PCA)
-    data = load(joinpath(@__DIR__, "xsec_genie_data.jld2"))
-    E_grid = data["E_grid"]
-    wester_xsec = data["wester_xsec"]
-    all_xsec = data["all_xsec"]
+    E_grid, wester_xsec, all_xsec = _load_genie_data()
 
     nominal_key = string(cfg.nominal)
     cc_channels = ("CC1p1h", "CC2p2h", "CC1pi", "CCDIS", "CCother")
@@ -510,27 +528,24 @@ function get_dσdE(cfg::H2O_PCA)
         return extrapolate(itp, Flat())
     end
 
-    # Clamp Wester values above valid range and blend to GENIE (same as get_scale)
+    # Extend Wester above valid range using GENIE shape (same as get_scale)
     E_wester_max = 26.0
-    E_blend_lo = 20.0
-    E_blend_hi = 30.0
     i_wester_last = findlast(E_grid .<= E_wester_max)
-    blend_weight = [(E_grid[i] < E_blend_lo ? 1.0 :
-                      E_grid[i] > E_blend_hi ? 0.0 :
-                      1.0 - (E_grid[i] - E_blend_lo) / (E_blend_hi - E_blend_lo))
-                     for i in 1:length(E_grid)]
 
-    function clamp_wester(vals)
-        clamped = copy(vals)
-        clamped[i_wester_last+1:end] .= vals[i_wester_last]
-        return clamped
+    function extend_wester(wester_vals, genie_vals)
+        extended = copy(wester_vals)
+        g_at_boundary = genie_vals[i_wester_last]
+        w_at_boundary = wester_vals[i_wester_last]
+        if g_at_boundary > 0 && w_at_boundary > 0
+            scale = w_at_boundary / g_at_boundary
+            extended[i_wester_last+1:end] .= genie_vals[i_wester_last+1:end] .* scale
+        end
+        return extended
     end
 
     function get_nominal(flav, ch)
         if nominal_key == "Wester"
-            w = clamp_wester(wester_xsec[flav][ch])
-            g = all_xsec["G18_10a"][flav][ch]
-            return blend_weight .* w .+ (1.0 .- blend_weight) .* g
+            return extend_wester(wester_xsec[flav][ch], all_xsec["G18_10a"][flav][ch])
         else
             return all_xsec[nominal_key][flav][ch]
         end
@@ -565,7 +580,9 @@ function get_dσdE(cfg::H2O_PCA)
 
     function get_channel_curve(source, ch)
         if source == "Wester"
-            return (clamp_wester(wester_xsec["nue"][ch]) .+ clamp_wester(wester_xsec["nuebar"][ch])) ./ 2
+            g_nue = all_xsec["G18_10a"]["nue"][ch]
+            g_nuebar = all_xsec["G18_10a"]["nuebar"][ch]
+            return (extend_wester(wester_xsec["nue"][ch], g_nue) .+ extend_wester(wester_xsec["nuebar"][ch], g_nuebar)) ./ 2
         else
             return (all_xsec[source]["nue"][ch] .+ all_xsec[source]["nuebar"][ch]) ./ 2
         end
@@ -602,8 +619,8 @@ function get_dσdE(cfg::H2O_PCA)
         process_shape_itps[ch] = compute_shape_pca(nom, alts)
     end
     for (label, flav) in [("NC_nu", "nue"), ("NC_nubar", "nuebar")]
-        nom = nominal_key == "Wester" ? clamp_wester(wester_xsec[flav]["NC"]) : all_xsec[nominal_key][flav]["NC"]
-        alts = [(k == "Wester" ? clamp_wester(wester_xsec[flav]["NC"]) : all_xsec[k][flav]["NC"]) for k in alt_keys]
+        nom = nominal_key == "Wester" ? extend_wester(wester_xsec[flav]["NC"], all_xsec["G18_10a"][flav]["NC"]) : all_xsec[nominal_key][flav]["NC"]
+        alts = [(k == "Wester" ? extend_wester(wester_xsec[flav]["NC"], all_xsec["G18_10a"][flav]["NC"]) : all_xsec[k][flav]["NC"]) for k in alt_keys]
         process_shape_itps[label] = compute_shape_pca(nom, alts)
     end
 
