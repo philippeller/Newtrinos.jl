@@ -1098,38 +1098,6 @@ function get_assets(physics; datadir = @__DIR__, energy_cdf=:logE)
 
     nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, nutau_nu_frac, nc_nu_frac), physics)
 
-    # Old F_ij method (commented out — replaced by reco bin overlap method)
-    #loge_grid_plus = loge_grid .+ log10(1.02)
-    #loge_grid_minus = loge_grid .+ log10(0.98)
-    #R_plus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid_plus, cz_grid; resolution_scale=1.01) for key in keys(MC))
-    #R_minus_3d = NamedTuple(key => make_response_matrix(MC[key], loge_grid_minus, cz_grid; resolution_scale=1.01) for key in keys(MC))
-    #weights_plus = calc_weights(params_nominal, (;R=flatten_R(R_plus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints), physics)
-    #weights_minus = calc_weights(params_nominal, (;R=flatten_R(R_minus_3d), flux_nominal, paths, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints), physics)
-    #Fij = NamedTuple(key => safe_div.((weights_plus[key] .- weights_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
-    #
-    ## Up/down Fij: downgoing uses nominal R and nominal E, upgoing uses shifted R and shifted E
-    #nE = length(midpoints(loge_grid))
-    #ncz_half = length(cz_midpoints) ÷ 2
-    #ncols_half = nE * ncz_half
-    #
-    #cz_down = cz_midpoints[1:ncz_half]
-    #cz_up = cz_midpoints[ncz_half+1:end]
-    #flux_down = flux_nominal[1:ncols_half]
-    #flux_up = flux_nominal[ncols_half+1:end]
-    #
-    #slice_R_cols(R_nt, cols) = NamedTuple(key => R_nt[key][:, cols] for key in keys(R_nt))
-    #R_down_nom = slice_R_cols(R, 1:ncols_half)
-    #R_up_plus = slice_R_cols(flatten_R(R_plus_3d), ncols_half+1:2*ncols_half)
-    #R_up_minus = slice_R_cols(flatten_R(R_minus_3d), ncols_half+1:2*ncols_half)
-    #
-    #weights_down = calc_weights(params_nominal, (;R=R_down_nom, flux_nominal=flux_down, nominal_layers, loge_grid, cz_midpoints=cz_down), physics)
-    #weights_up_plus = calc_weights(params_nominal, (;R=R_up_plus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_plus, cz_midpoints=cz_up), physics)
-    #weights_up_minus = calc_weights(params_nominal, (;R=R_up_minus, flux_nominal=flux_up, nominal_layers, loge_grid=loge_grid_minus, cz_midpoints=cz_up), physics)
-    #
-    #weights_updown_plus = NamedTuple(key => weights_down[key] .+ weights_up_plus[key] for key in keys(weights_down))
-    #weights_updown_minus = NamedTuple(key => weights_down[key] .+ weights_up_minus[key] for key in keys(weights_down))
-    #Fij_updown = NamedTuple(key => safe_div.((weights_updown_plus[key] .- weights_updown_minus[key]), (2*0.02 .* nominal_weights[key])) for key in keys(nominal_weights))
-
     # Build energy groups for reco bin overlap energy scale method
     sk_i_iii_mask = masks.sk_i_iii_bins
     sk_iv_v_mask = masks.sk_iv_v_bins
@@ -1325,23 +1293,6 @@ function get_all_factors(params, assets, total)
         (get_double_factor(total, assets.masks.sk_1ring_pi0, assets.masks.sk_2ring_pi0, params.sk_pi0_norm) .- 1)
     )
 end
-
-# Old F_ij functions (commented out — replaced by reco bin overlap method)
-#function get_Fij_factor(Fij, param)
-#    factor = 1 .+ Fij .* (1 - param)
-#end
-#
-#function get_Fij_factor_escale(Fij, masks, params)
-#    # Split energy scale by SK phase: SK I-III and SK IV-V bins get independent scales
-#    1 .+ Fij .* ((1 - params.sk_i_iii_energy_scale) .* masks.sk_i_iii_bins .+
-#                  (1 - params.sk_iv_v_energy_scale) .* masks.sk_iv_v_bins)
-#end
-#
-#function get_Fij_factor_updown(Fij_updown, masks, params)
-#    # Split up/down energy scale by SK phase
-#    1 .+ Fij_updown .* ((1 - params.sk_i_iii_updown_energy_scale) .* masks.sk_i_iii_bins .+
-#                         (1 - params.sk_iv_v_updown_energy_scale) .* masks.sk_iv_v_bins)
-#end
 
 function get_expected(params, physics, assets)
     expected = reweight(params, physics, assets)

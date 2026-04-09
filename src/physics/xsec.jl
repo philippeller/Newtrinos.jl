@@ -122,9 +122,8 @@ function ma_res_ratio(E, MA)
     return r_new / r_nom
 end
 
-function get_scale(cfg::Differential_H2O)
-
-    # digitized from T. Wester Super-K PhD thesis Figure 4.7
+function _load_h2o_interpolations()
+    # σ/E per channel on water, digitized from T. Wester Super-K PhD thesis Figure 4.7
     df_nue = CSV.read(joinpath(@__DIR__, "xsec_nue_water.csv"), DataFrame, skipto=3);
     df_nuebar = CSV.read(joinpath(@__DIR__, "xsec_nuebar_water.csv"), DataFrame, skipto=3);
 
@@ -154,6 +153,34 @@ function get_scale(cfg::Differential_H2O)
         CCDIS = make_interpolation("CCDIS", df_nuebar),
         NC = make_interpolation("NC", df_nuebar),
     )
+
+    return nue, nuebar
+end
+
+"""Apply MA_QE, MA_Res, FSI, channel norms, cc_norm, nubar_ratio to per-channel σ/E values."""
+function _apply_h2o_systematics(E, funs, flav, anti, params)
+    ma_qe = ma_qe_ratio.(E, params.xsec_MA_QE)
+    ma_res = ma_res_ratio.(E, params.xsec_MA_Res)
+    fsi_1p1h = 1 .- 0.1 .* (params.xsec_fsi - 1)
+    fsi_1pi = 1 .+ 0.1 .* (params.xsec_fsi - 1)
+
+    s = (funs.CC1p1h.(E) .* params.cc1p1h_norm .* ma_qe .* fsi_1p1h .+
+         funs.CC2p2h.(E) .* params.cc2p2h_norm .+
+         funs.CC1pi.(E) .* params.cc1pi_norm .* ma_res .* fsi_1pi .+
+         funs.CCother.(E) .* params.ccother_norm .* params.xsec_I12 .+
+         funs.CCDIS.(E) .* params.ccdis_norm) .* params.cc_norm
+
+    r = params.nubar_ratio
+    s = anti ? s .* (2 * r / (1 + r)) : s .* (2 / (1 + r))
+
+    if flav == :nutau
+        return s .* params.nutau_cc_norm
+    end
+    return s
+end
+
+function get_scale(cfg::Differential_H2O)
+    nue, nuebar = _load_h2o_interpolations()
 
     function ratios(funs, E)
         cc_funs = (CC1p1h=funs.CC1p1h, CC2p2h=funs.CC2p2h, CC1pi=funs.CC1pi, CCother=funs.CCother, CCDIS=funs.CCDIS)
@@ -163,68 +190,32 @@ function get_scale(cfg::Differential_H2O)
     end
 
     function scale(E::AbstractArray, flav::Symbol, interaction::Symbol, anti::Bool, params::NamedTuple)
-
         if interaction == :NC
             return params.nc_norm
-        else
-            if anti
-                rs = ratios(nuebar, E)
-            else
-                rs = ratios(nue, E)
-            end
-
-            ma_qe = ma_qe_ratio.(E, params.xsec_MA_QE)
-            ma_res = ma_res_ratio.(E, params.xsec_MA_Res)
-            fsi_1p1h = 1 .- 0.1 .* (params.xsec_fsi - 1)
-            fsi_1pi = 1 .+ 0.1 .* (params.xsec_fsi - 1)
-
-            s = (rs.CC1p1h .* params.cc1p1h_norm .* ma_qe .* fsi_1p1h .+ rs.CC2p2h * params.cc2p2h_norm .+ rs.CC1pi .* params.cc1pi_norm .* ma_res .* fsi_1pi .+ rs.CCother * params.ccother_norm * params.xsec_I12 .+ rs.CCDIS * params.ccdis_norm) .* params.cc_norm
-
-            # Normalization-conserving nu/nubar ratio
-            r = params.nubar_ratio
-            s = anti ? s .* (2 * r / (1 + r)) : s .* (2 / (1 + r))
-
-            if flav == :nutau
-                return s * params.nutau_cc_norm
-            else
-                return s
-            end
         end
+
+        funs = anti ? nuebar : nue
+        rs = ratios(funs, E)
+
+        ma_qe = ma_qe_ratio.(E, params.xsec_MA_QE)
+        ma_res = ma_res_ratio.(E, params.xsec_MA_Res)
+        fsi_1p1h = 1 .- 0.1 .* (params.xsec_fsi - 1)
+        fsi_1pi = 1 .+ 0.1 .* (params.xsec_fsi - 1)
+
+        s = (rs.CC1p1h .* params.cc1p1h_norm .* ma_qe .* fsi_1p1h .+ rs.CC2p2h * params.cc2p2h_norm .+ rs.CC1pi .* params.cc1pi_norm .* ma_res .* fsi_1pi .+ rs.CCother * params.ccother_norm * params.xsec_I12 .+ rs.CCDIS * params.ccdis_norm) .* params.cc_norm
+
+        r = params.nubar_ratio
+        s = anti ? s .* (2 * r / (1 + r)) : s .* (2 / (1 + r))
+
+        if flav == :nutau
+            return s * params.nutau_cc_norm
+        end
+        return s
     end
 end
 
 function get_dσdE(cfg::Differential_H2O)
-
-    # Same CSV data as get_scale — σ/E per channel on water
-    df_nue = CSV.read(joinpath(@__DIR__, "xsec_nue_water.csv"), DataFrame, skipto=3);
-    df_nuebar = CSV.read(joinpath(@__DIR__, "xsec_nuebar_water.csv"), DataFrame, skipto=3);
-
-    function make_interpolation(name, df)
-        idx = findfirst(==(name), names(df))
-        x = collect(skipmissing(df[:,idx]))
-        y = collect(skipmissing(df[:,idx+1]))
-        itp = interpolate((x,), y, Gridded(Linear()))
-        m(x) = max.(0, x)
-        return m ∘ extrapolate(itp, Linear())
-    end
-
-    nue = (
-        CC1p1h = make_interpolation("CC1p1h", df_nue),
-        CC2p2h = make_interpolation("CC2p2h", df_nue),
-        CC1pi = make_interpolation("CC1pi", df_nue),
-        CCother = make_interpolation("CCother", df_nue),
-        CCDIS = make_interpolation("CCDIS", df_nue),
-        NC = make_interpolation("NC", df_nue),
-    )
-
-    nuebar = (
-        CC1p1h = make_interpolation("CC1p1h", df_nuebar),
-        CC2p2h = make_interpolation("CC2p2h", df_nuebar),
-        CC1pi = make_interpolation("CC1pi", df_nuebar),
-        CCother = make_interpolation("CCother", df_nuebar),
-        CCDIS = make_interpolation("CCDIS", df_nuebar),
-        NC = make_interpolation("NC", df_nuebar),
-    )
+    nue, nuebar = _load_h2o_interpolations()
 
     function dσdE(E::AbstractArray, flav::Symbol, interaction::Symbol, anti::Bool, params::NamedTuple)
         funs = anti ? nuebar : nue
@@ -233,24 +224,7 @@ function get_dσdE(cfg::Differential_H2O)
             return funs.NC.(E) .* params.nc_norm
         end
 
-        ma_qe = ma_qe_ratio.(E, params.xsec_MA_QE)
-        ma_res = ma_res_ratio.(E, params.xsec_MA_Res)
-        fsi_1p1h = 1 .- 0.1 .* (params.xsec_fsi - 1)
-        fsi_1pi = 1 .+ 0.1 .* (params.xsec_fsi - 1)
-
-        s = (funs.CC1p1h.(E) .* params.cc1p1h_norm .* ma_qe .* fsi_1p1h .+
-             funs.CC2p2h.(E) .* params.cc2p2h_norm .+
-             funs.CC1pi.(E) .* params.cc1pi_norm .* ma_res .* fsi_1pi .+
-             funs.CCother.(E) .* params.ccother_norm .* params.xsec_I12 .+
-             funs.CCDIS.(E) .* params.ccdis_norm) .* params.cc_norm
-
-        r = params.nubar_ratio
-        s = anti ? s .* (2 * r / (1 + r)) : s .* (2 / (1 + r))
-
-        if flav == :nutau
-            return s .* params.nutau_cc_norm
-        end
-        return s
+        return _apply_h2o_systematics(E, funs, flav, anti, params)
     end
 end
 
