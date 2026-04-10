@@ -12,6 +12,7 @@ using Statistics: mean
 using Printf
 using SpecialFunctions: besseli
 using JLD2
+using Optim
 using ..Newtrinos
 
 @kwdef struct SuperKAtm <: Newtrinos.Experiment
@@ -61,117 +62,175 @@ function read_sk_file(filepath::String)
 end
 
 
-# Double-sided Crystal Ball distribution in log(E)
-# PDF: Gaussian core with power-law tails on both sides
-# Parameters: mu, sigma, alphaL, nL, alphaR, nR
-# Transition: left tail at t < -alphaL, right tail at t > alphaR (t = (x-mu)/sigma)
+# 2-component LogNormal mixture for energy response.
+# Equivalent to a 2-Gaussian mixture in log₁₀(E) space.
+# Fits all 7 data release statistics: 5 quantiles + mean + std (in linear E).
+# Two overlapping components produce smooth, nearly-unimodal distributions with
+# enough flexibility to capture asymmetry, while analytic moments keep fitting fast.
+# Falls back to single LogNormal when K=2 produces spurious tails.
 
-function dscb_cdf_unnorm(t, alphaL, nL, alphaR, nR)
-    # Integral of unnormalized PDF from -inf to t
-    if t < -alphaL
-        A = (nL / alphaL)^nL * exp(-alphaL^2 / 2)
-        B = nL / alphaL - alphaL
-        # Integral of A*(B-t')^(-nL) from -inf to t = A/(nL-1) * (B-t)^(1-nL)
-        return A / (nL - 1) * (B - t)^(1 - nL)
-    else
-        # Left tail integral from -inf to -alphaL
-        A_L = (nL / alphaL)^nL * exp(-alphaL^2 / 2)
-        B_L = nL / alphaL - alphaL
-        left_tail = A_L / (nL - 1) * (B_L + alphaL)^(1 - nL)
+const _LN10 = log(10.0)
 
-        if t <= alphaR
-            # Gaussian core integral from -alphaL to t
-            # = sqrt(2pi) * (Phi(t) - Phi(-alphaL))
-            gauss_part = sqrt(2 * pi) * (cdf(Normal(), t) - cdf(Normal(), -alphaL))
-            return left_tail + gauss_part
+function lognormal_mix_cdf(E, μs, σs, ws)
+    x = log10(E)
+    ws[1] * cdf(Normal(μs[1], σs[1]), x) + ws[2] * cdf(Normal(μs[2], σs[2]), x)
+end
+
+function lognormal_mix_mean(μs, σs, ws)
+    ws[1] * exp(μs[1] * _LN10 + 0.5 * σs[1]^2 * _LN10^2) +
+    ws[2] * exp(μs[2] * _LN10 + 0.5 * σs[2]^2 * _LN10^2)
+end
+
+function lognormal_mix_std(μs, σs, ws)
+    m1 = lognormal_mix_mean(μs, σs, ws)
+    m2 = ws[1] * exp(2 * μs[1] * _LN10 + 2 * σs[1]^2 * _LN10^2) +
+         ws[2] * exp(2 * μs[2] * _LN10 + 2 * σs[2]^2 * _LN10^2)
+    sqrt(max(m2 - m1^2, 0.0))
+end
+
+function _mix_unpack(x, σ_min)
+    μs = (x[1], x[2])
+    σs = (σ_min + exp(x[3]), σ_min + exp(x[4]))
+    w1 = 1.0 / (1.0 + exp(-x[5]))
+    ws = (w1, 1.0 - w1)
+    μs, σs, ws
+end
+
+function _mix_loss(x, eq, qp, mean_obs, std_obs, σ_min)
+    μs, σs, ws = _mix_unpack(x, σ_min)
+    loss = 0.0
+    for i in 1:5
+        c = lognormal_mix_cdf(eq[i], μs, σs, ws)
+        (isnan(c) || c <= 0.0 || c >= 1.0) && return 1e10
+        loss += (c - qp[i])^2
+    end
+    m = lognormal_mix_mean(μs, σs, ws)
+    (isnan(m) || m <= 0.0 || isinf(m)) && return 1e10
+    loss += 5.0 * ((m - mean_obs) / mean_obs)^2
+    s = lognormal_mix_std(μs, σs, ws)
+    (isnan(s) || s <= 0.0 || isinf(s)) && return 1e10
+    loss += 5.0 * ((s - std_obs) / std_obs)^2
+    loss
+end
+
+function _fit_lognormal_mixture(eq, mean_obs, std_obs, qp, σ_min; n_restarts=20)
+    # Fit 2-component Gaussian mixture in log₁₀(E) to 5 quantiles + mean + std
+    log_q = log10.(max.(eq, 1e-30))
+    log_median = log_q[3]
+    log_iqr = max((log_q[4] - log_q[2]) / 2.0, 0.03)
+    log_range = max(log_q[5] - log_q[1], 0.05)
+    log_mean = log10(max(mean_obs, 1e-30))
+    to_raw_σ(σ) = log(max(σ - σ_min, 1e-4))
+
+    best_x = nothing
+    best_loss = Inf
+
+    inits = [
+        ([log_median, log_mean], [log_iqr, log_iqr*0.5], [1.0]),
+        ([log_median-0.3*log_iqr, log_median+0.3*log_iqr], [log_iqr*0.8, log_iqr*0.8], [0.0]),
+        ([log_q[2], log_q[4]], [log_iqr*0.5, log_iqr*0.5], [0.5]),
+        ([log_median, log_q[1]+0.3*log_range], [log_iqr*1.2, log_iqr*0.3], [2.0]),
+        ([log_median, log_q[5]-0.3*log_range], [log_iqr*1.0, log_iqr*0.5], [1.5]),
+        ([log_median-0.05*log_iqr, log_median+0.05*log_iqr], [log_iqr, log_iqr], [0.0]),
+        ([log_q[1]+0.2*log_range, log_q[5]-0.2*log_range], [log_iqr*0.6, log_iqr*0.6], [0.5]),
+    ]
+
+    for restart in 1:n_restarts
+        if restart <= length(inits)
+            μ_init, σ_init, w_init = inits[restart]
         else
-            # Full Gaussian core from -alphaL to alphaR
-            gauss_full = sqrt(2 * pi) * (cdf(Normal(), alphaR) - cdf(Normal(), -alphaL))
-            # Right tail integral from alphaR to t
-            A_R = (nR / alphaR)^nR * exp(-alphaR^2 / 2)
-            B_R = nR / alphaR - alphaR
-            right_part = A_R / (nR - 1) * ((B_R + alphaR)^(1 - nR) - (B_R + t)^(1 - nR))
-            return left_tail + gauss_full + right_part
+            μ_init = [log_median + randn()*0.3*log_iqr, log_median + randn()*0.5*log_iqr]
+            σ_init = [log_iqr*(0.3+0.7*rand()), log_iqr*(0.3+0.7*rand())]
+            w_init = [randn()]
+        end
+        x0 = vcat(μ_init, to_raw_σ.(σ_init), w_init)
+
+        try
+            result = optimize(x -> _mix_loss(x, eq, qp, mean_obs, std_obs, σ_min), x0, NelderMead(),
+                              Optim.Options(iterations=20000, f_reltol=1e-15))
+            if Optim.minimum(result) < best_loss
+                best_loss = Optim.minimum(result)
+                best_x = Optim.minimizer(result)
+            end
+        catch
+            continue
+        end
+
+        if best_x !== nothing && restart > 5 && restart % 3 == 0
+            try
+                result = optimize(x -> _mix_loss(x, eq, qp, mean_obs, std_obs, σ_min),
+                                  best_x .+ randn(5) .* 0.02, NelderMead(),
+                                  Optim.Options(iterations=20000, f_reltol=1e-15))
+                if Optim.minimum(result) < best_loss
+                    best_loss = Optim.minimum(result)
+                    best_x = Optim.minimizer(result)
+                end
+            catch
+            end
         end
     end
+
+    if best_x === nothing
+        return ([log_median, log_median], [log_iqr, log_iqr], [0.5, 0.5])
+    end
+
+    μs, σs, ws = _mix_unpack(best_x, σ_min)
+    return (collect(μs), collect(σs), collect(ws))
 end
 
-function dscb_cdf(t, alphaL, nL, alphaR, nR)
-    # Normalized CDF: divide by total integral (from -inf to +inf)
-    total = dscb_cdf_unnorm(1e6, alphaL, nL, alphaR, nR)
-    return dscb_cdf_unnorm(t, alphaL, nL, alphaR, nR) / total
-end
+function _fit_single_lognormal(eq, qp; n_restarts=10)
+    # Fallback: single Gaussian in log₁₀(E), fits quantiles only (no moments).
+    # Always produces a clean unimodal PDF with no spurious tails.
+    log_q = log10.(max.(eq, 1e-30))
+    log_median = log_q[3]
+    log_iqr = max((log_q[4] - log_q[2]) / 2.0, 0.01)
 
-function fit_dscb(qv, qp)
-    # Fit DSCB in log-space: qv are energy quantiles, qp are probabilities
-    # Work in log10(E) space
-    log_q = log10.(max.(qv, 1e-30))
-
-    # Initial estimates: mu from median, sigma from IQR
-    mu = log_q[3]
-    sigma = (log_q[4] - log_q[2]) / 2.0
-    sigma = max(sigma, 1e-6)
-
-    best = (mu, sigma, 1.5, 5.0, 1.5, 5.0)
-    best_err = Inf
-
-    # Scan alphaL, alphaR, nL, nR
-    for alphaL in [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
-        for alphaR in [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
-            for nL in [1.5, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0]
-                for nR in [1.5, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0]
-                    err = 0.0
-                    valid = true
+    best_mu = log_median; best_sigma = log_iqr; best_loss = Inf
+    for restart in 1:n_restarts
+        mu0 = log_median + randn() * 0.05 * log_iqr
+        sigma0_raw = log(log_iqr * (0.7 + 0.6 * rand()))
+        try
+            result = optimize(
+                x -> begin
+                    mu, sigma = x[1], exp(x[2])
+                    sigma < 0.005 && return 1e10
+                    loss = 0.0
                     for i in 1:5
-                        t = (log_q[i] - mu) / sigma
-                        c = dscb_cdf(t, alphaL, nL, alphaR, nR)
-                        (isnan(c) || c <= 0 || c >= 1) && (valid = false; break)
-                        err += (c - qp[i])^2
+                        c = cdf(Normal(mu, sigma), log_q[i])
+                        (isnan(c) || c <= 0 || c >= 1) && return 1e10
+                        loss += (c - qp[i])^2
                     end
-                    valid || continue
-                    if err < best_err
-                        best = (mu, sigma, alphaL, nL, alphaR, nR)
-                        best_err = err
-                    end
-                end
+                    loss
+                end, [mu0, sigma0_raw], NelderMead(),
+                Optim.Options(iterations=5000, f_reltol=1e-14))
+            if Optim.minimum(result) < best_loss
+                best_loss = Optim.minimum(result)
+                best_mu = Optim.minimizer(result)[1]
+                best_sigma = exp(Optim.minimizer(result)[2])
             end
-        end
+        catch; end
     end
-
-    # Refine: also vary mu and sigma slightly
-    mu0, sigma0, aL0, nL0, aR0, nR0 = best
-    for mu_f in [0.98, 0.99, 1.0, 1.01, 1.02]
-        for sigma_f in [0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15]
-            mu_t = mu * mu_f
-            sigma_t = sigma * sigma_f
-            for alphaL in LinRange(max(0.3, aL0*0.7), aL0*1.4, 8)
-                for alphaR in LinRange(max(0.3, aR0*0.7), aR0*1.4, 8)
-                    for nL in LinRange(max(2.0, nL0*0.5), nL0*2.0, 8)
-                        for nR in LinRange(max(2.0, nR0*0.5), nR0*2.0, 8)
-                            err = 0.0
-                            valid = true
-                            for i in 1:5
-                                t = (log_q[i] - mu_t) / sigma_t
-                                c = dscb_cdf(t, alphaL, nL, alphaR, nR)
-                                (isnan(c) || c <= 0 || c >= 1) && (valid = false; break)
-                                err += (c - qp[i])^2
-                            end
-                            valid || continue
-                            if err < best_err
-                                best = (mu_t, sigma_t, alphaL, nL, alphaR, nR)
-                                best_err = err
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return best
+    return best_mu, best_sigma
 end
 
+function fit_energy_response(eq, mean_obs, std_obs, qp; n_restarts=20)
+    # Try K=2 mixture first. If edge quantiles are badly off (spurious tails),
+    # fall back to single LogNormal.
+    log_q = log10.(max.(eq, 1e-30))
+    log_range = max(log_q[5] - log_q[1], 0.05)
+    σ_min = max(0.02, 0.05 * log_range)
 
+    μs, σs, ws = _fit_lognormal_mixture(eq, mean_obs, std_obs, qp, σ_min; n_restarts)
+
+    c_lo = lognormal_mix_cdf(eq[1], μs, σs, ws)
+    c_hi = lognormal_mix_cdf(eq[5], μs, σs, ws)
+    if abs(c_lo - qp[1]) > 0.03 || abs(c_hi - qp[5]) > 0.03
+        mu, sigma = _fit_single_lognormal(eq, qp)
+        return ([mu, mu], [sigma, sigma], [0.5, 0.5])
+    end
+
+    return (μs, σs, ws)
+end
 
 
 # Von Mises-Fisher marginal distribution in cosZ
@@ -253,16 +312,102 @@ function fit_vmf_cosz(cz_quantiles, qp)
     return best_mu, best_kappa
 end
 
+function fit_vmf_edep(cz_quantiles, qp, mu_z, kappa_init, logE_grid, energy_params, bin_idx)
+    # Fast fit: precompute vMF CDF on a κ grid, then binary search β + κ₀ scan
+    # using interpolation instead of recomputing CDF tables.
+    μs = (energy_params["mu1"][bin_idx], energy_params["mu2"][bin_idx])
+    σs = (energy_params["sigma1"][bin_idx], energy_params["sigma2"][bin_idx])
+    ws = (energy_params["w1"][bin_idx], energy_params["w2"][bin_idx])
+    E_grid = 10 .^ logE_grid
+    c_e = [lognormal_mix_cdf(e, μs, σs, ws) for e in E_grid]
+    p_E = max.(diff(c_e), 0.0)
+    s = sum(p_E); s > 0 && (p_E ./= s)
+
+    cdf_e = cumsum(p_E)
+    med_idx = clamp(searchsortedfirst(cdf_e, 0.5), 1, length(p_E))
+    E_ref = 10.0^((logE_grid[med_idx] + logE_grid[med_idx+1]) / 2)
+
+    active = findall(p_E .> 1e-4 * maximum(p_E))
+    E_mids = [10.0^((logE_grid[i] + logE_grid[i+1]) / 2) for i in active]
+    p_active = p_E[active]
+
+    # Precompute vMF CDF at the 5 quantile points for a grid of log(κ) values.
+    # κ range: kappa_init * 0.01 to kappa_init * 100 (covers β∈[0,2] with E ratios)
+    n_kgrid = 200
+    log_k_min = log(max(kappa_init * 0.01, 0.1))
+    log_k_max = log(min(kappa_init * 100.0, 1e6))
+    log_k_grid = range(log_k_min, log_k_max, length=n_kgrid)
+    # cdf_lookup[qi, ki] = CDF of vMF(mu_z, κ_ki) at cz_quantiles[qi]
+    cdf_lookup = zeros(5, n_kgrid)
+    for ki in 1:n_kgrid
+        k = exp(log_k_grid[ki])
+        ct, cd = _vmf_cdf_table(mu_z, k; n_pts=100)
+        for qi in 1:5
+            cdf_lookup[qi, ki] = _vmf_cdf_at(ct, cd, cz_quantiles[qi])
+        end
+    end
+
+    # Interpolate CDF from precomputed grid
+    function interp_cdf(qi, log_k)
+        log_k <= log_k_grid[1] && return cdf_lookup[qi, 1]
+        log_k >= log_k_grid[end] && return cdf_lookup[qi, end]
+        # Linear interpolation
+        t = (log_k - log_k_grid[1]) / (log_k_grid[end] - log_k_grid[1]) * (n_kgrid - 1) + 1
+        i = clamp(floor(Int, t), 1, n_kgrid - 1)
+        f = t - i
+        cdf_lookup[qi, i] * (1 - f) + cdf_lookup[qi, i+1] * f
+    end
+
+    function loss_for_params(kappa0, beta)
+        l = 0.0
+        for qi in 1:5
+            c = 0.0
+            for j in eachindex(active)
+                log_k = log(kappa0) + beta * log(E_mids[j] / E_ref)
+                c += p_active[j] * interp_cdf(qi, log_k)
+            end
+            (isnan(c) || c <= 0 || c >= 1) && return 1e10
+            l += (c - qp[qi])^2
+        end
+        l
+    end
+
+    function best_kappa_for_beta(beta)
+        best_l = Inf; best_k = kappa_init
+        for log_k in range(log(max(kappa_init * 0.3, 1.0)), log(kappa_init * 3.0), length=15)
+            l = loss_for_params(exp(log_k), beta)
+            if l < best_l; best_l = l; best_k = exp(log_k); end
+        end
+        best_l, best_k
+    end
+
+    # Binary search for β in [0, 2]
+    lo = 0.0; hi = 2.0
+    for _ in 1:6
+        m1 = (2lo + hi) / 3; m2 = (lo + 2hi) / 3
+        l1, _ = best_kappa_for_beta(m1)
+        l2, _ = best_kappa_for_beta(m2)
+        l1 < l2 ? (hi = m2) : (lo = m1)
+    end
+    best_beta = (lo + hi) / 2
+    best_loss, best_kappa = best_kappa_for_beta(best_beta)
+
+    # Check β=0
+    loss_0, kappa_0 = best_kappa_for_beta(0.0)
+    if loss_0 <= best_loss
+        return kappa_0, 0.0, E_ref
+    end
+
+    return best_kappa, best_beta, E_ref
+end
 
 
-function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, vmf_params, reco_logP_width, reco_cz_width; mc_data_ratio=5.0)
-    # Build response matrix from precomputed DSCB energy + vMF cosZ parameters
-    # mc_data_ratio: assumed ratio of raw MC events to reported (scaled) counts
+function _build_R_from_params(MC_component, logE_grid, cosZ_grid, energy_params, vmf_params)
+    # Build response matrix from precomputed energy + E-dependent vMF cosZ parameters
     n_bins = size(MC_component, 1)
     n_logE = length(logE_grid) - 1
     n_cosZ = length(cosZ_grid) - 1
     E_grid = 10 .^ logE_grid
-    dlogE = Float64(logE_grid[2] - logE_grid[1])
 
     response_matrix = zeros(Float64, n_bins, n_logE, n_cosZ)
 
@@ -270,40 +415,40 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, dscb_params, v
         counts = MC_component[bin_idx, :].Counts
         counts == 0 && continue
 
-        # Energy: DSCB CDF in logE space
-        mu = dscb_params["mu"][bin_idx]
-        sigma = dscb_params["sigma"][bin_idx]
-        sigma == 0 && continue
-        aL = dscb_params["alphaL"][bin_idx]
-        nL = dscb_params["nL"][bin_idx]
-        aR = dscb_params["alphaR"][bin_idx]
-        nR = dscb_params["nR"][bin_idx]
-        c_e = [dscb_cdf((log10(e) - mu) / sigma, aL, nL, aR, nR) for e in E_grid]
+        # Energy: LogNormal mixture CDF (K=2)
+        μs = (energy_params["mu1"][bin_idx], energy_params["mu2"][bin_idx])
+        σs = (energy_params["sigma1"][bin_idx], energy_params["sigma2"][bin_idx])
+        ws = (energy_params["w1"][bin_idx], energy_params["w2"][bin_idx])
+        (σs[1] == 0 && σs[2] == 0) && continue
+        c_e = [lognormal_mix_cdf(e, μs, σs, ws) for e in E_grid]
         p_e = diff(c_e)
 
-        # Per-bin energy blur: account for MC statistical uncertainty in quantiles.
-        # With N_MC events in a reco bin of width delta_logP, the quantile estimates
-        # have uncertainty ~ delta_logP / sqrt(N_MC). Blur the energy PDF accordingly.
-        n_mc = mc_data_ratio * counts
-        sigma_blur_logE = reco_logP_width[bin_idx] / sqrt(n_mc)
-        sigma_blur_bins = sigma_blur_logE / dlogE
-        K_e = make_gaussian_kernel_matrix(n_logE, sigma_blur_bins)
-        p_e = K_e * p_e
+        # CosZ: E-dependent vMF — κ(E) = κ₀ × (E/E_ref)^β
+        kappa0 = vmf_params["kappa"][bin_idx]
+        kappa0 <= 0 && continue
+        mu_z = vmf_params["mu_z"][bin_idx]
+        beta = vmf_params["beta"][bin_idx]
+        E_ref = vmf_params["E_ref"][bin_idx]
 
-        # CosZ: vMF CDF with kappa reduced for MC statistical blur.
-        # Lower kappa = wider distribution, accounting for quantile uncertainty.
-        kappa = vmf_params["kappa"][bin_idx]
-        if kappa > 0
-            kappa_blur = reco_cz_width[bin_idx]^2 * kappa / n_mc
-            kappa_eff = kappa / (1 + kappa_blur)
-            ct, cd = _vmf_cdf_table(vmf_params["mu_z"][bin_idx], kappa_eff)
+        if beta == 0
+            # Factorized: single vMF for all energies
+            ct, cd = _vmf_cdf_table(mu_z, kappa0)
             c_cosz = [_vmf_cdf_at(ct, cd, x) for x in cosZ_grid]
+            p_cosz = diff(c_cosz)
+            response_matrix[bin_idx, :, :] .= p_e * p_cosz'
         else
-            c_cosz = collect(range(0, 1, length=length(cosZ_grid)))
+            # E-dependent: different κ per energy bin
+            for i in 1:n_logE
+                p_e[i] < 1e-15 && continue
+                E_mid = 10.0^((logE_grid[i] + logE_grid[i+1]) / 2)
+                k = kappa0 * (E_mid / E_ref)^beta
+                k = clamp(k, 0.1, 1e6)
+                ct, cd = _vmf_cdf_table(mu_z, k; n_pts=200)
+                c_cosz = [_vmf_cdf_at(ct, cd, x) for x in cosZ_grid]
+                p_cosz = diff(c_cosz)
+                response_matrix[bin_idx, i, :] .= p_e[i] .* p_cosz
+            end
         end
-        p_cosz = diff(c_cosz)
-
-        response_matrix[bin_idx, :, :] .= p_e * p_cosz'
     end
     return response_matrix
 end
@@ -588,14 +733,13 @@ function get_assets(physics; datadir = @__DIR__)
     vmf_params = vmf_data["vmf_params"]
 
     e_params = load(joinpath(datadir, "energy_response_params.jld2"))
-    dscb_params = e_params["dscb_logE"]
+    energy_params = e_params["mix_logE"]
 
-    # Build response matrices from precomputed DSCB energy + vMF cosZ parameters
-    reco_logP_width = bininfo.logPMax .- bininfo.logPMin
-    reco_cz_width = abs.(bininfo.CosZMax .- bininfo.CosZMin)
+    # Build response matrices from precomputed energy + E-dependent vMF cosZ parameters
     R_3d = NamedTuple(key => _build_R_from_params(
         MC[key], loge_grid, cz_grid,
-        dscb_params[key], vmf_params[key], reco_logP_width, reco_cz_width) for key in keys(MC))
+        energy_params[key], vmf_params[key]) for key in keys(MC))
+
     R = flatten_R(R_3d)
 
     # Compute nu/nubar mixture fractions for nutau CC and NC channels.
@@ -618,10 +762,10 @@ function get_assets(physics; datadir = @__DIR__)
     numubar_nc = wester["numubar"]["NC"]
 
     # Interpolate to our energy grid
-    itp_numu_cc = extrapolate(interpolate((xsec_E,), numu_cc_total, Gridded(Linear())), Flat())
-    itp_numubar_cc = extrapolate(interpolate((xsec_E,), numubar_cc_total, Gridded(Linear())), Flat())
-    itp_nu_nc = extrapolate(interpolate((xsec_E,), numu_nc, Gridded(Linear())), Flat())
-    itp_nubar_nc = extrapolate(interpolate((xsec_E,), numubar_nc, Gridded(Linear())), Flat())
+    itp_numu_cc = extrapolate(interpolate((xsec_E,), numu_cc_total, Gridded(Linear())), Interpolations.Flat())
+    itp_numubar_cc = extrapolate(interpolate((xsec_E,), numubar_cc_total, Gridded(Linear())), Interpolations.Flat())
+    itp_nu_nc = extrapolate(interpolate((xsec_E,), numu_nc, Gridded(Linear())), Interpolations.Flat())
+    itp_nubar_nc = extrapolate(interpolate((xsec_E,), numubar_nc, Gridded(Linear())), Interpolations.Flat())
 
     sigma_numu_cc = itp_numu_cc.(E_mid) .* E_mid      # sigma = (sigma/E) * E
     sigma_numubar_cc = itp_numubar_cc.(E_mid) .* E_mid
