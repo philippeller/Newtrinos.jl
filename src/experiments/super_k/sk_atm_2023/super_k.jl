@@ -381,9 +381,8 @@ function fit_vmf_edep(cz_quantiles, qp, mu_z, kappa_init, logE_grid, energy_para
         best_l, best_k
     end
 
-    # Binary search for β in [0.3, 1.5]
-    # β>0 always (angular resolution improves with energy); range from paper's b_A values
-    lo = 0.3; hi = 1.5
+    # Binary search for β in [0, 2]
+    lo = 0.0; hi = 2.0
     for _ in 1:6
         m1 = (2lo + hi) / 3; m2 = (lo + 2hi) / 3
         l1, _ = best_kappa_for_beta(m1)
@@ -392,6 +391,12 @@ function fit_vmf_edep(cz_quantiles, qp, mu_z, kappa_init, logE_grid, energy_para
     end
     best_beta = (lo + hi) / 2
     best_loss, best_kappa = best_kappa_for_beta(best_beta)
+
+    # Check β=0 (factorized) — keep if better
+    loss_0, kappa_0 = best_kappa_for_beta(0.0)
+    if loss_0 <= best_loss
+        return kappa_0, 0.0, E_ref
+    end
 
     return best_kappa, best_beta, E_ref
 end
