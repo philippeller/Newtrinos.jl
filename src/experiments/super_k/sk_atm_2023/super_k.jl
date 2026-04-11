@@ -423,6 +423,20 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, energy_params,
         c_e = [lognormal_mix_cdf(e, μs, σs, ws) for e in E_grid]
         p_e = diff(c_e)
 
+        # EXPERIMENTAL: Energy PDF deconvolution correction.
+        # The MC summary statistics describe p(E_true | reco_bin) which includes the
+        # generation spectrum. If the MC was generated with a power law E^(-γ) rather
+        # than the Honda flux, the fitted energy PDF is biased. Multiplying by E^α
+        # with α ≈ γ - 1 - (Honda spectral index) partially corrects this.
+        # α = 0.6 was found empirically to minimize the NoOsc→NO roundtrip chi2.
+        # THIS IS HIGHLY EXPERIMENTAL and may need to be reverted. The physical
+        # justification is uncertain — it could be correcting a generation spectrum
+        # mismatch, or it could be compensating for other systematic effects in the
+        # response matrix reconstruction. Test carefully in oscillation fits.
+        E_mid_arr = 10.0 .^ ((logE_grid[1:end-1] .+ logE_grid[2:end]) ./ 2)
+        p_e .*= E_mid_arr .^ 0.6
+        sp = sum(p_e); sp > 0 && (p_e ./= sp)
+
         # CosZ: E-dependent vMF — κ(E) = κ₀ × (E/E_ref)^β
         kappa0 = vmf_params["kappa"][bin_idx]
         kappa0 <= 0 && continue
