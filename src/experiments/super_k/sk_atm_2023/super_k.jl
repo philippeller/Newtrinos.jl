@@ -823,6 +823,7 @@ function get_params()
         sk_iv_v_energy_scale = 1.0,
         sk_i_iii_updown_energy_scale = 1.0,
         sk_iv_v_updown_energy_scale = 1.0,
+        sk_total_norm = 1.0,
         sk_fc_norm = 1.0,
         sk_pc_norm = 1.0,
         sk_upmu_norm = 1.0,
@@ -875,6 +876,7 @@ function get_priors()
         # SK IV: 0.5%, SK V: 0.7% → exposure-weighted ~0.6%
         sk_i_iii_updown_energy_scale = Truncated(Normal(1.0, 0.01), 0.5, 1.5),
         sk_iv_v_updown_energy_scale = Truncated(Normal(1.0, 0.006), 0.5, 1.5),
+        sk_total_norm = Normal(1.0, 0.2),
         sk_fc_norm = Normal(1.0, 0.015),
         sk_pc_norm = Normal(1.0, 0.03),
         sk_upmu_norm = Normal(1.0, 0.01),
@@ -984,6 +986,10 @@ end
 
 function get_expected(params, physics, assets)
     expected = reweight(params, physics, assets)
+
+    # Overall MC normalization — absorbs the ~7% data-MC deficit that SK handles
+    # with their full 193-parameter systematic model
+    expected = map(e -> e .* params.sk_total_norm, expected)
 
     total = reduce(+, values(expected))
 
