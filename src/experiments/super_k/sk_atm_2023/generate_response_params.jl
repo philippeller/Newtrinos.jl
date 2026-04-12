@@ -16,15 +16,16 @@ using Printf
 const DATADIR = @__DIR__
 const QP = [0.023, 0.159, 0.5, 0.841, 0.977]
 
-# Load unoscillated MC
-println("Loading unoscillated MC...")
+# Load NO (normal ordering) MC — summary statistics are oscillation-weighted,
+# so fitting to NO gives a response calibrated near the true oscillation point.
+println("Loading NO MC...")
 mc = (
-    nue     = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNueNoOsc.txt")),
-    numu    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNumuNoOsc.txt")),
-    nutau   = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNutauNoOsc.txt")),
-    nuebar  = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNueBarNoOsc.txt")),
-    numubar = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNumuBarNoOsc.txt")),
-    nunc    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNCNoOsc.txt")),
+    nue     = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNueNO.txt")),
+    numu    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNumuNO.txt")),
+    nutau   = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNutauNO.txt")),
+    nuebar  = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNueBarNO.txt")),
+    numubar = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNumuBarNO.txt")),
+    nunc    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNCNO.txt")),
 )
 
 n_bins = 930
@@ -36,15 +37,15 @@ function get_energy_quantiles(bin)
      bin.EnergyQuantile97_7Percent]
 end
 
-# ─── LogNormal mixture (K=3) energy fits ───
-println("\n--- Fitting LogNormal mixture K=3 (logE) ---")
+# ─── LogNormal mixture (K=2) energy fits ───
+println("\n--- Fitting LogNormal mixture K=2 (logE) ---")
 mix_result = Dict{Symbol, Dict{String, Vector{Float64}}}()
 
 for flav in flavors
     mc_comp = mc[flav]
-    mu1_vec = zeros(n_bins); mu2_vec = zeros(n_bins); mu3_vec = zeros(n_bins)
-    sigma1_vec = zeros(n_bins); sigma2_vec = zeros(n_bins); sigma3_vec = zeros(n_bins)
-    w1_vec = zeros(n_bins); w2_vec = zeros(n_bins); w3_vec = zeros(n_bins)
+    mu1_vec = zeros(n_bins); mu2_vec = zeros(n_bins)
+    sigma1_vec = zeros(n_bins); sigma2_vec = zeros(n_bins)
+    w1_vec = zeros(n_bins); w2_vec = zeros(n_bins)
 
     t0 = time()
     for bin_idx in 1:n_bins
@@ -56,16 +57,16 @@ for flav in flavors
         bin.EnergyRMS <= 0 && continue
 
         μs, σs, ws = Newtrinos.super_k.fit_energy_response(eq, bin.EnergyAvg, bin.EnergyRMS, QP)
-        mu1_vec[bin_idx] = μs[1]; mu2_vec[bin_idx] = μs[2]; mu3_vec[bin_idx] = μs[3]
-        sigma1_vec[bin_idx] = σs[1]; sigma2_vec[bin_idx] = σs[2]; sigma3_vec[bin_idx] = σs[3]
-        w1_vec[bin_idx] = ws[1]; w2_vec[bin_idx] = ws[2]; w3_vec[bin_idx] = ws[3]
+        mu1_vec[bin_idx] = μs[1]; mu2_vec[bin_idx] = μs[2]
+        sigma1_vec[bin_idx] = σs[1]; sigma2_vec[bin_idx] = σs[2]
+        w1_vec[bin_idx] = ws[1]; w2_vec[bin_idx] = ws[2]
     end
     dt = time() - t0
 
     mix_result[flav] = Dict(
-        "mu1" => mu1_vec, "mu2" => mu2_vec, "mu3" => mu3_vec,
-        "sigma1" => sigma1_vec, "sigma2" => sigma2_vec, "sigma3" => sigma3_vec,
-        "w1" => w1_vec, "w2" => w2_vec, "w3" => w3_vec
+        "mu1" => mu1_vec, "mu2" => mu2_vec,
+        "sigma1" => sigma1_vec, "sigma2" => sigma2_vec,
+        "w1" => w1_vec, "w2" => w2_vec
     )
     println(@sprintf "  %8s: %.1f s" flav dt)
 end

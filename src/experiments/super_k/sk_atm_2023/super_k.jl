@@ -62,10 +62,12 @@ function read_sk_file(filepath::String)
 end
 
 
-# 3-component LogNormal mixture for energy response.
-# Gaussian mixture in log₁₀(E) space with K=3 components (8 free parameters).
+# 2-component LogNormal mixture for energy response.
+# Equivalent to a 2-Gaussian mixture in log₁₀(E) space.
 # Fits all 7 data release statistics: 5 quantiles + mean + std (in linear E).
-# Adaptive σ floor prevents delta-like components.
+# Two overlapping components produce smooth, nearly-unimodal distributions with
+# enough flexibility to capture asymmetry, while analytic moments keep fitting fast.
+# Falls back to single LogNormal when K=2 produces spurious tails.
 
 const _LN10 = log(10.0)
 
@@ -87,13 +89,10 @@ function lognormal_mix_std(μs, σs, ws)
 end
 
 function _mix_unpack(x, σ_min)
-    μs = (x[1], x[2], x[3])
-    σs = (σ_min + exp(x[4]), σ_min + exp(x[5]), σ_min + exp(x[6]))
-    # softmax for 3 weights
-    max_w = max(x[7], x[8], 0.0)
-    e1 = exp(x[7] - max_w); e2 = exp(x[8] - max_w); e3 = exp(-max_w)
-    s = e1 + e2 + e3
-    ws = (e1/s, e2/s, e3/s)
+    μs = (x[1], x[2])
+    σs = (σ_min + exp(x[3]), σ_min + exp(x[4]))
+    w1 = 1.0 / (1.0 + exp(-x[5]))
+    ws = (w1, 1.0 - w1)
     μs, σs, ws
 end
 
@@ -114,46 +113,35 @@ function _mix_loss(x, eq, qp, mean_obs, std_obs, σ_min)
     loss
 end
 
-function fit_energy_response(eq, mean_obs, std_obs, qp; n_restarts=20)
-    # Fit 3-component Gaussian mixture in log₁₀(E) to 5 quantiles + mean + std
+function _fit_lognormal_mixture(eq, mean_obs, std_obs, qp, σ_min; n_restarts=20)
+    # Fit 2-component Gaussian mixture in log₁₀(E) to 5 quantiles + mean + std
     log_q = log10.(max.(eq, 1e-30))
     log_median = log_q[3]
     log_iqr = max((log_q[4] - log_q[2]) / 2.0, 0.03)
     log_range = max(log_q[5] - log_q[1], 0.05)
     log_mean = log10(max(mean_obs, 1e-30))
-
-    σ_min = max(0.02, 0.05 * log_range)
     to_raw_σ(σ) = log(max(σ - σ_min, 1e-4))
 
     best_x = nothing
     best_loss = Inf
 
     inits = [
-        ([log_median, log_q[1]+0.3*log_range, log_q[5]-0.3*log_range],
-         [log_iqr, log_iqr*0.5, log_iqr*0.5], [2.0, 0.0]),
-        ([log_median-0.5*log_iqr, log_median, log_median+0.5*log_iqr],
-         [log_iqr*0.8, log_iqr*0.3, log_iqr*0.3], [1.5, 0.5]),
-        ([log_q[2], log_q[3], log_q[4]],
-         [log_iqr*0.5, log_iqr*0.5, log_iqr*0.5], [0.5, 1.0]),
-        ([log_median, log_q[1], log_q[5]],
-         [log_iqr*1.2, log_iqr*0.3, log_iqr*0.3], [3.0, -1.0]),
-        ([log_median-0.1*log_iqr, log_median, log_median+0.1*log_iqr],
-         [log_iqr*0.4, log_iqr*1.0, log_iqr*0.6], [0.5, 1.5]),
-        ([log_mean, log_q[2], log_q[4]],
-         [log_iqr, log_iqr*0.3, log_iqr*0.3], [1.5, 0.0]),
-        ([log_median, log_q[1]+0.2*log_range, log_q[5]-0.2*log_range],
-         [log_iqr*1.5, log_iqr*0.5, log_iqr*0.5], [2.0, 0.0]),
-        ([log_q[2], log_q[3], log_q[4]],
-         [log_iqr, log_iqr, log_iqr], [0.0, 0.0]),
+        ([log_median, log_mean], [log_iqr, log_iqr*0.5], [1.0]),
+        ([log_median-0.3*log_iqr, log_median+0.3*log_iqr], [log_iqr*0.8, log_iqr*0.8], [0.0]),
+        ([log_q[2], log_q[4]], [log_iqr*0.5, log_iqr*0.5], [0.5]),
+        ([log_median, log_q[1]+0.3*log_range], [log_iqr*1.2, log_iqr*0.3], [2.0]),
+        ([log_median, log_q[5]-0.3*log_range], [log_iqr*1.0, log_iqr*0.5], [1.5]),
+        ([log_median-0.05*log_iqr, log_median+0.05*log_iqr], [log_iqr, log_iqr], [0.0]),
+        ([log_q[1]+0.2*log_range, log_q[5]-0.2*log_range], [log_iqr*0.6, log_iqr*0.6], [0.5]),
     ]
 
     for restart in 1:n_restarts
         if restart <= length(inits)
             μ_init, σ_init, w_init = inits[restart]
         else
-            μ_init = [log_q[1] + rand()*log_range for _ in 1:3]
-            σ_init = [log_iqr * (0.2 + 0.8*rand()) for _ in 1:3]
-            w_init = [randn(), randn()]
+            μ_init = [log_median + randn()*0.3*log_iqr, log_median + randn()*0.5*log_iqr]
+            σ_init = [log_iqr*(0.3+0.7*rand()), log_iqr*(0.3+0.7*rand())]
+            w_init = [randn()]
         end
         x0 = vcat(μ_init, to_raw_σ.(σ_init), w_init)
 
@@ -171,7 +159,7 @@ function fit_energy_response(eq, mean_obs, std_obs, qp; n_restarts=20)
         if best_x !== nothing && restart > 5 && restart % 3 == 0
             try
                 result = optimize(x -> _mix_loss(x, eq, qp, mean_obs, std_obs, σ_min),
-                                  best_x .+ randn(8) .* 0.02, NelderMead(),
+                                  best_x .+ randn(5) .* 0.02, NelderMead(),
                                   Optim.Options(iterations=20000, f_reltol=1e-15))
                 if Optim.minimum(result) < best_loss
                     best_loss = Optim.minimum(result)
@@ -183,13 +171,65 @@ function fit_energy_response(eq, mean_obs, std_obs, qp; n_restarts=20)
     end
 
     if best_x === nothing
-        return ([log_median, log_median, log_median],
-                [log_iqr, log_iqr, log_iqr],
-                [1.0/3, 1.0/3, 1.0/3])
+        return ([log_median, log_median], [log_iqr, log_iqr], [0.5, 0.5])
     end
 
     μs, σs, ws = _mix_unpack(best_x, σ_min)
     return (collect(μs), collect(σs), collect(ws))
+end
+
+function _fit_single_lognormal(eq, qp; n_restarts=10)
+    # Fallback: single Gaussian in log₁₀(E), fits quantiles only (no moments).
+    # Always produces a clean unimodal PDF with no spurious tails.
+    log_q = log10.(max.(eq, 1e-30))
+    log_median = log_q[3]
+    log_iqr = max((log_q[4] - log_q[2]) / 2.0, 0.01)
+
+    best_mu = log_median; best_sigma = log_iqr; best_loss = Inf
+    for restart in 1:n_restarts
+        mu0 = log_median + randn() * 0.05 * log_iqr
+        sigma0_raw = log(log_iqr * (0.7 + 0.6 * rand()))
+        try
+            result = optimize(
+                x -> begin
+                    mu, sigma = x[1], exp(x[2])
+                    sigma < 0.005 && return 1e10
+                    loss = 0.0
+                    for i in 1:5
+                        c = cdf(Normal(mu, sigma), log_q[i])
+                        (isnan(c) || c <= 0 || c >= 1) && return 1e10
+                        loss += (c - qp[i])^2
+                    end
+                    loss
+                end, [mu0, sigma0_raw], NelderMead(),
+                Optim.Options(iterations=5000, f_reltol=1e-14))
+            if Optim.minimum(result) < best_loss
+                best_loss = Optim.minimum(result)
+                best_mu = Optim.minimizer(result)[1]
+                best_sigma = exp(Optim.minimizer(result)[2])
+            end
+        catch; end
+    end
+    return best_mu, best_sigma
+end
+
+function fit_energy_response(eq, mean_obs, std_obs, qp; n_restarts=20)
+    # Try K=2 mixture first. If edge quantiles are badly off (spurious tails),
+    # fall back to single LogNormal.
+    log_q = log10.(max.(eq, 1e-30))
+    log_range = max(log_q[5] - log_q[1], 0.05)
+    σ_min = max(0.02, 0.05 * log_range)
+
+    μs, σs, ws = _fit_lognormal_mixture(eq, mean_obs, std_obs, qp, σ_min; n_restarts)
+
+    c_lo = lognormal_mix_cdf(eq[1], μs, σs, ws)
+    c_hi = lognormal_mix_cdf(eq[5], μs, σs, ws)
+    if abs(c_lo - qp[1]) > 0.03 || abs(c_hi - qp[5]) > 0.03
+        mu, sigma = _fit_single_lognormal(eq, qp)
+        return ([mu, mu], [sigma, sigma], [0.5, 0.5])
+    end
+
+    return (μs, σs, ws)
 end
 
 
@@ -376,17 +416,10 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, energy_params,
         counts == 0 && continue
 
         # Energy: LogNormal mixture CDF (K=2)
-        n_comp = haskey(energy_params, "mu3") ? 3 : 2
-        if n_comp == 3
-            μs = (energy_params["mu1"][bin_idx], energy_params["mu2"][bin_idx], energy_params["mu3"][bin_idx])
-            σs = (energy_params["sigma1"][bin_idx], energy_params["sigma2"][bin_idx], energy_params["sigma3"][bin_idx])
-            ws = (energy_params["w1"][bin_idx], energy_params["w2"][bin_idx], energy_params["w3"][bin_idx])
-        else
-            μs = (energy_params["mu1"][bin_idx], energy_params["mu2"][bin_idx])
-            σs = (energy_params["sigma1"][bin_idx], energy_params["sigma2"][bin_idx])
-            ws = (energy_params["w1"][bin_idx], energy_params["w2"][bin_idx])
-        end
-        all(σs .== 0) && continue
+        μs = (energy_params["mu1"][bin_idx], energy_params["mu2"][bin_idx])
+        σs = (energy_params["sigma1"][bin_idx], energy_params["sigma2"][bin_idx])
+        ws = (energy_params["w1"][bin_idx], energy_params["w2"][bin_idx])
+        (σs[1] == 0 && σs[2] == 0) && continue
         c_e = [lognormal_mix_cdf(e, μs, σs, ws) for e in E_grid]
         p_e = diff(c_e)
 
