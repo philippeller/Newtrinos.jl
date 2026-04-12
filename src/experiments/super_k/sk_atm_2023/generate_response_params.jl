@@ -140,6 +140,66 @@ for flav in flavors
     println(@sprintf "  %8s: %.1f s" flav dt)
 end
 
+# ─── Regularization: smooth parameters between neighboring bins ───
+# Bins within the same sample should have smoothly varying response parameters.
+# Replace each bin's params with a weighted average of itself and its neighbors.
+using CSV, DataFrames, Statistics
+bininfo = CSV.read(joinpath(DATADIR, "bins/sk_2023_BinInfo.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false)
+rename!(bininfo, [:Sample, :logPMin, :logPMax, :CosZMin, :CosZMax])
+
+# Build neighbor map: for each sample, bins are consecutive and ordered
+sample_groups = Dict{String, Vector{Int}}()
+for i in 1:n_bins
+    s = bininfo.Sample[i]
+    haskey(sample_groups, s) || (sample_groups[s] = Int[])
+    push!(sample_groups[s], i)
+end
+
+# Regularization strength: 0 = no smoothing, 1 = full average with neighbors
+const REG_STRENGTH = 0.3
+
+println("\n--- Regularizing parameters (strength=$REG_STRENGTH) ---")
+
+function smooth_param!(result, key, groups, mc_data)
+    for (sample, idxs) in groups
+        length(idxs) < 3 && continue
+        original = [result[key][i] for i in idxs]
+        for pos in 1:length(idxs)
+            i = idxs[pos]
+            mc_data[i, :].Counts == 0 && continue
+            result[key][i] == 0 && continue
+
+            # Collect active neighbors
+            neighbors = Float64[]
+            for np in max(1, pos-1):min(length(idxs), pos+1)
+                np == pos && continue
+                ni = idxs[np]
+                mc_data[ni, :].Counts == 0 && continue
+                original[np] == 0 && continue
+                push!(neighbors, original[np])
+            end
+            isempty(neighbors) && continue
+
+            # Smooth: blend own value with neighbor average
+            avg = mean(neighbors)
+            result[key][i] = (1 - REG_STRENGTH) * original[pos] + REG_STRENGTH * avg
+        end
+    end
+end
+
+for flav in flavors
+    mc_comp = mc[flav]
+    # Smooth energy params
+    for key in ["mu1", "mu2", "sigma1", "sigma2"]
+        smooth_param!(mix_result[flav], key, sample_groups, mc_comp)
+    end
+    # Smooth cosZ params
+    for key in ["kappa", "beta"]
+        smooth_param!(vmf_result[flav], key, sample_groups, mc_comp)
+    end
+    println(@sprintf "  %8s: smoothed" flav)
+end
+
 # ─── Save ───
 e_path = joinpath(DATADIR, "energy_response_params.jld2")
 jldsave(e_path; mix_logE=mix_result, quantile_probs=QP, mc_source="unoscillated")
