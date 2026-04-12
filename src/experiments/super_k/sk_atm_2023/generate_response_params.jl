@@ -16,16 +16,15 @@ using Printf
 const DATADIR = @__DIR__
 const QP = [0.023, 0.159, 0.5, 0.841, 0.977]
 
-# Load NO (normal ordering) MC — summary statistics are oscillation-weighted,
-# so fitting to NO gives a response calibrated near the true oscillation point.
-println("Loading NO MC...")
+# Load unoscillated MC
+println("Loading unoscillated MC...")
 mc = (
-    nue     = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNueNO.txt")),
-    numu    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNumuNO.txt")),
-    nutau   = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNutauNO.txt")),
-    nuebar  = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNueBarNO.txt")),
-    numubar = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNumuBarNO.txt")),
-    nunc    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "normal", "sk_2023_MCNCNO.txt")),
+    nue     = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNueNoOsc.txt")),
+    numu    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNumuNoOsc.txt")),
+    nutau   = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNutauNoOsc.txt")),
+    nuebar  = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNueBarNoOsc.txt")),
+    numubar = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNumuBarNoOsc.txt")),
+    nunc    = Newtrinos.super_k.read_sk_file(joinpath(DATADIR, "bins", "unoscillated", "sk_2023_MCNCNoOsc.txt")),
 )
 
 n_bins = 930
