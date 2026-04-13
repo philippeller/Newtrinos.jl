@@ -944,9 +944,8 @@ function get_double_factor(total, mask1, mask2, factor1)
     return factor
 end
 
-function get_all_factors(params, assets, total)
-    # Returns the sum of deviations Σ_j f_ij for the linearized formalism.
-    # Applied in get_expected as: expected_i × (1 + common_deviations + sample_deviations)
+function get_norm_factors(params, assets, total)
+    # Overall normalization factors — computed from total counts, applied to all channels
     return (
         (get_factor(assets.masks.fc, params.sk_fc_norm * params.sk_fiducial_norm) .- 1) .+
         (get_factor(assets.masks.pc, params.sk_pc_norm * params.sk_fiducial_norm) .- 1) .+
@@ -956,53 +955,71 @@ function get_all_factors(params, assets, total)
         (get_double_factor(total, assets.masks.pc_stop_bottom, assets.masks.pc_thru_bottom, params.sk_pc_stop_thru_bottom) .- 1) .+
         (get_double_factor(total, assets.masks.umpmu_stop, assets.masks.upmu_thru, params.sk_upmu_stopping_vs_througoing) .- 1) .+
         (get_double_factor(total, assets.masks.upmu_nonshower, assets.masks.upmu_shower, params.sk_upmu_nonshower_vs_shower) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_iii_elike_1decay_e, assets.masks.sk_i_iii_elike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_iii_mulike_1decay_e, assets.masks.sk_i_iii_mulike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_iii_mulike_2decay_e, assets.masks.sk_i_iii_mulike_1decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_iv_v_1decay_e, assets.masks.sk_iv_v_0decay_e, params.sk_iv_v_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_iv_v_subgev_0neutron, assets.masks.sk_iv_v_subgev_1neutron, params.sk_iv_v_subgev_neutron_tag_eff) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_iv_v_multigev_0neutron, assets.masks.sk_iv_v_multigev_1neutron, params.sk_iv_v_multigev_neutron_tag_eff) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_bdt_1) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_bdt_2) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_bdt_3) .- 1) .+
-        # PID migration: e-like ↔ mu-like
-        (get_double_factor(total, assets.masks.sk_i_iii_subgev_elike, assets.masks.sk_i_iii_subgev_mulike, params.sk_i_iii_subgev_pid) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_i_iii_multigev_1ring_elike, assets.masks.sk_i_iii_multigev_1ring_mulike, params.sk_i_iii_multigev_pid) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_iv_v_multigev_1ring_elike, assets.masks.sk_iv_v_multigev_1ring_mulike, params.sk_iv_v_multigev_pid) .- 1) .+
-        # Ring counting migration: overall + split by energy
-        (get_double_factor(total, assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_subgev_1ring, assets.masks.sk_subgev_multiring, params.sk_subgev_ring_counting) .- 1) .+
-        (get_double_factor(total, assets.masks.sk_multigev_1ring, assets.masks.sk_multigev_multiring, params.sk_multigev_ring_counting) .- 1) .+
         # Relative normalizations for high-energy samples
         (get_factor(assets.masks.fc_multigev, params.sk_fc_multigev_rel_norm) .- 1) .+
-        (get_factor(assets.masks.pc_upmu, params.sk_pc_upmu_rel_norm) .- 1) .+
+        (get_factor(assets.masks.pc_upmu, params.sk_pc_upmu_rel_norm) .- 1)
+    )
+end
+
+function get_migration_factors(params, assets, channel)
+    # Migration/classification factors — computed per-channel so that the transfer
+    # respects the actual flavor composition in each bin. E.g. PID migration between
+    # e-like and mu-like moves different fractions of nue vs numu events.
+    return (
+        # Decay-e tagging
+        (get_double_factor(channel, assets.masks.sk_i_iii_elike_1decay_e, assets.masks.sk_i_iii_elike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_i_iii_mulike_1decay_e, assets.masks.sk_i_iii_mulike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_i_iii_mulike_2decay_e, assets.masks.sk_i_iii_mulike_1decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_iv_v_1decay_e, assets.masks.sk_iv_v_0decay_e, params.sk_iv_v_decay_e_tag_eff) .- 1) .+
+        # Neutron tagging
+        (get_double_factor(channel, assets.masks.sk_iv_v_subgev_0neutron, assets.masks.sk_iv_v_subgev_1neutron, params.sk_iv_v_subgev_neutron_tag_eff) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_iv_v_multigev_0neutron, assets.masks.sk_iv_v_multigev_1neutron, params.sk_iv_v_multigev_neutron_tag_eff) .- 1) .+
+        # BDT multi-ring classification
+        (get_double_factor(channel, assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_bdt_1) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_bdt_2) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_bdt_3) .- 1) .+
+        # PID migration: e-like ↔ mu-like
+        (get_double_factor(channel, assets.masks.sk_i_iii_subgev_elike, assets.masks.sk_i_iii_subgev_mulike, params.sk_i_iii_subgev_pid) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_i_iii_multigev_1ring_elike, assets.masks.sk_i_iii_multigev_1ring_mulike, params.sk_i_iii_multigev_pid) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_iv_v_multigev_1ring_elike, assets.masks.sk_iv_v_multigev_1ring_mulike, params.sk_iv_v_multigev_pid) .- 1) .+
+        # Ring counting migration: overall + split by energy
+        (get_double_factor(channel, assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_subgev_1ring, assets.masks.sk_subgev_multiring, params.sk_subgev_ring_counting) .- 1) .+
+        (get_double_factor(channel, assets.masks.sk_multigev_1ring, assets.masks.sk_multigev_multiring, params.sk_multigev_ring_counting) .- 1) .+
         # FC/PC separation: FC multi-GeV mu-like ↔ PC
-        (get_double_factor(total, assets.masks.fc_multigev_mulike, assets.masks.pc, params.sk_fc_pc_separation) .- 1) .+
+        (get_double_factor(channel, assets.masks.fc_multigev_mulike, assets.masks.pc, params.sk_fc_pc_separation) .- 1) .+
         # pi0 selection
-        (get_double_factor(total, assets.masks.sk_1ring_pi0, assets.masks.sk_2ring_pi0, params.sk_pi0_norm) .- 1)
+        (get_double_factor(channel, assets.masks.sk_1ring_pi0, assets.masks.sk_2ring_pi0, params.sk_pi0_norm) .- 1)
     )
 end
 
 function get_expected(params, physics, assets)
     expected = reweight(params, physics, assets)
 
-    # Overall MC normalization — absorbs the ~7% data-MC deficit that SK handles
-    # with their full 193-parameter systematic model
+    # Overall MC normalization
     expected = map(e -> e .* params.sk_total_norm, expected)
 
     total = reduce(+, values(expected))
 
-    # Common systematic deviations (shared across all samples)
-    common = get_all_factors(params, assets, total)
+    # Normalization factors (from total counts, same for all channels)
+    norm = get_norm_factors(params, assets, total)
 
-    # Per-sample scale: 1 + common_deviations + sample-specific deviations
-    nue = apply_all_energy_scales(expected.nue .* (1 .+ common), assets, params)
-    numu = apply_all_energy_scales(expected.numu .* (1 .+ common .+ (get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .- 1)), assets, params)
-    nutau = apply_all_energy_scales(expected.nutau .* (1 .+ common), assets, params)
-    nuebar = apply_all_energy_scales(expected.nuebar .* (1 .+ common), assets, params)
-    numubar = apply_all_energy_scales(expected.numubar .* (1 .+ common .+ (get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .- 1)), assets, params)
-    nunc = apply_all_energy_scales(expected.nunc .* (1 .+ common .+ (get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .- 1) .+ (get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .- 1)), assets, params)
+    # Migration factors (per-channel, respecting flavor composition)
+    nue_mig = get_migration_factors(params, assets, expected.nue)
+    numu_mig = get_migration_factors(params, assets, expected.numu)
+    nutau_mig = get_migration_factors(params, assets, expected.nutau)
+    nuebar_mig = get_migration_factors(params, assets, expected.nuebar)
+    numubar_mig = get_migration_factors(params, assets, expected.numubar)
+    nunc_mig = get_migration_factors(params, assets, expected.nunc)
+
+    # Per-sample scale: norm + migration + sample-specific deviations
+    nue = apply_all_energy_scales(expected.nue .* (1 .+ norm .+ nue_mig), assets, params)
+    numu = apply_all_energy_scales(expected.numu .* (1 .+ norm .+ numu_mig .+ (get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .- 1)), assets, params)
+    nutau = apply_all_energy_scales(expected.nutau .* (1 .+ norm .+ nutau_mig), assets, params)
+    nuebar = apply_all_energy_scales(expected.nuebar .* (1 .+ norm .+ nuebar_mig), assets, params)
+    numubar = apply_all_energy_scales(expected.numubar .* (1 .+ norm .+ numubar_mig .+ (get_factor(assets.masks.sk_elike, params.sk_nue_contamination) .- 1)), assets, params)
+    nunc = apply_all_energy_scales(expected.nunc .* (1 .+ norm .+ nunc_mig .+ (get_factor(assets.masks.mu_indices, params.sk_nc_mu_norm) .- 1) .+ (get_factor(assets.masks.sk_elike, params.sk_ncpi0_norm) .- 1)), assets, params)
 
     return (; nue, numu, nutau, nuebar, numubar, nunc)
 end

@@ -140,36 +140,55 @@ for flav in flavors
     println(@sprintf "  %8s: %.1f s" flav dt)
 end
 
-# ─── Regularization: smooth parameters between neighboring bins ───
-# Bins within the same sample should have smoothly varying response parameters.
-# Replace each bin's params with a weighted average of itself and its neighbors.
+# ─── Regularization: smooth parameters across neighboring cosZ bins ───
+# Within each (sample, momentum bin), the response should vary smoothly in cosZ.
+# First canonicalize K=2 component ordering (μ₁ < μ₂), then smooth across cosZ neighbors.
 using CSV, DataFrames, Statistics
 bininfo = CSV.read(joinpath(DATADIR, "bins/sk_2023_BinInfo.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false)
 rename!(bininfo, [:Sample, :logPMin, :logPMax, :CosZMin, :CosZMax])
 
-# Build neighbor map: for each sample, bins are consecutive and ordered
-sample_groups = Dict{String, Vector{Int}}()
+# Step 1: Canonicalize K=2 component ordering so μ₁ < μ₂ in every bin
+println("\n--- Canonicalizing K=2 component ordering (μ₁ < μ₂) ---")
+for flav in flavors
+    d = mix_result[flav]
+    n_swapped = 0
+    for i in 1:n_bins
+        d["sigma1"][i] == 0 && continue
+        if d["mu1"][i] > d["mu2"][i]
+            # Swap components
+            d["mu1"][i], d["mu2"][i] = d["mu2"][i], d["mu1"][i]
+            d["sigma1"][i], d["sigma2"][i] = d["sigma2"][i], d["sigma1"][i]
+            d["w1"][i], d["w2"][i] = d["w2"][i], d["w1"][i]
+            n_swapped += 1
+        end
+    end
+    println(@sprintf "  %8s: swapped %d bins" flav n_swapped)
+end
+
+# Step 2: Build cosZ neighbor groups — bins with same (sample, logPMin, logPMax)
+# These are the cosZ slices within each momentum bin of each sample
+cz_groups = Dict{Tuple{String,Float64,Float64}, Vector{Int}}()
 for i in 1:n_bins
-    s = bininfo.Sample[i]
-    haskey(sample_groups, s) || (sample_groups[s] = Int[])
-    push!(sample_groups[s], i)
+    key = (bininfo.Sample[i], bininfo.logPMin[i], bininfo.logPMax[i])
+    haskey(cz_groups, key) || (cz_groups[key] = Int[])
+    push!(cz_groups[key], i)
 end
 
 # Regularization strength: 0 = no smoothing, 1 = full average with neighbors
-const REG_STRENGTH = 0.3
+const REG_STRENGTH = 0.5
 
-println("\n--- Regularizing parameters (strength=$REG_STRENGTH) ---")
+println("\n--- Regularizing across cosZ neighbors (strength=$REG_STRENGTH) ---")
 
-function smooth_param!(result, key, groups, mc_data)
-    for (sample, idxs) in groups
+function smooth_param_cz!(result, key, groups, mc_data)
+    for (grp_key, idxs) in groups
         length(idxs) < 3 && continue
         original = [result[key][i] for i in idxs]
         for pos in 1:length(idxs)
             i = idxs[pos]
             mc_data[i, :].Counts == 0 && continue
-            result[key][i] == 0 && continue
+            original[pos] == 0 && continue
 
-            # Collect active neighbors
+            # Collect active cosZ neighbors (only prev/next in cosZ)
             neighbors = Float64[]
             for np in max(1, pos-1):min(length(idxs), pos+1)
                 np == pos && continue
@@ -180,7 +199,6 @@ function smooth_param!(result, key, groups, mc_data)
             end
             isempty(neighbors) && continue
 
-            # Smooth: blend own value with neighbor average
             avg = mean(neighbors)
             result[key][i] = (1 - REG_STRENGTH) * original[pos] + REG_STRENGTH * avg
         end
@@ -189,13 +207,13 @@ end
 
 for flav in flavors
     mc_comp = mc[flav]
-    # Smooth energy params
+    # Smooth energy params (both components, now correctly ordered)
     for key in ["mu1", "mu2", "sigma1", "sigma2"]
-        smooth_param!(mix_result[flav], key, sample_groups, mc_comp)
+        smooth_param_cz!(mix_result[flav], key, cz_groups, mc_comp)
     end
     # Smooth cosZ params
     for key in ["kappa", "beta"]
-        smooth_param!(vmf_result[flav], key, sample_groups, mc_comp)
+        smooth_param_cz!(vmf_result[flav], key, cz_groups, mc_comp)
     end
     println(@sprintf "  %8s: smoothed" flav)
 end
