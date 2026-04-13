@@ -218,6 +218,188 @@ for flav in flavors
     println(@sprintf "  %8s: smoothed" flav)
 end
 
+# ─── Cross-flavor override: detect failed fits, replace from partner/median ───
+# Minority channels (e.g., nutau in nue-like bins) with very few events can get
+# pathological fits. Rather than blending (which dilutes but doesn't fix), we
+# detect failures and fully replace width parameters from partner channels or
+# the cross-flavor median. Location parameters (mu1, mu2, mu_z) are kept from
+# the channel's own fit when possible, since nutau/NC legitimately peak at
+# different energies.
+const MIN_COUNTS = 1.0
+const MAX_RATIO = 3.0
+
+PARTNERS = Dict(
+    :nue => :nuebar, :nuebar => :nue,
+    :numu => :numubar, :numubar => :numu,
+    :nutau => :numu,   # closest CC kinematics
+    :nunc => nothing,  # use cross-flavor median
+)
+
+println("\n--- Detecting failed fits (min_counts=$MIN_COUNTS, max_ratio=$MAX_RATIO) ---")
+
+# 1. Detect failed bins
+failed = Dict(flav => falses(n_bins) for flav in flavors)
+
+for bin_idx in 1:n_bins
+    # Collect active sigmas and kappas across flavors for median computation
+    e_sigmas = Dict{Symbol,Float64}()
+    cz_kappas = Dict{Symbol,Float64}()
+    for flav in flavors
+        mc[flav][bin_idx, :].Counts == 0 && continue
+        s = mix_result[flav]["sigma1"][bin_idx]
+        s > 0 && (e_sigmas[flav] = s)
+        k = vmf_result[flav]["kappa"][bin_idx]
+        k > 0 && (cz_kappas[flav] = k)
+    end
+
+    e_med = length(e_sigmas) >= 2 ? median(collect(values(e_sigmas))) : 0.0
+    cz_med = length(cz_kappas) >= 2 ? median(collect(values(cz_kappas))) : 0.0
+
+    for flav in flavors
+        counts = mc[flav][bin_idx, :].Counts
+        counts == 0 && continue
+
+        # Low statistics — insufficient to constrain 5 quantiles + mean + RMS
+        if counts < MIN_COUNTS
+            failed[flav][bin_idx] = true; continue
+        end
+
+        # Energy width outlier
+        if e_med > 0 && haskey(e_sigmas, flav)
+            ratio = e_sigmas[flav] / e_med
+            if ratio > MAX_RATIO || ratio < 1/MAX_RATIO
+                failed[flav][bin_idx] = true; continue
+            end
+        end
+
+        # CosZ kappa outlier
+        if cz_med > 0 && haskey(cz_kappas, flav)
+            ratio = cz_kappas[flav] / cz_med
+            if ratio > MAX_RATIO || ratio < 1/MAX_RATIO
+                failed[flav][bin_idx] = true; continue
+            end
+        end
+    end
+end
+
+for flav in flavors
+    n_fail = count(failed[flav])
+    n_active = count(mc[flav][i, :].Counts > 0 for i in 1:n_bins)
+    println(@sprintf "  %8s: %d / %d active bins failed" flav n_fail n_active)
+end
+
+# 2. Override from partner or cross-flavor median
+println("\n--- Overriding failed fits from partner/median ---")
+
+function get_cross_flavor_median(result_dict, key, bin_idx, flavors, failed)
+    vals = Float64[]
+    for f in flavors
+        failed[f][bin_idx] && continue
+        v = result_dict[f][key][bin_idx]
+        v > 0 && push!(vals, v)
+    end
+    isempty(vals) ? 0.0 : median(vals)
+end
+
+n_partner = 0; n_median = 0
+for bin_idx in 1:n_bins
+    for flav in flavors
+        !failed[flav][bin_idx] && continue
+        # Skip completely empty bins
+        mc[flav][bin_idx, :].Counts == 0 && continue
+        mix_result[flav]["sigma1"][bin_idx] == 0 && vmf_result[flav]["kappa"][bin_idx] == 0 && continue
+
+        partner = PARTNERS[flav]
+
+        # Try partner first
+        source = nothing
+        if partner !== nothing && !failed[partner][bin_idx] &&
+           (mix_result[partner]["sigma1"][bin_idx] > 0 || vmf_result[partner]["kappa"][bin_idx] > 0)
+            source = partner
+        end
+
+        if source !== nothing
+            # Copy width params from partner
+            for key in ["sigma1", "sigma2"]
+                mix_result[flav][key][bin_idx] = mix_result[source][key][bin_idx]
+            end
+            for key in ["kappa", "beta"]
+                vmf_result[flav][key][bin_idx] = vmf_result[source][key][bin_idx]
+            end
+            # Copy location too if own counts are very low
+            if mc[flav][bin_idx, :].Counts < MIN_COUNTS
+                for key in ["mu1", "mu2", "w1", "w2"]
+                    mix_result[flav][key][bin_idx] = mix_result[source][key][bin_idx]
+                end
+                vmf_result[flav]["mu_z"][bin_idx] = vmf_result[source]["mu_z"][bin_idx]
+                vmf_result[flav]["E_ref"][bin_idx] = vmf_result[source]["E_ref"][bin_idx]
+            end
+            global n_partner += 1
+        else
+            # Fall back to cross-flavor median of non-failed channels
+            for key in ["sigma1", "sigma2"]
+                med = get_cross_flavor_median(mix_result, key, bin_idx, flavors, failed)
+                med > 0 && (mix_result[flav][key][bin_idx] = med)
+            end
+            for key in ["kappa", "beta"]
+                med = get_cross_flavor_median(vmf_result, key, bin_idx, flavors, failed)
+                med > 0 && (vmf_result[flav][key][bin_idx] = med)
+            end
+            global n_median += 1
+        end
+    end
+end
+println("  Overridden from partner: $n_partner")
+println("  Overridden from median:  $n_median")
+println("  Total: $(n_partner + n_median)")
+
+# 3. Re-smooth across cosZ neighbors to blend overridden values with neighborhood
+println("\n--- Re-smoothing after overrides ---")
+for flav in flavors
+    mc_comp = mc[flav]
+    for key in ["sigma1", "sigma2"]
+        smooth_param_cz!(mix_result[flav], key, cz_groups, mc_comp)
+    end
+    for key in ["kappa", "beta"]
+        smooth_param_cz!(vmf_result[flav], key, cz_groups, mc_comp)
+    end
+    println(@sprintf "  %8s: re-smoothed" flav)
+end
+
+# 4. Final cleanup: hard-clamp any remaining outliers after re-smoothing
+# (re-smoothing can pull overridden values back toward pathological neighbors)
+println("\n--- Final cleanup pass ---")
+n_final = 0
+for bin_idx in 1:n_bins
+    for (result_dict, keys_to_check) in [(mix_result, ["sigma1", "sigma2"]), (vmf_result, ["kappa"])]
+        for key in keys_to_check
+            vals = Float64[]
+            active_flavs = Symbol[]
+            for flav in flavors
+                mc[flav][bin_idx, :].Counts == 0 && continue
+                v = result_dict[flav][key][bin_idx]
+                v > 0 || continue
+                push!(vals, v)
+                push!(active_flavs, flav)
+            end
+            length(vals) < 2 && continue
+            med = median(vals)
+            med <= 0 && continue
+            for (i, flav) in enumerate(active_flavs)
+                ratio = vals[i] / med
+                if ratio > MAX_RATIO
+                    result_dict[flav][key][bin_idx] = med * MAX_RATIO
+                    global n_final += 1
+                elseif ratio < 1.0 / MAX_RATIO
+                    result_dict[flav][key][bin_idx] = med / MAX_RATIO
+                    global n_final += 1
+                end
+            end
+        end
+    end
+end
+println("  Clamped $n_final remaining outliers")
+
 # ─── Save ───
 e_path = joinpath(DATADIR, "energy_response_params.jld2")
 jldsave(e_path; mix_logE=mix_result, quantile_probs=QP, mc_source="unoscillated")
