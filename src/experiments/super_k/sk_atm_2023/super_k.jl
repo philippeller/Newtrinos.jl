@@ -944,6 +944,63 @@ function get_double_factor(total, mask1, mask2, factor1)
     return factor
 end
 
+"""
+    get_gaussian_double_factor(total, channel, mask1, mask2, param) → Vector
+
+Gaussian discriminant model for binary classifier migration systematics.
+
+Models each flavor channel's discriminant distribution as a Gaussian with shared
+width σ=1 and flavor-dependent mean μ_f, inferred from the nominal event fraction
+on each side of the classification threshold. A systematic parameter shift moves
+the threshold, changing fractions non-linearly via the Gaussian CDF.
+
+This is more physical than the linear `get_double_factor`: a flavor that dominates
+one side (e.g., nue in e-like bins, 95% on correct side) is barely affected by a
+small threshold shift, while a contamination flavor near the threshold (e.g., numu
+in e-like, 20%) is affected much more.
+
+**Derivation**:
+- For each channel, the nominal fraction frac1 = n1/(n1+n2) determines the Gaussian
+  mean: μ = -Φ⁻¹(frac1), where Φ is the standard normal CDF.
+- The threshold shift δ is derived from the total (all-flavor) counts so that the
+  total-count behavior matches the linear model: Φ(δ - μ_total) = param × frac1_total.
+- The same δ is applied to each channel's Gaussian: new_frac1 = Φ(δ - μ_channel).
+- Per-side factors: factor1 = new_frac1/frac1, factor2 = (1-new_frac1)/(1-frac1).
+
+At param=1.0, δ=0 and all factors are exactly 1.0. For small deviations, the model
+reproduces the linear behavior for total counts but gives physically motivated
+non-linear per-channel responses.
+"""
+function get_gaussian_double_factor(total, channel, mask1, mask2, param)
+    # Threshold shift δ from total counts (backward compatible with linear model)
+    total1 = sum(total[mask1])
+    total2 = sum(total[mask2])
+    total_sum = total1 + total2
+    (total_sum < 1e-10) && return ones(eltype(param), length(channel))
+
+    frac1_total = total1 / total_sum
+    μ_total = -quantile(Normal(), clamp(frac1_total, 1e-6, 1 - 1e-6))
+    new_frac1_total = clamp(param * frac1_total, 1e-6, 1 - 1e-6)
+    δ = quantile(Normal(), new_frac1_total) + μ_total
+
+    # Apply same δ to this channel's Gaussian
+    ch1 = sum(channel[mask1])
+    ch2 = sum(channel[mask2])
+    ch_sum = ch1 + ch2
+    (ch_sum < 1e-10) && return ones(eltype(param), length(channel))
+
+    frac1_ch = ch1 / ch_sum
+    # Channel entirely on one side — no migration possible
+    (frac1_ch < 1e-10 || frac1_ch > 1 - 1e-10) && return ones(eltype(param), length(channel))
+    μ_ch = -quantile(Normal(), clamp(frac1_ch, 1e-6, 1 - 1e-6))
+    new_frac1_ch = cdf(Normal(), δ - μ_ch)
+
+    f1 = frac1_ch > 1e-10 ? new_frac1_ch / frac1_ch : one(param)
+    f2 = (1 - frac1_ch) > 1e-10 ? (1 - new_frac1_ch) / (1 - frac1_ch) : one(param)
+
+    return (mask1 * f1 .+ .!mask1) .* (mask2 * f2 .+ .!mask2)
+end
+
 function get_norm_factors(params, assets, total)
     # Overall normalization factors — computed from total counts, applied to all channels
     return (
@@ -961,36 +1018,37 @@ function get_norm_factors(params, assets, total)
     )
 end
 
-function get_migration_factors(params, assets, channel)
-    # Migration/classification factors — computed per-channel so that the transfer
-    # respects the actual flavor composition in each bin. E.g. PID migration between
-    # e-like and mu-like moves different fractions of nue vs numu events.
+function get_migration_factors(params, assets, channel, total)
+    # Migration/classification factors using Gaussian discriminant model.
+    # The threshold shift δ is derived from total counts (backward compatible),
+    # then applied per-channel with flavor-specific Gaussian means.
+    G = (m1, m2, p) -> get_gaussian_double_factor(total, channel, m1, m2, p)
     return (
         # Decay-e tagging
-        (get_double_factor(channel, assets.masks.sk_i_iii_elike_1decay_e, assets.masks.sk_i_iii_elike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_i_iii_mulike_1decay_e, assets.masks.sk_i_iii_mulike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_i_iii_mulike_2decay_e, assets.masks.sk_i_iii_mulike_1decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_iv_v_1decay_e, assets.masks.sk_iv_v_0decay_e, params.sk_iv_v_decay_e_tag_eff) .- 1) .+
+        (G(assets.masks.sk_i_iii_elike_1decay_e, assets.masks.sk_i_iii_elike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
+        (G(assets.masks.sk_i_iii_mulike_1decay_e, assets.masks.sk_i_iii_mulike_0decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
+        (G(assets.masks.sk_i_iii_mulike_2decay_e, assets.masks.sk_i_iii_mulike_1decay_e, params.sk_i_iii_decay_e_tag_eff) .- 1) .+
+        (G(assets.masks.sk_iv_v_1decay_e, assets.masks.sk_iv_v_0decay_e, params.sk_iv_v_decay_e_tag_eff) .- 1) .+
         # Neutron tagging
-        (get_double_factor(channel, assets.masks.sk_iv_v_subgev_0neutron, assets.masks.sk_iv_v_subgev_1neutron, params.sk_iv_v_subgev_neutron_tag_eff) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_iv_v_multigev_0neutron, assets.masks.sk_iv_v_multigev_1neutron, params.sk_iv_v_multigev_neutron_tag_eff) .- 1) .+
+        (G(assets.masks.sk_iv_v_subgev_0neutron, assets.masks.sk_iv_v_subgev_1neutron, params.sk_iv_v_subgev_neutron_tag_eff) .- 1) .+
+        (G(assets.masks.sk_iv_v_multigev_0neutron, assets.masks.sk_iv_v_multigev_1neutron, params.sk_iv_v_multigev_neutron_tag_eff) .- 1) .+
         # BDT multi-ring classification
-        (get_double_factor(channel, assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_bdt_1) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_bdt_2) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_bdt_3) .- 1) .+
+        (G(assets.masks.sk_i_v_multigev_multiring_nuebar, assets.masks.sk_i_v_multigev_multiring_nue, params.sk_i_v_bdt_1) .- 1) .+
+        (G(assets.masks.sk_i_v_multigev_multiring_nue, assets.masks.sk_i_v_multigev_multiring_mu, params.sk_i_v_bdt_2) .- 1) .+
+        (G(assets.masks.sk_i_v_multigev_multiring_mu, assets.masks.sk_i_v_multigev_multiring_other, params.sk_i_v_bdt_3) .- 1) .+
         # PID migration: e-like ↔ mu-like
-        (get_double_factor(channel, assets.masks.sk_i_iii_subgev_elike, assets.masks.sk_i_iii_subgev_mulike, params.sk_i_iii_subgev_pid) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_i_iii_multigev_1ring_elike, assets.masks.sk_i_iii_multigev_1ring_mulike, params.sk_i_iii_multigev_pid) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_iv_v_multigev_1ring_elike, assets.masks.sk_iv_v_multigev_1ring_mulike, params.sk_iv_v_multigev_pid) .- 1) .+
+        (G(assets.masks.sk_i_iii_subgev_elike, assets.masks.sk_i_iii_subgev_mulike, params.sk_i_iii_subgev_pid) .- 1) .+
+        (G(assets.masks.sk_iv_v_subgev_elike, assets.masks.sk_iv_v_subgev_mulike, params.sk_iv_v_subgev_pid) .- 1) .+
+        (G(assets.masks.sk_i_iii_multigev_1ring_elike, assets.masks.sk_i_iii_multigev_1ring_mulike, params.sk_i_iii_multigev_pid) .- 1) .+
+        (G(assets.masks.sk_iv_v_multigev_1ring_elike, assets.masks.sk_iv_v_multigev_1ring_mulike, params.sk_iv_v_multigev_pid) .- 1) .+
         # Ring counting migration: overall + split by energy
-        (get_double_factor(channel, assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_subgev_1ring, assets.masks.sk_subgev_multiring, params.sk_subgev_ring_counting) .- 1) .+
-        (get_double_factor(channel, assets.masks.sk_multigev_1ring, assets.masks.sk_multigev_multiring, params.sk_multigev_ring_counting) .- 1) .+
+        (G(assets.masks.sk_1ring, assets.masks.sk_multiring, params.sk_ring_counting) .- 1) .+
+        (G(assets.masks.sk_subgev_1ring, assets.masks.sk_subgev_multiring, params.sk_subgev_ring_counting) .- 1) .+
+        (G(assets.masks.sk_multigev_1ring, assets.masks.sk_multigev_multiring, params.sk_multigev_ring_counting) .- 1) .+
         # FC/PC separation: FC multi-GeV mu-like ↔ PC
-        (get_double_factor(channel, assets.masks.fc_multigev_mulike, assets.masks.pc, params.sk_fc_pc_separation) .- 1) .+
+        (G(assets.masks.fc_multigev_mulike, assets.masks.pc, params.sk_fc_pc_separation) .- 1) .+
         # pi0 selection
-        (get_double_factor(channel, assets.masks.sk_1ring_pi0, assets.masks.sk_2ring_pi0, params.sk_pi0_norm) .- 1)
+        (G(assets.masks.sk_1ring_pi0, assets.masks.sk_2ring_pi0, params.sk_pi0_norm) .- 1)
     )
 end
 
@@ -1005,13 +1063,13 @@ function get_expected(params, physics, assets)
     # Normalization factors (from total counts, same for all channels)
     norm = get_norm_factors(params, assets, total)
 
-    # Migration factors (per-channel, respecting flavor composition)
-    nue_mig = get_migration_factors(params, assets, expected.nue)
-    numu_mig = get_migration_factors(params, assets, expected.numu)
-    nutau_mig = get_migration_factors(params, assets, expected.nutau)
-    nuebar_mig = get_migration_factors(params, assets, expected.nuebar)
-    numubar_mig = get_migration_factors(params, assets, expected.numubar)
-    nunc_mig = get_migration_factors(params, assets, expected.nunc)
+    # Migration factors (per-channel Gaussian discriminant model)
+    nue_mig = get_migration_factors(params, assets, expected.nue, total)
+    numu_mig = get_migration_factors(params, assets, expected.numu, total)
+    nutau_mig = get_migration_factors(params, assets, expected.nutau, total)
+    nuebar_mig = get_migration_factors(params, assets, expected.nuebar, total)
+    numubar_mig = get_migration_factors(params, assets, expected.numubar, total)
+    nunc_mig = get_migration_factors(params, assets, expected.nunc, total)
 
     # Per-sample scale: norm + migration + sample-specific deviations
     nue = apply_all_energy_scales(expected.nue .* (1 .+ norm .+ nue_mig), assets, params)
