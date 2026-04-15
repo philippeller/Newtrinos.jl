@@ -59,7 +59,6 @@ function get_params(cfg::Barr)
         atm_flux_updown_sigma = 0.,
         atm_flux_norm_ratio_lo = 1.,
         atm_flux_norm_ratio_hi = 1.,
-        atm_flux_K_pi_ratio = 1.,
         )
 end
 
@@ -79,7 +78,6 @@ function get_priors(cfg::Barr)
         atm_flux_updown_sigma = Truncated(Normal(0., 1.), -3, 3),
         atm_flux_norm_ratio_lo = Normal(1, 0.15),
         atm_flux_norm_ratio_hi = Normal(1, 0.15),
-        atm_flux_K_pi_ratio = Normal(1, 0.1),
         )
 end
 
@@ -152,6 +150,10 @@ function updown(coszen, up_down_ratio)
     return scale
 end
 
+fun_numunumubar(cz, σ) = (σ / 0.77896) .* (1 .- 0.5 .* exp.(-abs.(cz).^1.75 ./ 0.3))
+fun_numunue(cz, σ) = fun_numunumubar(cz, σ)
+fun_nuenuebar(cz, σ) = (1 .+ 9.62 .* σ.^1.7) .* σ .- 17 .* σ.^2.7 .* exp.(-abs.(cz).^1.75 ./ 0.5)
+
 function get_sys_flux(cfg::Barr)
     function sys_flux(flux, params)
     
@@ -172,33 +174,29 @@ function get_sys_flux(cfg::Barr)
             params.atm_flux_norm_ratio_lo .- 1,
             params.atm_flux_norm_ratio_hi .- 1))
 
-        # K/π ratio: kaons dominate above ~5 GeV, stronger effect on νe than νμ
-        f_k_pi_e = 1 .+ (params.atm_flux_K_pi_ratio - 1) ./ (1 .+ exp.(-(log10e .- log10(5)) .* 3))
-        f_k_pi_mu = 1 .+ 0.3 .* (params.atm_flux_K_pi_ratio - 1) ./ (1 .+ exp.(-(log10e .- log10(5)) .* 3))
-
         # all coefficients below come from fits to the Figs. 7 & 9 in Uncertainties in Atmospheric Neutrino Fluxes by Barr & Robbins
 
-        # nue - nuebar (3 energy ranges)
+        # nue - nuebar (3 energy ranges, coszen-dependent)
         uncert = ((0.73 * e) .^(0.59) .+ 4.8) / 100.
         eff_sigma = ifelse.(mask_lo, params.atm_flux_nuenuebar_sigma_lo,
                     ifelse.(mask_mid, params.atm_flux_nuenuebar_sigma_mid,
                                       params.atm_flux_nuenuebar_sigma_hi))
-        flux_nue1, flux_nuebar1 = scale_flux(flux.nue, flux.nuebar, 1. .+ (eff_sigma .* uncert))
+        flux_nue1, flux_nuebar1 = scale_flux(flux.nue, flux.nuebar, 1. .+ fun_nuenuebar(cz, eff_sigma .* uncert))
 
-        # numu - numubar (3 energy ranges)
+        # numu - numubar (3 energy ranges, coszen-dependent)
         uncert = ((9.6 * e) .^(0.41) .-0.8) / 100.
         eff_sigma = ifelse.(mask_lo, params.atm_flux_numunumubar_sigma_lo,
                     ifelse.(mask_mid, params.atm_flux_numunumubar_sigma_mid,
                                       params.atm_flux_numunumubar_sigma_hi))
-        flux_numu1, flux_numubar1 = scale_flux(flux.numu, flux.numubar, 1. .+ (eff_sigma .* uncert))
+        flux_numu1, flux_numubar1 = scale_flux(flux.numu, flux.numubar, 1. .+ fun_numunumubar(cz, eff_sigma .* uncert))
 
-        # nue - numu (3 energy ranges)
+        # nue - numu (3 energy ranges, coszen-dependent)
         uncert = ((0.051 * e) .^(0.63) .+ 0.73) / 100.
         eff_sigma = ifelse.(mask_lo, params.atm_flux_nuenumu_sigma_lo,
                     ifelse.(mask_mid, params.atm_flux_nuenumu_sigma_mid,
                                       params.atm_flux_nuenumu_sigma_hi))
-        flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- (eff_sigma .* uncert))
-        flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- (eff_sigma .* uncert))
+        flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- fun_numunue(cz, eff_sigma .* uncert))
+        flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- fun_numunue(cz, eff_sigma .* uncert))
 
         #up/down
         uncert = max.(0., 7 ./ (1 .+ (e./0.5) .^2)) / 100.
@@ -208,14 +206,14 @@ function get_sys_flux(cfg::Barr)
         # nue
         uncert = (-0.43*log10e.^5 .+ 1.17*log10e.^4 .+ 0.89*log10e.^3 .- 0.36*log10e.^2 .- 1.59*log10e .+ 1.96) / 100.
         f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizontal_sigma) 
-        flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt .* f_k_pi_e
-        flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt .* f_k_pi_e
+        flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
+        flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
 
         #numu
         uncert = (-0.16*log10e.^5 .+ 0.45*log10e.^4 .+ 0.48*log10e.^3 .+ 0.17*log10e.^2 .- 1.88*log10e .+ 1.88) / 100.
         f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizontal_sigma)
-        flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt .* f_k_pi_mu
-        flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt .* f_k_pi_mu
+        flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
+        flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
 
         return (nue=flux_nue3, numu=flux_numu3, nuebar=flux_nuebar3, numubar=flux_numubar3)
     
