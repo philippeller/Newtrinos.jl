@@ -150,9 +150,9 @@ function updown(coszen, up_down_ratio)
     return scale
 end
 
-fun_numunumubar(cz, σ) = (σ / 0.77896) .* (1 .- 0.5 .* exp.(-abs.(cz).^1.75 ./ 0.3))
-fun_numunue(cz, σ) = fun_numunumubar(cz, σ)
-fun_nuenuebar(cz, σ) = (1 .+ 9.62 .* σ.^1.7) .* σ .- 17 .* σ.^2.7 .* exp.(-abs.(cz).^1.75 ./ 0.5)
+fun_numunumubar(cz, u) = (u / 0.77896) .* (1 .- 0.5 .* exp.(-abs.(cz).^1.75 ./ 0.3))
+fun_numunue(cz, u) = fun_numunumubar(cz, u)
+fun_nuenuebar(cz, u) = (1 .+ 9.62 .* u.^1.7) .* u .- 17 .* u.^2.7 .* exp.(-abs.(cz).^1.75 ./ 0.5)
 
 function get_sys_flux(cfg::Barr)
     function sys_flux(flux, params)
@@ -181,22 +181,22 @@ function get_sys_flux(cfg::Barr)
         eff_sigma = ifelse.(mask_lo, params.atm_flux_nuenuebar_sigma_lo,
                     ifelse.(mask_mid, params.atm_flux_nuenuebar_sigma_mid,
                                       params.atm_flux_nuenuebar_sigma_hi))
-        flux_nue1, flux_nuebar1 = scale_flux(flux.nue, flux.nuebar, 1. .+ fun_nuenuebar(cz, eff_sigma .* uncert))
+        flux_nue1, flux_nuebar1 = scale_flux(flux.nue, flux.nuebar, 1. .+ eff_sigma .* fun_nuenuebar(cz, uncert))
 
         # numu - numubar (3 energy ranges, coszen-dependent)
         uncert = ((9.6 * e) .^(0.41) .-0.8) / 100.
         eff_sigma = ifelse.(mask_lo, params.atm_flux_numunumubar_sigma_lo,
                     ifelse.(mask_mid, params.atm_flux_numunumubar_sigma_mid,
                                       params.atm_flux_numunumubar_sigma_hi))
-        flux_numu1, flux_numubar1 = scale_flux(flux.numu, flux.numubar, 1. .+ fun_numunumubar(cz, eff_sigma .* uncert))
+        flux_numu1, flux_numubar1 = scale_flux(flux.numu, flux.numubar, 1. .+ eff_sigma .* fun_numunumubar(cz, uncert))
 
         # nue - numu (3 energy ranges, coszen-dependent)
         uncert = ((0.051 * e) .^(0.63) .+ 0.73) / 100.
         eff_sigma = ifelse.(mask_lo, params.atm_flux_nuenumu_sigma_lo,
                     ifelse.(mask_mid, params.atm_flux_nuenumu_sigma_mid,
                                       params.atm_flux_nuenumu_sigma_hi))
-        flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .- fun_numunue(cz, eff_sigma .* uncert))
-        flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .- fun_numunue(cz, eff_sigma .* uncert))
+        flux_nue2, flux_numu2 = scale_flux(flux_nue1, flux_numu1, 1. .+ eff_sigma .* fun_numunue(cz, uncert))
+        flux_nuebar2, flux_numubar2 = scale_flux(flux_nuebar1, flux_numubar1, 1. .+ eff_sigma .* fun_numunue(cz, uncert))
 
         #up/down
         uncert = max.(0., 7 ./ (1 .+ (e./0.5) .^2)) / 100.
