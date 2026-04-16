@@ -874,9 +874,9 @@ function get_priors()
         sk_iv_v_energy_scale = Truncated(Normal(1.0, 0.021), 0.5, 1.5),
         # Up/down energy scale from Table 5.6, split by phase group
         # SK I: 1.3%, SK II: 0.6%, SK III: 0.7% → exposure-weighted ~1.0%
-        # SK IV: 0.5%, SK V: 0.7% → exposure-weighted ~0.6% (changed to 1% as test)
+        # SK IV: 0.5%, SK V: 0.7% → exposure-weighted ~0.6%
         sk_i_iii_updown_energy_scale = Truncated(Normal(1.0, 0.01), 0.5, 1.5),
-        sk_iv_v_updown_energy_scale = Truncated(Normal(1.0, 0.01), 0.5, 1.5),
+        sk_iv_v_updown_energy_scale = Truncated(Normal(1.0, 0.006), 0.5, 1.5),
         sk_total_norm = Normal(1.0, 0.2),
         sk_fc_norm = Normal(1.0, 0.015),
         sk_pc_norm = Normal(1.0, 0.03),
@@ -892,15 +892,15 @@ function get_priors()
         sk_iv_v_decay_e_tag_eff = Normal(1.0, 0.008),
         sk_iv_v_subgev_neutron_tag_eff = Normal(1.0, 0.12),
         sk_iv_v_multigev_neutron_tag_eff = Normal(1.0, 0.12),
-        sk_i_v_bdt_1 = Normal(1, 0.08), #was 5%
-        sk_i_v_bdt_2 = Normal(1, 0.08),
-        sk_i_v_bdt_3 = Normal(1, 0.08),
+        sk_i_v_bdt_1 = Normal(1, 0.05),
+        sk_i_v_bdt_2 = Normal(1, 0.05),
+        sk_i_v_bdt_3 = Normal(1, 0.05),
         # PID: thesis shows <1% for most phases, up to ~2-3% for some
         # Sub-GeV PID is better constrained than multi-GeV
-        sk_i_iii_subgev_pid = Normal(1, 0.05), # was 2
-        sk_iv_v_subgev_pid = Normal(1, 0.05),
-        sk_i_iii_multigev_pid = Normal(1, 0.05), # was 3
-        sk_iv_v_multigev_pid = Normal(1, 0.05),
+        sk_i_iii_subgev_pid = Normal(1, 0.02),
+        sk_iv_v_subgev_pid = Normal(1, 0.02),
+        sk_i_iii_multigev_pid = Normal(1, 0.03),
+        sk_iv_v_multigev_pid = Normal(1, 0.03),
         # Ring counting: split into sub-GeV (better constrained) and multi-GeV
         sk_ring_counting = Normal(1, 0.05),
         sk_nue_contamination = Normal(1, 0.05),

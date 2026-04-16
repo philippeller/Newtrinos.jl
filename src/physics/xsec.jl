@@ -253,6 +253,7 @@ function get_params(cfg::H2O_PCA)
         xsec_ccdis_nubar_ratio = 1.,
         xsec_ccother_nubar_ratio = 1.,
         xsec_nc_nubar_ratio = 1.,
+        xsec_cc1p1h_nue_numu_ratio = 1.,
     )
 end
 
@@ -279,6 +280,8 @@ function get_priors(cfg::H2O_PCA)
         xsec_ccdis_nubar_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
         xsec_ccother_nubar_ratio = Truncated(Normal(1, 0.10), 0.5, 1.5),
         xsec_nc_nubar_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
+        # νe/νμ CCQE ratio: nuclear model uncertainty (RFG vs LFG)
+        xsec_cc1p1h_nue_numu_ratio = Truncated(Normal(1, 0.05), 0.7, 1.3),
     )
 end
 
@@ -511,6 +514,15 @@ function get_scale(cfg::H2O_PCA)
             else
                 ch_w = ch_w .* (2 / (1 + r))
             end
+            # Normalization-conserving νe/νμ ratio for CCQE
+            if ch == "CC1p1h"
+                r_fl = params.xsec_cc1p1h_nue_numu_ratio
+                if flav == :nue
+                    ch_w = ch_w .* (2 * r_fl / (1 + r_fl))
+                else
+                    ch_w = ch_w .* (2 / (1 + r_fl))
+                end
+            end
             result .+= ch_w
         end
 
@@ -668,6 +680,14 @@ function get_dσdE(cfg::H2O_PCA)
                 ch_w = ch_w .* (2 * r / (1 + r))
             else
                 ch_w = ch_w .* (2 / (1 + r))
+            end
+            if ch == "CC1p1h"
+                r_fl = params.xsec_cc1p1h_nue_numu_ratio
+                if flav == :nue
+                    ch_w = ch_w .* (2 * r_fl / (1 + r_fl))
+                else
+                    ch_w = ch_w .* (2 / (1 + r_fl))
+                end
             end
             result .+= ch_w
         end
