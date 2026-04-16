@@ -126,13 +126,29 @@ if use_distributed
         using MeasureBase
         using ADTypes
         using Newtrinos
+        using FileIO
 
         experiments = Newtrinos.configure_experiments(args["experiments"])
-        likelihood = Newtrinos.generate_likelihood(experiments)
 
         ad_backend = Symbol(args["ad"])
         Newtrinos.set_ad_backend(ad_backend)
         p = Newtrinos.get_params(experiments)
+        # Seed initial parameters from a previous result file
+        if args["seed"] !== nothing
+            seed_data = FileIO.load(args["seed"])
+            seed_bf = Newtrinos.bestfit(seed_data["result"])
+            matched = [k for k in keys(p) if haskey(seed_bf, k)]
+            seed_vals = NamedTuple{Tuple(matched)}(seed_bf[k] for k in matched)
+            p = merge(p, seed_vals)
+            @info "Seeded $(length(matched)) parameters from $(args["seed"])"
+        end
+
+        # ASIMOV
+        #asimov = NamedTuple(e=>Newtrinos.generate_asimov_data(experiments[e], p) for e in keys(experiments))
+        #likelihood = Newtrinos.generate_likelihood(experiments, asimov)
+
+        likelihood = Newtrinos.generate_likelihood(experiments)
+
         set_batcontext(ad = Newtrinos.select_ad(length(p)))
     end
 
@@ -207,6 +223,10 @@ priors = Newtrinos.condition(priors, conditional_vars, p)
 
 @reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
 @reset priors.θ₂₃ = Uniform(pi/4-0.2, pi/4+0.2)
+
+# IO
+#@reset p.Δm²₃₁ = -p.Δm²₃₁
+#@reset priors.Δm²₃₁ = -priors.Δm²₃₁
 
 if lowercase(args["task"]) == "nestedsampling"
     import UltraNest

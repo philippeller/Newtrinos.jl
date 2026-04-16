@@ -257,9 +257,9 @@ end
 
 function get_priors(cfg::H2O_PCA)
     (
-        xsec_cc1p1h_norm = Truncated(Normal(1, 0.15), 0.4, 1.6),
+        xsec_cc1p1h_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
         xsec_cc2p2h_norm = Truncated(Normal(1, 0.50), 0.0, 3.0),
-        xsec_cc1pi_norm = Truncated(Normal(1, 0.15), 0.4, 1.6),
+        xsec_cc1pi_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
         xsec_ccdis_norm = Truncated(Normal(1, 0.10), 0.5, 1.5),
         xsec_ccother_norm = Truncated(Normal(1, 0.30), 0.2, 1.8),
         xsec_nc_norm = Truncated(Normal(1, 0.20), 0.4, 1.6),
