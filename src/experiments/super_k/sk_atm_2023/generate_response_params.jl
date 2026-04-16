@@ -226,7 +226,7 @@ end
 # the channel's own fit when possible, since nutau/NC legitimately peak at
 # different energies.
 const MIN_COUNTS = 1.0
-const MAX_RATIO = 1.8
+const MAX_RATIO = 3.0
 
 PARTNERS = Dict(
     :nue => :nuebar, :nuebar => :nue,
@@ -239,21 +239,17 @@ println("\n--- Detecting failed fits (min_counts=$MIN_COUNTS, max_ratio=$MAX_RAT
 
 # 1. Detect failed bins
 failed = Dict(flav => falses(n_bins) for flav in flavors)
-failed_location = Dict(flav => falses(n_bins) for flav in flavors)
 
 for bin_idx in 1:n_bins
-    # Collect active sigmas, kappas, and mu_z across flavors
+    # Collect active sigmas and kappas across flavors for median computation
     e_sigmas = Dict{Symbol,Float64}()
     cz_kappas = Dict{Symbol,Float64}()
-    cz_mu_z = Dict{Symbol,Float64}()
     for flav in flavors
         mc[flav][bin_idx, :].Counts == 0 && continue
         s = mix_result[flav]["sigma1"][bin_idx]
         s > 0 && (e_sigmas[flav] = s)
         k = vmf_result[flav]["kappa"][bin_idx]
         k > 0 && (cz_kappas[flav] = k)
-        mz = vmf_result[flav]["mu_z"][bin_idx]
-        mz != 0 && (cz_mu_z[flav] = mz)
     end
 
     e_med = length(e_sigmas) >= 2 ? median(collect(values(e_sigmas))) : 0.0
@@ -281,22 +277,6 @@ for bin_idx in 1:n_bins
             ratio = cz_kappas[flav] / cz_med
             if ratio > MAX_RATIO || ratio < 1/MAX_RATIO
                 failed[flav][bin_idx] = true; continue
-            end
-        end
-
-        # CosZ location outlier: compare mu_z to mean of other channels.
-        # Significance uses the channel's own vMF width (1/√κ) added in
-        # quadrature with the std of the other channels' mu_z values.
-        if length(cz_mu_z) >= 3 && haskey(cz_mu_z, flav) && haskey(cz_kappas, flav)
-            others = [v for (k,v) in cz_mu_z if k != flav]
-            other_mean = mean(others)
-            other_std = std(others)
-            vmf_width = 1 / sqrt(cz_kappas[flav])
-            combined_sigma = sqrt(vmf_width^2 + other_std^2)
-            if abs(cz_mu_z[flav] - other_mean) > combined_sigma
-                failed[flav][bin_idx] = true
-                failed_location[flav][bin_idx] = true
-                continue
             end
         end
     end
@@ -346,8 +326,8 @@ for bin_idx in 1:n_bins
             for key in ["kappa", "beta"]
                 vmf_result[flav][key][bin_idx] = vmf_result[source][key][bin_idx]
             end
-            # Copy location too if own counts are very low or location was flagged
-            if mc[flav][bin_idx, :].Counts < MIN_COUNTS || failed_location[flav][bin_idx]
+            # Copy location too if own counts are very low
+            if mc[flav][bin_idx, :].Counts < MIN_COUNTS
                 for key in ["mu1", "mu2", "w1", "w2"]
                     mix_result[flav][key][bin_idx] = mix_result[source][key][bin_idx]
                 end
@@ -364,20 +344,6 @@ for bin_idx in 1:n_bins
             for key in ["kappa", "beta"]
                 med = get_cross_flavor_median(vmf_result, key, bin_idx, flavors, failed)
                 med > 0 && (vmf_result[flav][key][bin_idx] = med)
-            end
-            # Also override locations if low counts or location was flagged
-            if mc[flav][bin_idx, :].Counts < MIN_COUNTS || failed_location[flav][bin_idx]
-                for key in ["mu1", "mu2"]
-                    med = get_cross_flavor_median(mix_result, key, bin_idx, flavors, failed)
-                    med > 0 && (mix_result[flav][key][bin_idx] = med)
-                end
-                mz_vals = Float64[]
-                for f in flavors
-                    failed[f][bin_idx] && continue
-                    mz = vmf_result[f]["mu_z"][bin_idx]
-                    mz != 0 && push!(mz_vals, mz)
-                end
-                !isempty(mz_vals) && (vmf_result[flav]["mu_z"][bin_idx] = mean(mz_vals))
             end
             global n_median += 1
         end

@@ -560,6 +560,15 @@ function calc_weights(params, assets, physics)
 
     flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
 
+    # Interpolate between solar min (s=0) and solar max (s=1)
+    s_sol = haskey(params, :sk_solar_activity) ? params.sk_solar_activity : zero(eltype(E))
+    flux = (
+        nue     = flux.nue     .* (1 .+ s_sol .* (assets.flux_solar_ratio.nue .- 1)),
+        numu    = flux.numu    .* (1 .+ s_sol .* (assets.flux_solar_ratio.numu .- 1)),
+        nuebar  = flux.nuebar  .* (1 .+ s_sol .* (assets.flux_solar_ratio.nuebar .- 1)),
+        numubar = flux.numubar .* (1 .+ s_sol .* (assets.flux_solar_ratio.numubar .- 1)),
+    )
+
     s = (size(p)[1], size(p)[2])
 
     # Energy-dependent flux normalization (bathtub shape, split at 1 GeV)
@@ -725,7 +734,19 @@ function get_assets(physics; datadir = @__DIR__)
     nominal_layers = physics.earth_layers.compute_layers()
     cz_midpoints = midpoints(cz_grid)
     paths = physics.earth_layers.compute_paths(cz_midpoints, nominal_layers)
-    flux_nominal = physics.atm_flux.nominal_flux(10. .^midpoints(loge_grid), cz_midpoints)
+    E_mid = 10. .^midpoints(loge_grid)
+    flux_nominal = physics.atm_flux.nominal_flux(E_mid, cz_midpoints)
+
+    # Precompute solar max/min flux ratio for solar activity interpolation
+    solmax_physics = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(
+        nominal_model=Newtrinos.atm_flux.HKKM("kam-ally-20-01-mtn-solmax.d")))
+    flux_solmax = solmax_physics.nominal_flux(E_mid, cz_midpoints)
+    flux_solar_ratio = (
+        nue     = Float64.(flux_solmax.nue ./ flux_nominal.nue),
+        numu    = Float64.(flux_solmax.numu ./ flux_nominal.numu),
+        nuebar  = Float64.(flux_solmax.nuebar ./ flux_nominal.nuebar),
+        numubar = Float64.(flux_solmax.numubar ./ flux_nominal.numubar),
+    )
 
     flatten_R(R3d) = NamedTuple(key => reshape(R3d[key], size(R3d[key], 1), :) for key in keys(R3d))
 
@@ -789,7 +810,7 @@ function get_assets(physics; datadir = @__DIR__)
     nc_nubar_rate = flux_nubar_E .* sigma_nubar_nc
     nc_nu_frac = nc_nu_rate ./ (nc_nu_rate .+ nc_nubar_rate .+ 1e-30)
 
-    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, nutau_nu_frac, nc_nu_frac), physics)
+    nominal_weights = calc_weights(params_nominal, (;R, flux_nominal, flux_solar_ratio, paths, nominal_layers, loge_grid, cz_grid, cz_midpoints, nutau_nu_frac, nc_nu_frac), physics)
 
     # Build energy groups for reco bin overlap energy scale method
     sk_i_iii_mask = masks.sk_i_iii_bins
@@ -810,7 +831,7 @@ function get_assets(physics; datadir = @__DIR__)
     masks = (; masks..., sk_i_iii_updown, sk_iv_v_updown)
 
 
-    return (; MC, R, flux_nominal, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
+    return (; MC, R, flux_nominal, flux_solar_ratio, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
               energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac)
 
 end
@@ -862,6 +883,7 @@ function get_params()
         # Energy-dependent flux normalization (bathtub shape, split at 1 GeV)
         sk_flux_norm_low = 0.0,
         sk_flux_norm_high = 0.0,
+        sk_solar_activity = 0.0,
         )
 end
 
@@ -897,7 +919,7 @@ function get_priors()
         sk_i_v_bdt_3 = Normal(1, 0.05),
         # PID: thesis shows <1% for most phases, up to ~2-3% for some
         # Sub-GeV PID is better constrained than multi-GeV
-        sk_i_iii_subgev_pid = Normal(1, 0.02),
+        sk_i_iii_subgev_pid = Normal(1, 0.03),
         sk_iv_v_subgev_pid = Normal(1, 0.02),
         sk_i_iii_multigev_pid = Normal(1, 0.03),
         sk_iv_v_multigev_pid = Normal(1, 0.03),
@@ -920,6 +942,8 @@ function get_priors()
         # High-E: 7% flat from 1-10 GeV, linear in logE to 20% at 1 TeV
         sk_flux_norm_low = Truncated(Normal(0, 1), -3, 3),
         sk_flux_norm_high = Truncated(Normal(0, 1), -3, 3),
+        # Solar activity: 0 = solar min, 1 = solar max
+        sk_solar_activity = Uniform(0, 1),
         )
 end
 
