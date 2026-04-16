@@ -20,7 +20,8 @@ likelihood = Newtrinos.generate_likelihood(experiments)
 @reset params.xsec_cc1pi_shape = 1.435466316028621
 @reset params.sk_flux_norm_high = 0.3994660286467456
 @reset params.sk_flux_norm_low = -0.7448957257833595
-@reset params.xsec_cc1p1h_norm = 0.8798531573440069
+@reset params.xsec_cc1p1h_subgev_norm = 0.8798531573440069
+@reset params.xsec_cc1p1h_multigev_norm = 0.8798531573440069
 @reset params.xsec_nc_norm = 1.1196641134274956
 
 prior = distprod(;priors...)
@@ -49,4 +50,5 @@ println("\n=== MLE Result ===")
 @printf "sk_flux_norm_high = %.4f\n" opt_params.sk_flux_norm_high
 @printf "sk_flux_norm_low = %.4f\n" opt_params.sk_flux_norm_low
 @printf "xsec_nc_norm = %.4f\n" opt_params.xsec_nc_norm
-@printf "xsec_cc1p1h_norm = %.4f\n" opt_params.xsec_cc1p1h_norm
+@printf "xsec_cc1p1h_subgev_norm = %.4f\n" opt_params.xsec_cc1p1h_subgev_norm
+@printf "xsec_cc1p1h_multigev_norm = %.4f\n" opt_params.xsec_cc1p1h_multigev_norm

@@ -23,7 +23,8 @@ likelihood = Newtrinos.generate_likelihood(experiments)
 @reset params.xsec_cc1pi_shape = 1.459204145906447
 @reset params.sk_flux_norm_high = 0.6638253292609961
 @reset params.sk_flux_norm_low = -0.6476531169410142
-@reset params.xsec_cc1p1h_norm = 0.8803763874976104
+@reset params.xsec_cc1p1h_subgev_norm = 0.8803763874976104
+@reset params.xsec_cc1p1h_multigev_norm = 0.8803763874976104
 @reset params.xsec_nc_norm = 1.1349243033945697
 @reset params.sk_fc_multigev_rel_norm = 1.0150464973591837
 

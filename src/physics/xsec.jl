@@ -233,7 +233,8 @@ end
 
 function get_params(cfg::H2O_PCA)
     (
-        xsec_cc1p1h_norm = 1.,
+        xsec_cc1p1h_subgev_norm = 1.,
+        xsec_cc1p1h_multigev_norm = 1.,
         xsec_cc2p2h_norm = 1.,
         xsec_cc1pi_norm = 1.,
         xsec_ccdis_norm = 1.,
@@ -257,8 +258,9 @@ end
 
 function get_priors(cfg::H2O_PCA)
     (
-        xsec_cc1p1h_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
-        xsec_cc2p2h_norm = Truncated(Normal(1, 0.50), 0.0, 3.0),
+        xsec_cc1p1h_subgev_norm = Truncated(Normal(1, 0.05), 0.7, 1.3),
+        xsec_cc1p1h_multigev_norm = Truncated(Normal(1, 0.25), 0.3, 1.7),
+        xsec_cc2p2h_norm = Uniform(0, 2),
         xsec_cc1pi_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
         xsec_ccdis_norm = Truncated(Normal(1, 0.10), 0.5, 1.5),
         xsec_ccother_norm = Truncated(Normal(1, 0.30), 0.2, 1.8),
@@ -447,7 +449,6 @@ function get_scale(cfg::H2O_PCA)
 
     # Parameter → channel mapping
     norm_syms = (
-        CC1p1h = :xsec_cc1p1h_norm,
         CC2p2h = :xsec_cc2p2h_norm,
         CC1pi  = :xsec_cc1pi_norm,
         CCDIS  = :xsec_ccdis_norm,
@@ -499,7 +500,7 @@ function get_scale(cfg::H2O_PCA)
         result = zeros(T, length(E))
         for ch in cc_channels
             f_ch = getfield(fracs, Symbol(ch)).(E)
-            ch_norm = getfield(params, getfield(norm_syms, Symbol(ch)))
+            ch_norm = ch == "CC1p1h" ? ifelse.(E .< 1.33, params.xsec_cc1p1h_subgev_norm, params.xsec_cc1p1h_multigev_norm) : getfield(params, getfield(norm_syms, Symbol(ch)))
             ch_eps = getfield(params, getfield(shape_syms, Symbol(ch)))
             ch_shape = process_shape_itps[ch]
             ch_w = max.(zero(T), f_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
@@ -627,7 +628,7 @@ function get_dσdE(cfg::H2O_PCA)
         process_shape_itps[label] = compute_shape_pca(nom, alts)
     end
 
-    norm_syms = (CC1p1h=:xsec_cc1p1h_norm, CC2p2h=:xsec_cc2p2h_norm, CC1pi=:xsec_cc1pi_norm, CCDIS=:xsec_ccdis_norm, CCother=:xsec_ccother_norm)
+    norm_syms = (CC2p2h=:xsec_cc2p2h_norm, CC1pi=:xsec_cc1pi_norm, CCDIS=:xsec_ccdis_norm, CCother=:xsec_ccother_norm)
     shape_syms = (CC1p1h=:xsec_cc1p1h_shape, CC2p2h=:xsec_cc2p2h_shape, CC1pi=:xsec_cc1pi_shape, CCDIS=:xsec_ccdis_shape, CCother=:xsec_ccother_shape)
     nubar_ratio_syms = (CC1p1h=:xsec_cc1p1h_nubar_ratio, CC2p2h=:xsec_cc2p2h_nubar_ratio, CC1pi=:xsec_cc1pi_nubar_ratio, CCDIS=:xsec_ccdis_nubar_ratio, CCother=:xsec_ccother_nubar_ratio)
 
@@ -658,7 +659,7 @@ function get_dσdE(cfg::H2O_PCA)
         result = zeros(T, length(E))
         for ch in cc_channels
             σ_ch = getfield(xsecs, Symbol(ch)).(E)
-            ch_norm = getfield(params, getfield(norm_syms, Symbol(ch)))
+            ch_norm = ch == "CC1p1h" ? ifelse.(E .< 1.33, params.xsec_cc1p1h_subgev_norm, params.xsec_cc1p1h_multigev_norm) : getfield(params, getfield(norm_syms, Symbol(ch)))
             ch_eps = getfield(params, getfield(shape_syms, Symbol(ch)))
             ch_shape = process_shape_itps[ch]
             ch_w = max.(zero(T), σ_ch .* ch_norm .* (one(T) .+ ch_eps .* ch_shape.(E)))
