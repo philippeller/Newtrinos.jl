@@ -423,6 +423,19 @@ function _build_R_from_params(MC_component, logE_grid, cosZ_grid, energy_params,
         c_e = [lognormal_mix_cdf(e, μs, σs, ws) for e in E_grid]
         p_e = diff(c_e)
 
+        # Apply sigmoid low-energy efficiency if parameters are present
+        if haskey(energy_params, "sigmoid_thresh")
+            thresh = energy_params["sigmoid_thresh"][bin_idx]
+            width = energy_params["sigmoid_width"][bin_idx]
+            if thresh > -1.5  # only apply if sigmoid is active
+                logE_mid = [(logE_grid[i] + logE_grid[i+1]) / 2 for i in 1:n_logE]
+                sig = [1.0 / (1.0 + exp(-(x - thresh) / max(width, 1e-4))) for x in logE_mid]
+                p_e = p_e .* sig
+                s = sum(p_e)
+                s > 0 && (p_e ./= s)
+            end
+        end
+
         # CosZ: E-dependent vMF — κ(E) = κ₀ × (E/E_ref)^β
         kappa0 = vmf_params["kappa"][bin_idx]
         kappa0 <= 0 && continue
@@ -711,7 +724,12 @@ function get_assets(physics; datadir = @__DIR__)
     )
 
     data = CSV.read(joinpath(datadir, "bins/sk_2023_Data.txt"), DataFrame; delim=' ', ignorerepeated=true, comment="#", header=false)
-    observed = round.(data.Column1);
+    observed_all = round.(data.Column1);
+
+    # Mask out lowest momentum bins (logP=[2.0, 2.4]) — these have unreliable
+    # reweighting at the detector threshold edge
+    analysis_mask = .!(bininfo.logPMin .== 2.0 .&& bininfo.logPMax .== 2.4)
+    observed = observed_all[analysis_mask];
 
     MC = (nue=read_sk_file(joinpath(datadir, "bins/normal/sk_2023_MCNueNO.txt")),
         numu=read_sk_file(joinpath(datadir, "bins/normal/sk_2023_MCNumuNO.txt")),
@@ -832,7 +850,7 @@ function get_assets(physics; datadir = @__DIR__)
 
 
     return (; MC, R, flux_nominal, flux_solar_ratio, nominal_layers, loge_grid, cz_grid, cz_midpoints, nominal_weights, observed, bininfo, masks,
-              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac)
+              energy_groups_sk_i_iii, energy_groups_sk_iv_v, nutau_nu_frac, nc_nu_frac, analysis_mask)
 
 end
 
@@ -1111,6 +1129,7 @@ function get_forward_model(physics, assets)
     function fwd_model(params)
         expected = get_expected(params, physics, assets)
         total = reduce(+, values(expected))
+        total = total[assets.analysis_mask]
         clamped = max.(1e-3, total)
         distprod(Poisson.(clamped))
     end
