@@ -766,8 +766,23 @@ end
 
 function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::Spray, interaction::Union{SI, NSI}, anti::Bool, eigen_method::EigenMethod=DefaultEigen())
     H_eff = U * Diagonal(h) * adjoint(U)
-    # Production height: only first (atmosphere) section varies, dL/dh = 1
-    dldh = [vcat([1.0], zeros(length(p) - 1)) for p in paths]
+    # Production height: only first (atmosphere) section varies.
+    # dL/dh = 1/cos(α) where α is the angle between the path and the radial
+    # direction at the production point. From the cosine rule (triangle with
+    # sides R_atm, R_det, L_atm):
+    #   cos(α) = (R_atm² + L_atm² - R_det²) / (2·R_atm·L_atm)
+    R_atm = layers.radius[1]  # atmosphere outer radius
+    R_det = layers.radius[2]  # next layer below atmosphere
+    dldh = map(paths) do p
+        L_atm = p[1].length
+        if L_atm > 1e-3
+            cos_alpha = (R_atm^2 + L_atm^2 - R_det^2) / (2 * R_atm * L_atm)
+            dldh_val = 1.0 / max(cos_alpha, 1e-3)
+        else
+            dldh_val = 1.0
+        end
+        vcat([dldh_val], zeros(length(p) - 1))
+    end
     p = stack(map((e, de) -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction, eigen_method; Delta_E=de, Delta_h=propagation.σ_h, dldh_all=dldh), E, propagation.σ_E .* E))
     permutedims(p, (1, 2, 4, 3))
 end
