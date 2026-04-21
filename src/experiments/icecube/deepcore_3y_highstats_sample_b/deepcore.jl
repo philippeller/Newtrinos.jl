@@ -60,8 +60,7 @@ function get_assets(physics; datadir = @__DIR__)
     binning[:e_ticks] = (binning[:reco_energy_bin_edges], [@sprintf("%.1f",b) for b in binning[:reco_energy_bin_edges]])
     binning = NamedTuple(binning)
     
-    layers = physics.earth_layers.compute_layers()
-    paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
+    nominal_layers = physics.earth_layers.compute_layers()
 
   
     mc_nu = CSV.read(joinpath(datadir, "neutrino_mc.csv"), FlexTable; header=true);
@@ -108,7 +107,7 @@ function get_assets(physics; datadir = @__DIR__)
 
     flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
 
-    assets = (;mc, hyperplanes, flux, muons, observed=data.count, layers, paths, binning)
+    assets = (;mc, hyperplanes, flux, muons, observed=data.count, nominal_layers, binning)
 
 end
 
@@ -173,12 +172,15 @@ function reweight(params, physics, assets)
 
     s = (size(assets.binning.e_fine)[1], size(assets.binning.cz_fine)[1])
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
+    layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
+    paths = physics.earth_layers.compute_paths(assets.binning.cz_fine, layers)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
-    
+
     nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue, :numu, :nutau]))
-    
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
     nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar, :numubar, :nutaubar]))

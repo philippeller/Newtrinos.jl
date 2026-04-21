@@ -22,10 +22,67 @@ using Logging
 using ProgressMeter
 using Dates
 using LibGit2
+import Mooncake
+import Random
 using ..Newtrinos
 
-adsel = AutoForwardDiff()
-set_batcontext(ad = adsel)
+const AD_BACKEND = Ref{Symbol}(:auto)
+
+"""
+    set_ad_backend(backend::Symbol)
+
+Set the global AD backend. Valid values: `:auto`, `:forwarddiff`, `:polyester`, `:mooncake`.
+"""
+function set_ad_backend(backend::Symbol)
+    backend in (:auto, :forwarddiff, :polyester, :mooncake) || error("Unknown AD backend: $backend. Choose from: auto, forwarddiff, polyester, mooncake")
+    AD_BACKEND[] = backend
+end
+
+"""
+    select_ad(n_params; threshold=12)
+
+Choose AD backend for gradient-based optimization based on the global setting
+(see [`set_ad_backend`](@ref)).
+
+- `:auto` — ForwardDiff for ≤ threshold params, PolyesterForwardDiff otherwise
+- `:forwarddiff` — standard chunked ForwardDiff
+- `:polyester` — threaded chunked ForwardDiff (PolyesterForwardDiff)
+- `:mooncake` — reverse-mode AD via Mooncake (constant overhead, lower memory)
+"""
+function select_ad(n_params; threshold=12)
+    backend = AD_BACKEND[]
+    if backend == :auto
+        return n_params > threshold ? AutoPolyesterForwardDiff() : AutoForwardDiff()
+    elseif backend == :forwarddiff
+        return AutoForwardDiff()
+    elseif backend == :polyester
+        return AutoPolyesterForwardDiff()
+    elseif backend == :mooncake
+        return AutoMooncake(Mooncake.Config())
+    end
+end
+
+# AD backend is set via set_ad_backend() + set_batcontext(ad = select_ad(n))
+# Do NOT set a hardcoded default here — it overrides user selection
+
+# ── Experiment Configuration ───────────────────────────────────────
+
+"""
+    configure_experiments(experiment_list)
+    configure_experiments(experiment_list, physics)
+
+Construct a NamedTuple of configured experiments from a list of experiment name strings.
+Optionally pass a shared `physics` override.
+"""
+function configure_experiments(experiment_list)
+    pairs = (Symbol(lowercase(exp)) => getproperty(getproperty(Newtrinos, Symbol(lowercase(exp))), :configure)() for exp in experiment_list)
+    return (; pairs...)
+end
+
+function configure_experiments(experiment_list, physics)
+    pairs = (Symbol(lowercase(exp)) => getproperty(getproperty(Newtrinos, Symbol(lowercase(exp))), :configure)(physics) for exp in experiment_list)
+    return (; pairs...)
+end
 
 # ── Core Types ──────────────────────────────────────────────────────
 
@@ -282,13 +339,13 @@ end
 # ── Optimization ────────────────────────────────────────────────────
 
 """
-    find_mle(likelihood, prior, params; adsel=AutoPolyesterForwardDiff())
+    find_mle(likelihood, prior, params; adsel=select_ad(length(params)))
 
 Find the Maximum Likelihood Estimator using LBFGS optimization via BAT.
 Returns `(llh, log_posterior, optimized_params)`. Parameters with `ConstValueDist`
 priors are held fixed.
 """
-function find_mle(likelihood, prior, params; adsel = AutoPolyesterForwardDiff())
+function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
     try
         set_batcontext(ad = adsel)
         posterior = PosteriorMeasure(likelihood, prior)
@@ -398,32 +455,86 @@ function assemble_profile_results(opt_results, result_size)
     NamedTuple(s)
 end
 
-function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing)
-    do_work(i) = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+"""
+    randomize_params(rng, params, prior)
+
+Sample free parameters from their prior distributions to create randomized starting points.
+Parameters fixed via `ConstValueDist` are left unchanged.
+"""
+function randomize_params(rng, params, prior)
+    p = deepcopy(params)
+    for key in keys(p)
+        d = prior[key]
+        if !(d isa ValueShapes.ConstValueDist)
+            @reset p[key] = rand(rng, d)
+        end
+    end
+    return p
+end
+
+function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, nseeds=1)
+    if nseeds <= 1
+        # Original single-seed path: no randomization
+        if isnothing(map_func)
+            opt_results = Array{Any}(undef, size(scanpoints))
+            @showprogress Threads.@threads for i in eachindex(scanpoints)
+                opt_results[i] = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+            end
+        else
+            work = collect(eachindex(scanpoints))
+            opt_results_flat = map_func(work, scanpoints, params, cache_dir)
+            opt_results = reshape(opt_results_flat, size(scanpoints))
+        end
+        return assemble_profile_results(opt_results, size(scanpoints))
+    end
+
+    # Multi-seed path: expand each scan point into nseeds independent jobs
+    n_points = length(scanpoints)
+    flat_scanpoints = vec(scanpoints)
+    n_jobs = n_points * nseeds
+
+    expanded_scanpoints = Vector{eltype(flat_scanpoints)}(undef, n_jobs)
+    expanded_params = Vector{typeof(params)}(undef, n_jobs)
+    rng = Random.Xoshiro(42)
+    for i in 1:n_points
+        for s in 1:nseeds
+            j = (s - 1) * n_points + i
+            expanded_scanpoints[j] = flat_scanpoints[i]
+            expanded_params[j] = randomize_params(rng, params, flat_scanpoints[i])
+        end
+    end
+
+    @info "Running $n_jobs jobs ($n_points scan points × $nseeds seeds)"
 
     if isnothing(map_func)
-        # Default: threaded execution
-        opt_results = Array{Any}(undef, size(scanpoints))
-        @showprogress Threads.@threads for i in eachindex(scanpoints)
-            opt_results[i] = do_work(i)
+        opt_results = Vector{Any}(undef, n_jobs)
+        @showprogress Threads.@threads for j in 1:n_jobs
+            opt_results[j] = find_mle_cached(likelihood, expanded_scanpoints[j], deepcopy(expanded_params[j]), cache_dir)
         end
     else
-        # Custom map (e.g., pmap for distributed)
-        work = collect(eachindex(scanpoints))
-        opt_results_flat = map_func(do_work, work)
-        opt_results = reshape(opt_results_flat, size(scanpoints))
+        work = collect(1:n_jobs)
+        opt_results = collect(map_func(work, expanded_scanpoints, expanded_params, cache_dir))
     end
-    assemble_profile_results(opt_results, size(scanpoints))
+
+    # Select best fit per scan point (highest log_posterior)
+    best_results = Vector{Any}(undef, n_points)
+    for i in 1:n_points
+        seed_indices = [(s - 1) * n_points + i for s in 1:nseeds]
+        posteriors = [let p = opt_results[j][2]; isnan(p) ? -Inf : p end for j in seed_indices]
+        best_results[i] = opt_results[seed_indices[argmax(posteriors)]]
+    end
+    assemble_profile_results(reshape(best_results, size(scanpoints)), size(scanpoints))
 end
 
 """
-    profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing)
+    profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1)
 
 Run a profile likelihood scan. At each grid point defined by `vars_to_scan`,
 optimizes over all other parameters. Use `cache_dir` to cache and resume results.
 Use `map_func=pmap` for distributed parallelism (default: `Threads.@threads`).
+Use `nseeds > 1` to run multiple fits per point from randomized starting values and keep the best.
 """
-function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing)
+function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1)
     t1 = time()
     # check if there is actually any variable to be profiled over, or if they are all just Numbers
     if all([isa(priors[var], Number) for var in setdiff(keys(priors), keys(vars_to_scan))])
@@ -438,9 +549,9 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, ma
             mkdir(cache_dir)
         end
     end
-    res = _profile(likelihood, scanpoints, params, cache_dir; map_func=map_func)
+    res = _profile(likelihood, scanpoints, params, cache_dir; map_func=map_func, nseeds=nseeds)
     t2 = time()
-    meta = Dict("task"=> "profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan, "params"=>params, "exec_time"=>t2-t1, "cache_dir"=>cache_dir)
+    meta = Dict("task"=> "profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan, "params"=>params, "exec_time"=>t2-t1, "cache_dir"=>cache_dir, "nseeds"=>nseeds)
     add_meta!(meta)
     axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
     result = NewtrinosResult(axes=axes, values=res, meta=meta)

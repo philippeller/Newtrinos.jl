@@ -3,6 +3,7 @@ using BenchmarkTools
 using DensityInterface
 using Newtrinos
 import ForwardDiff
+import PolyesterForwardDiff
 
 function parse_command_line()
     s = ArgParseSettings()
@@ -39,7 +40,9 @@ println("  Parameters:  ", length(keys(params)))
 println()
 
 # Warmup
-logdensityof(likelihood, params)
+l = logdensityof(likelihood, params)
+
+println("llh =", l)
 
 println("=== Likelihood evaluation ===")
 b_llh = @benchmark logdensityof($likelihood, $params)
@@ -55,14 +58,30 @@ b_grad = @benchmark ForwardDiff.gradient($grad_f, $params)
 display(b_grad)
 println()
 
+# Gradient via PolyesterForwardDiff (threaded chunked ForwardDiff)
+println("=== Gradient (PolyesterForwardDiff) ===")
+param_keys = keys(params)
+poly_f(x) = logdensityof(likelihood, NamedTuple{param_keys}(Tuple(x)))
+params_vec = collect(Float64, values(params))
+grad_buf = similar(params_vec)
+PolyesterForwardDiff.threaded_gradient!(poly_f, grad_buf, params_vec, ForwardDiff.Chunk{12}())  # warmup
+
+b_poly = @benchmark PolyesterForwardDiff.threaded_gradient!($poly_f, $grad_buf, $params_vec, ForwardDiff.Chunk{12}())
+display(b_poly)
+println()
+
 # Summary
 t_llh = median(b_llh).time / 1e6
 t_grad = median(b_grad).time / 1e6
+t_poly = median(b_poly).time / 1e6
 n_params = length(keys(params))
 
 println("=== Summary ===")
-println("  Likelihood:  $(round(t_llh, digits=2)) ms (median)")
-println("  Gradient:    $(round(t_grad, digits=2)) ms (median)")
-println("  Ratio grad/llh: $(round(t_grad / t_llh, digits=1))×")
-println("  Parameters:  $n_params")
-println("  Grad cost per param: $(round(t_grad / n_params, digits=2)) ms")
+println("  Likelihood:          $(round(t_llh, digits=2)) ms (median)")
+println("  ForwardDiff:         $(round(t_grad, digits=2)) ms (median)")
+println("  PolyesterForwardDiff: $(round(t_poly, digits=2)) ms (median)")
+println("  Ratio FD/llh:        $(round(t_grad / t_llh, digits=1))×")
+println("  Ratio Poly/llh:      $(round(t_poly / t_llh, digits=1))×")
+println("  Speedup Poly vs FD:  $(round(t_grad / t_poly, digits=2))×")
+println("  Parameters:          $n_params")
+println("  Threads:             $(Threads.nthreads())")

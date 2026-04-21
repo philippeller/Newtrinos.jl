@@ -59,8 +59,7 @@ function make_init_samples(posterior, nseeds::Int=10, nsamples::Int=10_000)
     @info "Finding modes"
 
     Threads.@threads for i in 1:nseeds
-        adsel = AutoForwardDiff()
-        set_batcontext(ad = adsel)
+        set_batcontext(ad = select_ad(length(seeds[i])))
         r = bat_findmode(pstr, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([seeds[i]])))
         components[i] = local_MGVI_approx(pstr, r.result)
     end
@@ -102,8 +101,7 @@ function make_init_samples(posterior, seed_points::DataFrame, nsamples::Int=10_0
     @info "Finding modes"
 
     Threads.@threads for i in 1:length(seeds)
-        adsel = AutoForwardDiff()
-        set_batcontext(ad = adsel)
+        set_batcontext(ad = select_ad(length(seeds[i])))
         r = bat_findmode(pstr, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([seeds[i]]), kwargs = (reltol=1e-4, maxiters=100)))
         components[i] = local_MGVI_approx(pstr, r.result)
     end

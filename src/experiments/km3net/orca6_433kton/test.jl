@@ -12,8 +12,8 @@ using CSV
 experiments = (orca = Newtrinos.orca.configure(),)
 
 vars_to_scan = OrderedDict()
-vars_to_scan[:θ₂₃] = 21
-vars_to_scan[:Δm²₃₁] = 21
+vars_to_scan[:θ₂₃] = 11
+vars_to_scan[:Δm²₃₁] = 11
 
 likelihood = Newtrinos.generate_likelihood(experiments);
 

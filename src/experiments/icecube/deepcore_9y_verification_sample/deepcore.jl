@@ -75,8 +75,7 @@ function get_assets(physics; datadir = @__DIR__)
     binning[:e_ticks] = (binning[:reco_energy_bin_edges], [@sprintf("%.1f",b) for b in binning[:reco_energy_bin_edges]])
     binning = NamedTuple(binning)
     
-    layers = physics.earth_layers.compute_layers()
-    paths = physics.earth_layers.compute_paths(binning.cz_fine, layers)
+    nominal_layers = physics.earth_layers.compute_layers()
 
 
     mc_flextable = (nu_nc = CSV.read(joinpath(datadir, "mc_nu_nc.csv"), FlexTable; header=true),
@@ -144,7 +143,7 @@ function get_assets(physics; datadir = @__DIR__)
     
     flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
 
-    assets = (;mc, hypersurfaces, flux, muons, observed=data.count, layers, paths, binning)
+    assets = (;mc, hypersurfaces, flux, muons, observed=data.count, nominal_layers, binning)
 
 end
 
@@ -217,20 +216,31 @@ function reweight(params, physics, assets)
 
     s = (size(assets.binning.e_fine)[1], size(assets.binning.cz_fine)[1])
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params)
+    layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
+    paths = physics.earth_layers.compute_paths(assets.binning.cz_fine, layers)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
-    
-    nus = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nue_cc, :numu_cc, :nutau_cc]))
+
+    nus = (
+        nue_cc = gather_flux(p_flux, assets.mc.nue_cc.ef_idx, assets.mc.nue_cc.cf_idx, 1),
+        numu_cc = gather_flux(p_flux, assets.mc.numu_cc.ef_idx, assets.mc.numu_cc.cf_idx, 2),
+        nutau_cc = gather_flux(p_flux, assets.mc.nutau_cc.ef_idx, assets.mc.nutau_cc.cf_idx, 3),
+    )
 
     nu_ncs = (nu_nc = gather_flux_nc(reshape(sys_flux.nue .+ sys_flux.numu, s),  assets.mc[:nu_nc].ef_idx, assets.mc[:nu_nc].cf_idx),)
-    
-    p = physics.osc.osc_prob(assets.binning.e_fine, assets.paths, assets.layers, params, anti=true)
+
+    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
-    nubars = NamedTuple(ch=>gather_flux(p_flux, assets.mc[ch].ef_idx, assets.mc[ch].cf_idx, i) for (i, ch) in enumerate([:nuebar_cc, :numubar_cc, :nutaubar_cc]))
+    nubars = (
+        nuebar_cc = gather_flux(p_flux, assets.mc.nuebar_cc.ef_idx, assets.mc.nuebar_cc.cf_idx, 1),
+        numubar_cc = gather_flux(p_flux, assets.mc.numubar_cc.ef_idx, assets.mc.numubar_cc.cf_idx, 2),
+        nutaubar_cc = gather_flux(p_flux, assets.mc.nutaubar_cc.ef_idx, assets.mc.nutaubar_cc.cf_idx, 3),
+    )
 
     nubar_ncs = (nubar_nc = gather_flux_nc(reshape(sys_flux.nue .+ sys_flux.numu, s),  assets.mc[:nubar_nc].ef_idx, assets.mc[:nubar_nc].cf_idx),)
-    
+
     merge(nu_ncs, nus, nubar_ncs, nubars)
 end
 
@@ -262,10 +272,10 @@ function apply_hypersurfaces(hists, params, physics, assets)
     f_numu_cc = get_hypersurface_factor(assets.hypersurfaces.numu_cc, idx, fraction, params)
     f_nutau_cc = get_hypersurface_factor(assets.hypersurfaces.nutau_cc, idx, fraction, params) 
 
-    nu_nc = hists[:nu_nc] .+ hists[:nubar_nc]
-    nue_cc = hists[:nue_cc] .+ hists[:nuebar_cc]
-    numu_cc = hists[:numu_cc] .+ hists[:numubar_cc]
-    nutau_cc = hists[:nutau_cc] .+ hists[:nutaubar_cc]
+    nu_nc = hists.nu_nc .+ hists.nubar_nc
+    nue_cc = hists.nue_cc .+ hists.nuebar_cc
+    numu_cc = hists.numu_cc .+ hists.numubar_cc
+    nutau_cc = hists.nutau_cc .+ hists.nutaubar_cc
             
     return (
     nu_nc .* f_nu_nc_nue_cc .* physics.xsec.scale(:Any, :NC, params) .+ 
@@ -281,7 +291,16 @@ function get_expected(params, physics, assets)
 
     lifetime_seconds = params.deepcore_aeff_scale * 365. * 24. * 3600. * 7.5 * 1e-4 #(cm2 -> m2)
 
-    hists = NamedTuple(ch=>make_hist_per_channel(assets.mc[ch], osc_flux[ch], lifetime_seconds) for ch in keys(assets.mc))
+    hists = (
+        nu_nc = make_hist_per_channel(assets.mc.nu_nc, osc_flux.nu_nc, lifetime_seconds),
+        nubar_nc = make_hist_per_channel(assets.mc.nubar_nc, osc_flux.nubar_nc, lifetime_seconds),
+        nue_cc = make_hist_per_channel(assets.mc.nue_cc, osc_flux.nue_cc, lifetime_seconds),
+        nuebar_cc = make_hist_per_channel(assets.mc.nuebar_cc, osc_flux.nuebar_cc, lifetime_seconds),
+        numu_cc = make_hist_per_channel(assets.mc.numu_cc, osc_flux.numu_cc, lifetime_seconds),
+        numubar_cc = make_hist_per_channel(assets.mc.numubar_cc, osc_flux.numubar_cc, lifetime_seconds),
+        nutau_cc = make_hist_per_channel(assets.mc.nutau_cc, osc_flux.nutau_cc, lifetime_seconds),
+        nutaubar_cc = make_hist_per_channel(assets.mc.nutaubar_cc, osc_flux.nutaubar_cc, lifetime_seconds),
+    )
     
     expected_nu = apply_hypersurfaces(hists, params, physics, assets)
 
