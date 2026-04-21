@@ -728,7 +728,15 @@ function get_assets(physics; datadir = @__DIR__)
 
     # Mask out lowest momentum bins (logP=[2.0, 2.4]) — these have unreliable
     # reweighting at the detector threshold edge
-    analysis_mask = .!(bininfo.logPMin .== 2.0 .&& bininfo.logPMax .== 2.4)
+    #analysis_mask = .!(bininfo.logPMin .== 2.0 .&& bininfo.logPMax .== 2.4)
+
+    mask = ones(930)
+    mask[1:20] .= 0
+    #mask[501:510] .= 0
+    mask[571:590] .= 0
+    mask[621:630] .= 0
+    analysis_mask = Bool.(mask)
+
     observed = observed_all[analysis_mask];
 
     MC = (nue=read_sk_file(joinpath(datadir, "bins/normal/sk_2023_MCNueNO.txt")),
