@@ -24,7 +24,7 @@ function default_physics()
     osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("frj-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure()
-    xsec = Newtrinos.xsec.configure()
+    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA(mc_nominal=:G00_00a))
     (; osc, atm_flux, earth_layers, xsec)
 end
 
@@ -80,7 +80,28 @@ function get_assets(physics; datadir = @__DIR__)
     data_hist = permutedims(reshape(data.W, reco_shape[rs]), rs)
     muon_hist = permutedims(reshape(muons.W, reco_shape[rs]), rs);
 
-    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, nominal_layers, flux_nominal)
+    xsec_eval = if !isnothing(physics.xsec.grid_weights)
+        gw = physics.xsec.grid_weights
+        @info "Precomputing per-energy xsec weight arrays for ORCA MC"
+        (
+            nue_cc      = gw(binning.e_fine, :nue,   :CC, false),
+            nuebar_cc   = gw(binning.e_fine, :nue,   :CC, true),
+            numu_cc     = gw(binning.e_fine, :numu,  :CC, false),
+            numubar_cc  = gw(binning.e_fine, :numu,  :CC, true),
+            nutau_cc    = gw(binning.e_fine, :nutau, :CC, false),
+            nutaubar_cc = gw(binning.e_fine, :nutau, :CC, true),
+            nue_nc      = gw(binning.e_fine, :nue,   :NC, false),
+            nuebar_nc   = gw(binning.e_fine, :nue,   :NC, true),
+            numu_nc     = gw(binning.e_fine, :numu,  :NC, false),
+            numubar_nc  = gw(binning.e_fine, :numu,  :NC, true),
+            nutau_nc    = gw(binning.e_fine, :nutau, :NC, false),
+            nutaubar_nc = gw(binning.e_fine, :nutau, :NC, true),
+        )
+    else
+        nothing
+    end
+
+    assets = (;mc, muon_hist, observed=cut(data_hist), binning, true_shape, reco_shape, nominal_layers, flux_nominal, xsec_eval)
 end
 
 function get_params()
@@ -124,9 +145,12 @@ function make_hist(e_idx, c_idx, p_idx, t_idx, w, size=(8,8,2,2))
     hist
 end
 
-function make_hist_per_channel(mc, osc_flux, lifetime_seconds, params, assets)
+function make_hist_per_channel(mc, osc_flux, lifetime_seconds, params, assets, xsec_cc=nothing, xsec_nc=nothing)
     w = lifetime_seconds * mc.W .* osc_flux .* (mc.he_mask * (params.orca_norm_he - 1.) .+ 1.0)
-    h = make_hist(mc.E_reco_bin, mc.Ct_reco_bin, mc.AnaClass, mc.IsCC .+ 1, w, assets.reco_shape)
+    if !isnothing(xsec_cc) && !isnothing(xsec_nc)
+        w = w .* ifelse.(mc.IsCC .== 1, xsec_cc[mc.E_true_bin], xsec_nc[mc.E_true_bin])
+    end
+    make_hist(mc.E_reco_bin, mc.Ct_reco_bin, mc.AnaClass, mc.IsCC .+ 1, w, assets.reco_shape)
 end
 
 
@@ -166,18 +190,23 @@ function get_expected(params, physics, assets)
 
     lifetime_seconds = 1.
 
+    xsec_w = isnothing(assets.xsec_eval) ? nothing : map(f -> f(params), assets.xsec_eval)
+
+    function _xsec(key_cc, key_nc)
+        isnothing(xsec_w) ? (nothing, nothing) : (getfield(xsec_w, key_cc), getfield(xsec_w, key_nc))
+    end
+
     hists = (
-        nue = make_hist_per_channel(assets.mc.nue, osc_flux.nue, lifetime_seconds, params, assets),
-        nuebar = make_hist_per_channel(assets.mc.nuebar, osc_flux.nuebar, lifetime_seconds, params, assets),
-        numu = make_hist_per_channel(assets.mc.numu, osc_flux.numu, lifetime_seconds, params, assets),
-        numubar = make_hist_per_channel(assets.mc.numubar, osc_flux.numubar, lifetime_seconds, params, assets),
-        nutau = make_hist_per_channel(assets.mc.nutau, osc_flux.nutau, lifetime_seconds, params, assets),
-        nutaubar = make_hist_per_channel(assets.mc.nutaubar, osc_flux.nutaubar, lifetime_seconds, params, assets),
+        nue      = make_hist_per_channel(assets.mc.nue,     osc_flux.nue,     lifetime_seconds, params, assets, _xsec(:nue_cc,      :nue_nc)...),
+        nuebar   = make_hist_per_channel(assets.mc.nuebar,  osc_flux.nuebar,  lifetime_seconds, params, assets, _xsec(:nuebar_cc,   :nuebar_nc)...),
+        numu     = make_hist_per_channel(assets.mc.numu,    osc_flux.numu,    lifetime_seconds, params, assets, _xsec(:numu_cc,     :numu_nc)...),
+        numubar  = make_hist_per_channel(assets.mc.numubar, osc_flux.numubar, lifetime_seconds, params, assets, _xsec(:numubar_cc,  :numubar_nc)...),
+        nutau    = make_hist_per_channel(assets.mc.nutau,   osc_flux.nutau,   lifetime_seconds, params, assets, _xsec(:nutau_cc,    :nutau_nc)...),
+        nutaubar = make_hist_per_channel(assets.mc.nutaubar,osc_flux.nutaubar,lifetime_seconds, params, assets, _xsec(:nutaubar_cc, :nutaubar_nc)...),
     )
 
-    hists_nc = reduce(+, map(h -> h[:, :, :, 1], values(hists))) * physics.xsec.scale(:any, :NC, params)
-
-    hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ (hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]) * physics.xsec.scale(:nutau, :CC, params)
+    hists_nc = reduce(+, map(h -> h[:, :, :, 1], values(hists)))
+    hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]
     expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc .+ hists_cc) * params.orca_norm_all
 
     # Poisson > 0

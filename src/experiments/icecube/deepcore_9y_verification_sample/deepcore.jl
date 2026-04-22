@@ -39,7 +39,7 @@ function default_physics()
     osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("spl-nu-20-01-000.d")))
     earth_layers = Newtrinos.earth_layers.configure()
-    xsec = Newtrinos.xsec.configure()
+    xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA(mc_nominal=:G00_00a))
     (; osc, atm_flux, earth_layers, xsec)
 end
 
@@ -143,7 +143,25 @@ function get_assets(physics; datadir = @__DIR__)
     
     flux = physics.atm_flux.nominal_flux(binning.e_fine, binning.cz_fine)
 
-    assets = (;mc, hypersurfaces, flux, muons, observed=data.count, nominal_layers, binning)
+    # Precompute per-event xsec weight closures (interpolations done once here, not at eval time)
+    mc_xsec_eval = if !isnothing(physics.xsec.event_weights)
+        ew = physics.xsec.event_weights
+        @info "Precomputing per-event xsec weight arrays for DeepCore MC"
+        (
+            nu_nc       = ew(mc.nu_nc.true_energy,       mc.nu_nc.interaction,       :nue,   :NC, false),
+            nubar_nc    = ew(mc.nubar_nc.true_energy,    mc.nubar_nc.interaction,    :nue,   :NC, true),
+            nue_cc      = ew(mc.nue_cc.true_energy,      mc.nue_cc.interaction,      :nue,   :CC, false),
+            nuebar_cc   = ew(mc.nuebar_cc.true_energy,   mc.nuebar_cc.interaction,   :nue,   :CC, true),
+            numu_cc     = ew(mc.numu_cc.true_energy,     mc.numu_cc.interaction,     :numu,  :CC, false),
+            numubar_cc  = ew(mc.numubar_cc.true_energy,  mc.numubar_cc.interaction,  :numu,  :CC, true),
+            nutau_cc    = ew(mc.nutau_cc.true_energy,    mc.nutau_cc.interaction,    :nutau, :CC, false),
+            nutaubar_cc = ew(mc.nutaubar_cc.true_energy, mc.nutaubar_cc.interaction, :nutau, :CC, true),
+        )
+    else
+        nothing
+    end
+
+    assets = (;mc, hypersurfaces, flux, muons, observed=data.count, nominal_layers, binning, mc_xsec_eval)
 
 end
 
@@ -186,8 +204,9 @@ function make_hist(e_idx, c_idx, p_idx, w, size=(10,10,2))
     hist
 end
 
-function make_hist_per_channel(mc, osc_flux, lifetime_seconds)
+function make_hist_per_channel(mc, osc_flux, lifetime_seconds, xsec_w=nothing)
     w = lifetime_seconds * mc.weight .* osc_flux
+    isnothing(xsec_w) || (w = w .* xsec_w)
     make_hist(mc.e_idx, mc.c_idx, mc.p_idx, w)
 end
 
@@ -278,11 +297,11 @@ function apply_hypersurfaces(hists, params, physics, assets)
     nutau_cc = hists.nutau_cc .+ hists.nutaubar_cc
             
     return (
-    nu_nc .* f_nu_nc_nue_cc .* physics.xsec.scale(:Any, :NC, params) .+ 
-    nue_cc .* f_nu_nc_nue_cc .+ 
-    numu_cc .* f_numu_cc .+ 
-    nutau_cc .* f_nutau_cc .* physics.xsec.scale(:nutau, :CC, params)
-    )    
+    nu_nc .* f_nu_nc_nue_cc .+
+    nue_cc .* f_nu_nc_nue_cc .+
+    numu_cc .* f_numu_cc .+
+    nutau_cc .* f_nutau_cc
+    )
 end 
 
 function get_expected(params, physics, assets)
@@ -291,15 +310,18 @@ function get_expected(params, physics, assets)
 
     lifetime_seconds = params.deepcore_aeff_scale * 365. * 24. * 3600. * 7.5 * 1e-4 #(cm2 -> m2)
 
+    # Compute per-event xsec weights using precomputed fast eval closures (no interpolation at eval time)
+    xsec_w = isnothing(assets.mc_xsec_eval) ? nothing : map(f -> f(params), assets.mc_xsec_eval)
+
     hists = (
-        nu_nc = make_hist_per_channel(assets.mc.nu_nc, osc_flux.nu_nc, lifetime_seconds),
-        nubar_nc = make_hist_per_channel(assets.mc.nubar_nc, osc_flux.nubar_nc, lifetime_seconds),
-        nue_cc = make_hist_per_channel(assets.mc.nue_cc, osc_flux.nue_cc, lifetime_seconds),
-        nuebar_cc = make_hist_per_channel(assets.mc.nuebar_cc, osc_flux.nuebar_cc, lifetime_seconds),
-        numu_cc = make_hist_per_channel(assets.mc.numu_cc, osc_flux.numu_cc, lifetime_seconds),
-        numubar_cc = make_hist_per_channel(assets.mc.numubar_cc, osc_flux.numubar_cc, lifetime_seconds),
-        nutau_cc = make_hist_per_channel(assets.mc.nutau_cc, osc_flux.nutau_cc, lifetime_seconds),
-        nutaubar_cc = make_hist_per_channel(assets.mc.nutaubar_cc, osc_flux.nutaubar_cc, lifetime_seconds),
+        nu_nc      = make_hist_per_channel(assets.mc.nu_nc,      osc_flux.nu_nc,      lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.nu_nc),
+        nubar_nc   = make_hist_per_channel(assets.mc.nubar_nc,   osc_flux.nubar_nc,   lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.nubar_nc),
+        nue_cc     = make_hist_per_channel(assets.mc.nue_cc,     osc_flux.nue_cc,     lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.nue_cc),
+        nuebar_cc  = make_hist_per_channel(assets.mc.nuebar_cc,  osc_flux.nuebar_cc,  lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.nuebar_cc),
+        numu_cc    = make_hist_per_channel(assets.mc.numu_cc,    osc_flux.numu_cc,    lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.numu_cc),
+        numubar_cc = make_hist_per_channel(assets.mc.numubar_cc, osc_flux.numubar_cc, lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.numubar_cc),
+        nutau_cc   = make_hist_per_channel(assets.mc.nutau_cc,   osc_flux.nutau_cc,   lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.nutau_cc),
+        nutaubar_cc= make_hist_per_channel(assets.mc.nutaubar_cc,osc_flux.nutaubar_cc,lifetime_seconds, isnothing(xsec_w) ? nothing : xsec_w.nutaubar_cc),
     )
     
     expected_nu = apply_hypersurfaces(hists, params, physics, assets)

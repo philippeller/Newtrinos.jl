@@ -22,6 +22,7 @@ using ..Newtrinos
     assets::NamedTuple
     forward_model::Function
     plot::Function
+    plot_bins::Function
 end
 
 function default_physics()
@@ -46,7 +47,8 @@ function configure(physics=default_physics())
         priors = get_priors(),
         assets = assets,
         forward_model = get_forward_model(physics, assets),
-        plot = get_plot(physics, assets)
+        plot = get_plot(physics, assets),
+        plot_bins = get_plot_bins(physics, assets)
     )
 end
 
@@ -799,7 +801,7 @@ function get_assets(physics; datadir = @__DIR__)
     # Get actual cross-section curves from the xsec data file
     xsec_data = load(joinpath(dirname(dirname(dirname(datadir))), "physics", "xsec_genie_data.jld2"))
     xsec_E = xsec_data["E_grid"]
-    wester = xsec_data["wester_xsec"]
+    wester = xsec_data["wester_xsec"]  # NEUT5.4.0 cross-sections
     cc_channels = ("CC1p1h", "CC2p2h", "CC1pi", "CCDIS", "CCother")
 
     # Total CC xsec (sigma/E) for numu and numubar (used for nutau since nutau xsec ~ numu xsec)
@@ -1186,6 +1188,11 @@ function get_plot(physics, assets)
         bininfo = assets.bininfo
         expected = get_expected(params, physics, assets)
 
+        # Apply analysis mask so bininfo/expected align with masked observed data
+        mask = assets.analysis_mask
+        bininfo = bininfo[mask, :]
+        expected = map(e -> e[mask], expected)
+
         fig = Figure()
         for (i,sample) in enumerate(unique(bininfo.Sample))
             grid_idx = (Int(floor((i-1)/5))+1, (i-1)%5+1)
@@ -1221,6 +1228,123 @@ function get_plot(physics, assets)
 
         end
         Legend(fig[6,5], fig.content[1]; position=:rb, nbanks=2)
+        resize_to_layout!(fig)
+        fig
+    end
+end
+
+function get_plot_bins(physics, assets)
+
+    function plot_bins(params, data=assets.observed)
+
+        # Apply analysis mask
+        mask    = assets.analysis_mask
+        bininfo = assets.bininfo[mask, :]
+
+        # Compute per-bin expected counts (Poisson means) and std
+        exp_fl  = get_expected(params, physics, assets)
+        exp_fl  = map(e -> e[mask], exp_fl)
+        total_e = reduce(+, values(exp_fl))
+        std_e   = sqrt.(max.(total_e, 1e-3))
+
+        samples  = unique(bininfo.Sample)
+        ncols    = 5
+        nrows    = ceil(Int, length(samples) / ncols)
+        fig      = Figure(size = (ncols * 230, nrows * 180))
+        pal      = Makie.wong_colors()
+
+        # Helper: build stepped x/y arrays from bin edges + per-bin values (step=:post style)
+        # Result: 2N x-values [e0,e1, e1,e2, ...] and 2N y-values [v1,v1, v2,v2, ...]
+        function make_stepped(x_edges, vals)
+            x_step = vec([x_edges[1:end-1] x_edges[2:end]]')
+            y_step = repeat(vals, inner = 2)
+            x_step, y_step
+        end
+
+        for (i, sample) in enumerate(samples)
+            row  = ceil(Int, i / ncols)
+            col  = (i - 1) % ncols + 1
+            inds = findall(bininfo.Sample .== sample)
+            bi   = bininfo[inds, :]
+            e    = total_e[inds]
+            s    = std_e[inds]
+            o    = data[inds]
+
+            ax = Axis(fig[row, col];
+                title     = replace(sample, "_" => " "),
+                titlesize = 10,
+                width = 210, height = 155)
+
+            has_cosz = length(unique(bi.CosZMin)) > 1
+
+            if !has_cosz
+                ord     = sortperm(bi.logPMin)
+                c       = :steelblue3
+                x_edges = vcat(bi.logPMin[ord], [bi.logPMax[ord][end]])
+                e_ord   = e[ord];  s_ord = s[ord];  o_ord = o[ord]
+                lp_mids = 0.5 .* (bi.logPMin[ord] .+ bi.logPMax[ord])
+                x_step, y_step = make_stepped(x_edges, e_ord)
+                band!(ax, x_step, y_step .- repeat(s_ord, inner=2),
+                               y_step .+ repeat(s_ord, inner=2); color = (c, 0.3))
+                stairs!(ax, x_edges, vcat(e_ord, [e_ord[end]]); step = :post,
+                        color = c, linewidth = 1.5)
+                scatter!(ax, lp_mids, o_ord; color = c, markersize = 8)
+                xlims!(ax, x_edges[1], x_edges[end])
+                ymax = maximum(e_ord .+ s_ord) * 1.15
+                ylims!(ax, 0, ymax)
+                ax.xlabel = "log\u2081\u2080(p / MeV/c)"
+
+            else
+                lp_pairs  = sort(unique(zip(bi.logPMin, bi.logPMax)), by = x -> x[1])
+                cumoffset = 0.0
+                y_ann_top = 0.0   # track highest annotation y for ylims
+
+                for (j, (lpmin, lpmax)) in enumerate(lp_pairs)
+                    lp_sel  = findall((bi.logPMin .== lpmin) .& (bi.logPMax .== lpmax))
+                    ord     = sortperm(bi.CosZMin[lp_sel])
+                    sel_ord = lp_sel[ord]
+
+                    x_edges = vcat(bi.CosZMin[sel_ord], [bi.CosZMax[sel_ord][end]])
+                    cz_mids = 0.5 .* (bi.CosZMin[sel_ord] .+ bi.CosZMax[sel_ord])
+                    e_sl    = e[sel_ord]
+                    s_sl    = s[sel_ord]
+                    o_sl    = o[sel_ord]
+                    c       = pal[mod1(j, length(pal))]
+
+                    # Stepped uncertainty band
+                    x_step, y_step = make_stepped(x_edges, e_sl)
+                    band!(ax, x_step,
+                          y_step .- repeat(s_sl, inner=2) .+ cumoffset,
+                          y_step .+ repeat(s_sl, inner=2) .+ cumoffset;
+                          color = (c, 0.3))
+                    # Step histogram
+                    stairs!(ax, x_edges, vcat(e_sl, [e_sl[end]]) .+ cumoffset;
+                            step = :post, color = c, linewidth = 1.5)
+                    # Data points
+                    scatter!(ax, cz_mids, o_sl .+ cumoffset;
+                             color = c, markersize = 8, marker = :circle)
+
+                    # Annotation centered above this slice
+                    x_cen = 0.5 * (x_edges[1] + x_edges[end])
+                    y_top = maximum(max.(e_sl .+ s_sl, o_sl)) + cumoffset
+                    ann   = @sprintf("logP \u2208 [%.1f,%.1f], offset +%.0f",
+                                     lpmin, lpmax, cumoffset)
+                    text!(ax, x_cen, y_top;
+                          text = ann, color = c, fontsize = 11,
+                          align = (:center, :bottom))
+
+                    y_ann_top = y_top
+                    # Next offset: ensure gap above annotation, then round up to multiple of 10
+                    cumoffset = ceil((y_top + maximum(e_sl) * 0.2) / 10) * 10
+                end
+
+                xlims!(ax, minimum(bi.CosZMin), maximum(bi.CosZMax))
+                # Pad y-axis so the last annotation fits; approximate annotation height
+                ylims!(ax, 0, y_ann_top * 1.12)
+                ax.xlabel = "cos \u03b8z"
+            end
+        end
+
         resize_to_layout!(fig)
         fig
     end
