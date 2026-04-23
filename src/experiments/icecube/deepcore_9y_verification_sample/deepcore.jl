@@ -281,10 +281,13 @@ end
 
 function apply_hypersurfaces(hists, params, physics, assets)
 
-    x = params.Δm²₃₁
+    # Use |Δm²₃₁| so IO (negative Δm²₃₁) maps onto the same NO hypersurface grid.
+    # The hypersurfaces encode detector response vs. mass splitting magnitude,
+    # which is the same for both orderings. Clamp for safety at grid edges.
     X = assets.binning.hs_dm31
     Δx = X[2] - X[1]
-    idx = floor(Int, (x - X[1]) / Δx)
+    x = clamp(abs(params.Δm²₃₁), X[1], X[end])
+    idx = clamp(floor(Int, (x - X[1]) / Δx), 1, length(X) - 1)
     fraction = (x - X[idx]) / Δx
 
     f_nu_nc_nue_cc = get_hypersurface_factor(assets.hypersurfaces.nu_nc_nue_cc, idx, fraction, params)
