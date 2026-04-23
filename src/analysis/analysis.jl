@@ -31,6 +31,15 @@ function parse_command_line()
         arg_type = String
         required = true
 
+        "--ordering"
+        help = "NMO, default is NO, or choose IO"
+        arg_type = String
+        default = "NO"
+
+        "--asimov"
+        help = "Use asimov data"
+        action = :store_true
+
         "--plot"
         help = "Enable plotting"
         action = :store_true
@@ -143,11 +152,12 @@ if use_distributed
             @info "Seeded $(length(matched)) parameters from $(args["seed"])"
         end
 
-        # ASIMOV
-        #asimov = NamedTuple(e=>Newtrinos.generate_asimov_data(experiments[e], p) for e in keys(experiments))
-        #likelihood = Newtrinos.generate_likelihood(experiments, asimov)
-
-        likelihood = Newtrinos.generate_likelihood(experiments)
+        if args["asimov"]
+            asimov = NamedTuple(e=>Newtrinos.generate_asimov_data(experiments[e], p) for e in keys(experiments))
+            likelihood = Newtrinos.generate_likelihood(experiments, asimov)
+        else
+            likelihood = Newtrinos.generate_likelihood(experiments)
+        end
 
         set_batcontext(ad = Newtrinos.select_ad(length(p)))
     end
@@ -218,15 +228,20 @@ end
 if !use_distributed
     likelihood = Newtrinos.generate_likelihood(experiments);
 end
-
+#
 priors = Newtrinos.condition(priors, conditional_vars, p)
 
-@reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
-@reset priors.θ₂₃ = Uniform(pi/4-0.2, pi/4+0.2)
+#@reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
+#@reset priors.θ₂₃ = Uniform(pi/4-0.2, pi/4+0.2)
 
-# IO
-#@reset p.Δm²₃₁ = -p.Δm²₃₁
-#@reset priors.Δm²₃₁ = -priors.Δm²₃₁
+@reset priors.Δm²₃₁ = Uniform(0.0023, 0.0027)
+@reset priors.θ₁₃ = Uniform(0.1, 0.2)
+@reset priors.θ₂₃ = Uniform(pi/4-0.1, pi/4+0.1)
+### IO
+if lowercase(args["ordering"]) == "io"
+    @reset p.Δm²₃₁ = -p.Δm²₃₁
+    @reset priors.Δm²₃₁ = -priors.Δm²₃₁
+end
 
 if lowercase(args["task"]) == "nestedsampling"
     import UltraNest
