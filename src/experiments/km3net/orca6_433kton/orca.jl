@@ -163,7 +163,7 @@ function reweight(params, physics, assets)
     layers = haskey(params, :electron_density_scale) ? Newtrinos.earth_layers.scale_densities(assets.nominal_layers, params.electron_density_scale) : assets.nominal_layers
     paths = physics.earth_layers.compute_paths(assets.binning.cz_fine, layers)
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params)
+    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, paths, layers, params)
     p_flux = reshape(sys_flux.nue, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numu, s) .* p[:, :, 2, :]
 
     nus = (
@@ -172,7 +172,7 @@ function reweight(params, physics, assets)
         nutau = gather_flux(p_flux, assets.mc.nutau.E_true_bin, assets.mc.nutau.Ct_true_bin, 3),
     )
 
-    p = physics.osc.osc_prob(assets.binning.e_fine, paths, layers, params, anti=true)
+    p = physics.osc.osc_prob(assets.binning.e_fine * params.orca_energy_scale, paths, layers, params, anti=true)
     p_flux = reshape(sys_flux.nuebar, s) .* p[:, :, 1, :] .+ reshape(sys_flux.numubar, s) .* p[:, :, 2, :]
 
     nubars = (
@@ -182,27 +182,6 @@ function reweight(params, physics, assets)
     )
 
     merge(nus, nubars)
-end
-
-function energy_transfer_matrix(scale, e_edges)
-    n = length(e_edges) - 1
-    T = zeros(typeof(scale), n, n)
-    for k in 1:n
-        ek_lo = e_edges[k]   / scale
-        ek_hi = e_edges[k+1] / scale
-        for j in 1:n
-            ej_lo = e_edges[j]; ej_hi = e_edges[j+1]
-            overlap = max(zero(scale), min(ej_hi, ek_hi) - max(ej_lo, ek_lo))
-            T[k, j] = overlap / (ej_hi - ej_lo)
-        end
-    end
-    return T
-end
-
-function apply_energy_scale(hist, scale, e_edges)
-    T = energy_transfer_matrix(scale, e_edges)
-    n_e = size(hist, 1)
-    return reshape(T * reshape(hist, n_e, :), size(hist))
 end
 
 function get_expected(params, physics, assets)
@@ -230,11 +209,8 @@ function get_expected(params, physics, assets)
     hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]
     expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc .+ hists_cc) * params.orca_norm_all
 
-    expected = apply_energy_scale(expected, params.orca_energy_scale, assets.binning.e_reco_edges)
-
-    # Poisson > 0; also replace NaN (from extreme param combos) since max(1e-2, NaN) = NaN
-    floor_val = one(eltype(expected)) * 1e-2
-    expected = ifelse.(isnan.(expected), floor_val, max.(floor_val, expected))
+    # Poisson > 0
+    expected = max.(1e-2, (expected))
 
     c = cut(expected)
     
