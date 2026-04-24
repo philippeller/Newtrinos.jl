@@ -156,7 +156,8 @@ end
 
 function reweight(params, physics, assets)
 
-    sys_flux = physics.atm_flux.sys_flux(assets.flux_nominal, params)
+    flux = physics.atm_flux.nominal_flux(assets.binning.e_fine * params.orca_energy_scale, assets.binning.cz_fine)
+    sys_flux = physics.atm_flux.sys_flux(flux, params)
 
     s = assets.true_shape
 
@@ -209,8 +210,9 @@ function get_expected(params, physics, assets)
     hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]
     expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc .+ hists_cc) * params.orca_norm_all
 
-    # Poisson > 0
-    expected = max.(1e-2, (expected))
+    # Poisson > 0; also replace NaN (from extreme param combos) since max(1e-2, NaN) = NaN
+    floor_val = one(eltype(expected)) * 1e-2
+    expected = ifelse.(isnan.(expected), floor_val, max.(floor_val, expected))
 
     c = cut(expected)
     
