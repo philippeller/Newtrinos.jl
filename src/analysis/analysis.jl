@@ -251,7 +251,7 @@ priors = Newtrinos.condition(priors, conditional_vars, p)
 ### IO
 if lowercase(args["ordering"]) == "io"
     @reset p.Δm²₃₁ = -0.0025
-    @reset priors.Δm²₃₁ = -(priors.Δm²₃₁ + 7.53e-5)
+    @reset priors.Δm²₃₁ = -(priors.Δm²₃₁ - 7.53e-5)
 end
 
 if lowercase(args["task"]) == "nestedsampling"
