@@ -83,6 +83,10 @@ function parse_command_line()
         help = "For refine_profile: Gaussian blur sigma in grid units applied to parameter arrays after outlier repair"
         arg_type = Float64
         default = 1.0
+
+        "--sequential"
+        help = "For profile/refine_profile: compute scan points in BFS order from seed best-fit, warm-starting each point from its neighbour's result"
+        action = :store_true
     end
 
     return parse_args(s)
@@ -274,8 +278,22 @@ elseif lowercase(args["task"]) == "importancesampling"
     whack_samples = whack_many_moles(posterior, init_samples, target_samplesize=10_000, cache_dir=name)
     FileIO.save(name * ".jld2", Dict(String(a)=>whack_samples[a] for a in keys(whack_samples)))
 else
+    sequential = args["sequential"]
+
     if lowercase(args["task"]) == "profile"
-        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p; cache_dir=name, map_func=map_func, nseeds=args["nseeds"])
+        # Extract start_from from seed file if sequential warm-starting is requested
+        start_from = nothing
+        if sequential && !isnothing(args["seed"])
+            seed_data = FileIO.load(args["seed"])
+            start_from = Newtrinos.bestfit(seed_data["result"])
+            @info "Sequential profile: seed best-fit will anchor the BFS start point"
+        end
+        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p;
+            cache_dir   = name,
+            map_func    = map_func,
+            nseeds      = args["nseeds"],
+            sequential  = sequential,
+            start_from  = start_from)
     elseif lowercase(args["task"]) == "scan"
         result = Newtrinos.scan(likelihood, priors, vars_to_scan, p)
     elseif lowercase(args["task"]) == "refine_profile"
@@ -284,11 +302,14 @@ else
         smoothed = Newtrinos.smooth_result(seed_result;
             outlier_threshold = args["outlier-threshold"],
             gaussian_sigma    = args["gaussian-sigma"])
+        start_from = sequential ? Newtrinos.bestfit(seed_result) : nothing
         result = Newtrinos.profile(likelihood, priors, vars_to_scan, p;
             cache_dir   = name,
             map_func    = map_func,
             nseeds      = args["nseeds"],
-            seed_result = smoothed)
+            seed_result = smoothed,
+            sequential  = sequential,
+            start_from  = start_from)
     end
 
     save_result(result, name)
