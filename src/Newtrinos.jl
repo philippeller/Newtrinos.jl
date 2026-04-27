@@ -23,6 +23,7 @@ abstract type Experiment end
 
 export Physics, Experiment
 export NewtrinosResult, plot
+export smooth_result, make_seed_interpolants
 export bin, rebin
 export make_init_samples, make_prior_samples, whack_a_mole, whack_many_moles
 

@@ -24,6 +24,8 @@ using Dates
 using LibGit2
 import Mooncake
 import Random
+using Interpolations
+using Statistics
 using ..Newtrinos
 
 const AD_BACKEND = Ref{Symbol}(:auto)
@@ -436,7 +438,7 @@ function generate_scanpoints(vars_to_scan, priors)
         scanpoints[i] = make_prior(mesh[i])
     end
 
-    values, scanpoints
+    values, scanpoints, vec(mesh)
 end
 
 """Assemble optimization results into a NamedTuple of arrays."""
@@ -472,17 +474,18 @@ function randomize_params(rng, params, prior)
     return p
 end
 
-function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, nseeds=1)
+function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, nseeds=1, seed_params=nothing)
+    get_p(i) = isnothing(seed_params) ? params : seed_params[i]
     if nseeds <= 1
         # Original single-seed path: no randomization
         if isnothing(map_func)
             opt_results = Array{Any}(undef, size(scanpoints))
             @showprogress Threads.@threads for i in eachindex(scanpoints)
-                opt_results[i] = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
+                opt_results[i] = find_mle_cached(likelihood, scanpoints[i], deepcopy(get_p(i)), cache_dir)
             end
         else
             work = collect(eachindex(scanpoints))
-            opt_results_flat = map_func(work, scanpoints, params, cache_dir)
+            opt_results_flat = map_func(work, scanpoints, get_p.(eachindex(scanpoints)), cache_dir)
             opt_results = reshape(opt_results_flat, size(scanpoints))
         end
         return assemble_profile_results(opt_results, size(scanpoints))
@@ -500,7 +503,7 @@ function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing, n
         for s in 1:nseeds
             j = (s - 1) * n_points + i
             expanded_scanpoints[j] = flat_scanpoints[i]
-            expanded_params[j] = randomize_params(rng, params, flat_scanpoints[i])
+            expanded_params[j] = randomize_params(rng, get_p(i), flat_scanpoints[i])
         end
     end
 
@@ -534,14 +537,14 @@ optimizes over all other parameters. Use `cache_dir` to cache and resume results
 Use `map_func=pmap` for distributed parallelism (default: `Threads.@threads`).
 Use `nseeds > 1` to run multiple fits per point from randomized starting values and keep the best.
 """
-function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1)
+function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1, seed_result=nothing)
     t1 = time()
     # check if there is actually any variable to be profiled over, or if they are all just Numbers
     if all([isa(priors[var], Number) for var in setdiff(keys(priors), keys(vars_to_scan))])
         return scan(likelihood, priors, vars_to_scan, params)
     end
 
-    values, scanpoints = generate_scanpoints(vars_to_scan, priors)
+    values, scanpoints, mesh_flat = generate_scanpoints(vars_to_scan, priors)
     if !isnothing(cache_dir)
         if isdir(cache_dir)
             @info "Reusing cache dir `$(cache_dir)`"
@@ -549,7 +552,20 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, ma
             mkdir(cache_dir)
         end
     end
-    res = _profile(likelihood, scanpoints, params, cache_dir; map_func=map_func, nseeds=nseeds)
+
+    seed_params = nothing
+    if !isnothing(seed_result)
+        itps = make_seed_interpolants(seed_result)
+        param_keys = collect(keys(itps))
+        axis_keys  = keys(seed_result.axes)
+        n_axes = length(axis_keys)
+        seed_params = [let coords = Tuple(Float64(mesh_flat[i][d]) for d in 1:n_axes)
+            merge(params, NamedTuple{Tuple(param_keys)}(itps[k](coords...) for k in param_keys))
+        end for i in eachindex(mesh_flat)]
+        @info "Using per-point seeds from smoothed result ($(length(param_keys)) params interpolated)"
+    end
+
+    res = _profile(likelihood, scanpoints, params, cache_dir; map_func=map_func, nseeds=nseeds, seed_params=seed_params)
     t2 = time()
     meta = Dict("task"=> "profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan, "params"=>params, "exec_time"=>t2-t1, "cache_dir"=>cache_dir, "nseeds"=>nseeds)
     add_meta!(meta)
@@ -638,4 +654,124 @@ function add_meta!(meta)
     meta["repo"] = repo
     meta["commit_hash"] = LibGit2.head(repo)
     meta["repo_clean"] = !LibGit2.isdirty(LibGit2.GitRepo(repo))
+end
+
+# ── Result smoothing for refine_profile ────────────────────────────────────────
+
+"""
+    _gaussian_blur(arr, sigma)
+
+Apply a separable Gaussian blur of width `sigma` (in grid units) to an N-dimensional array.
+Boundary effects are handled by renormalising the kernel weights at edges.
+"""
+function _gaussian_blur(arr::Array, sigma::Float64)
+    sigma <= 0 && return float.(arr)
+    result = float.(arr)
+    for d in 1:ndims(arr)
+        n = size(result, d)
+        radius = min(ceil(Int, 3 * sigma), n - 1)
+        k_range = -radius:radius
+        kernel = [exp(-k^2 / (2 * sigma^2)) for k in k_range]
+        old = copy(result)
+        for idx in CartesianIndices(size(old))
+            s = 0.0; w = 0.0
+            for (ki, delta) in enumerate(k_range)
+                ni = idx[d] + delta
+                1 <= ni <= n || continue
+                nidx = CartesianIndex(ntuple(i -> i == d ? ni : idx[i], ndims(arr)))
+                s += kernel[ki] * old[nidx]
+                w += kernel[ki]
+            end
+            result[idx] = s / w
+        end
+    end
+    result
+end
+
+"""
+    smooth_result(result; outlier_threshold=10.0, gaussian_sigma=1.0)
+
+Prepare a `NewtrinosResult` for use as per-point seeds in `refine_profile`:
+
+1. Detect outlier scan points where `log_posterior` is more than `outlier_threshold` below
+   the maximum of its direct grid neighbours (indicating a failed optimisation).
+2. Replace each outlier's parameter values with the mean of its valid (non-outlier) neighbours.
+3. Apply a Gaussian blur of width `gaussian_sigma` (in grid units) to all parameter arrays.
+
+Returns a new `NewtrinosResult` with smoothed values.
+"""
+function smooth_result(result::NewtrinosResult; outlier_threshold=10.0, gaussian_sigma=1.0)
+    lp = result.values.log_posterior        # already grid-shaped
+    grid_shape = size(lp)
+    ndim = ndims(lp)
+    param_keys = [k for k in keys(result.values) if k ∉ (:llh, :log_posterior)]
+
+    # Helper: direct grid neighbours of idx (in-bounds only)
+    function neighbor_indices(idx)
+        nbrs = CartesianIndex[]
+        for d in 1:ndim, delta in (-1, 1)
+            nidx = CartesianIndex(ntuple(i -> i == d ? idx[i] + delta : idx[i], ndim))
+            checkbounds(Bool, lp, nidx) && push!(nbrs, nidx)
+        end
+        nbrs
+    end
+
+    # 1. Detect outliers
+    is_outlier = falses(grid_shape)
+    for idx in CartesianIndices(grid_shape)
+        nbrs = neighbor_indices(idx)
+        isempty(nbrs) && continue
+        lp[idx] < maximum(lp[n] for n in nbrs) - outlier_threshold && (is_outlier[idx] = true)
+    end
+    @info "smooth_result: $(count(is_outlier)) outlier(s) detected in $(prod(grid_shape)) scan points"
+
+    # 2. Replace outlier param values with mean of valid neighbours, then Gaussian-blur
+    new_params = Dict{Symbol, Vector{Float64}}()
+    for k in param_keys
+        arr = reshape(copy(float.(result.values[k])), grid_shape)
+        for idx in CartesianIndices(grid_shape)
+            is_outlier[idx] || continue
+            valid_vals = [arr[n] for n in neighbor_indices(idx) if !is_outlier[n]]
+            isempty(valid_vals) || (arr[idx] = mean(valid_vals))
+        end
+        new_params[k] = vec(_gaussian_blur(arr, gaussian_sigma))
+    end
+
+    # Also repair log_posterior at outlier points (for reference only, not used as seeds)
+    new_lp = copy(float.(lp))
+    for idx in CartesianIndices(grid_shape)
+        is_outlier[idx] || continue
+        valid_vals = [lp[n] for n in neighbor_indices(idx) if !is_outlier[n]]
+        isempty(valid_vals) || (new_lp[idx] = mean(valid_vals))
+    end
+
+    new_values = NamedTuple{keys(result.values)}(
+        [k == :log_posterior ? new_lp :
+         k == :llh           ? result.values.llh :
+         new_params[k]
+         for k in keys(result.values)])
+    meta = merge(result.meta, Dict("smoothed"=>true,
+                                   "outlier_threshold"=>outlier_threshold,
+                                   "gaussian_sigma"=>gaussian_sigma))
+    NewtrinosResult(axes=result.axes, values=new_values, meta=meta)
+end
+
+"""
+    make_seed_interpolants(result)
+
+Build a linear interpolant (with linear extrapolation outside the grid) for each
+optimised parameter in `result`, indexed by the scan axis values.
+Returns a `Dict{Symbol, AbstractExtrapolation}`.
+"""
+function make_seed_interpolants(result::NewtrinosResult)
+    axis_vals = Tuple(collect(Float64, v) for v in values(result.axes))
+    grid_shape = size(result.values.log_posterior)
+    param_keys = [k for k in keys(result.values) if k ∉ (:llh, :log_posterior)]
+    itps = Dict{Symbol, Any}()
+    for k in param_keys
+        arr = Float64.(reshape(result.values[k], grid_shape))
+        itp = interpolate(axis_vals, arr, Gridded(Linear()))
+        itps[k] = extrapolate(itp, Linear())
+    end
+    itps
 end
