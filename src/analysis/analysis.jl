@@ -231,16 +231,17 @@ end
 #
 priors = Newtrinos.condition(priors, conditional_vars, p)
 
-#@reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
-#@reset priors.θ₂₃ = Uniform(pi/4-0.2, pi/4+0.2)
+@reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
+@reset priors.θ₂₃ = Uniform(pi/4-0.2, pi/4+0.2)
 
-@reset priors.Δm²₃₁ = Uniform(0.0023, 0.0027)
-@reset priors.θ₁₃ = Uniform(0.1, 0.2)
-@reset priors.θ₂₃ = Uniform(pi/4-0.1, pi/4+0.1)
+#@reset priors.Δm²₃₁ = Uniform(0.002, 0.003)
+#@reset priors.θ₁₃ = Uniform(0.05, 0.25)
+@reset priors.θ₁₃ = Truncated(Normal(0.156, 0.008), 0.12, 0.18)
+#@reset priors.θ₂₃ = Uniform(pi/4-0.1, pi/4+0.1)
 ### IO
 if lowercase(args["ordering"]) == "io"
-    @reset p.Δm²₃₁ = -p.Δm²₃₁
-    @reset priors.Δm²₃₁ = -priors.Δm²₃₁
+    @reset p.Δm²₃₁ = -0.0025
+    @reset priors.Δm²₃₁ = -(priors.Δm²₃₁ + 7.53e-5)
 end
 
 if lowercase(args["task"]) == "nestedsampling"
