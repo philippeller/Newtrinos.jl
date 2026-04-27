@@ -36,7 +36,12 @@ using ..Newtrinos
 end
 
 function default_physics()
-    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
+    # Spray propagation: σ_E matched to logE grid for Nyquist (no aliasing),
+    # σ_h = 10 km atmospheric production height uncertainty (same as Super-K)
+    dlogE   = 4.0 / 200.0           # log10E range / n_bins (matches LinRange(0,4,201))
+    sigma_E = 10.0^dlogE - 1.0      # fractional energy smearing ≈ 0.047
+    propagation = Newtrinos.osc.Spray(averaging=:gaussian, σ_E=sigma_E, σ_h=10.0)
+    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=propagation))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("spl-nu-20-01-000.d")))
     earth_layers = Newtrinos.earth_layers.configure()
     xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA(mc_nominal=:G00_00a))

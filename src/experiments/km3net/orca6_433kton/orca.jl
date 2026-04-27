@@ -6,6 +6,7 @@ using DataStructures
 using TypedTables
 using HDF5
 using StatsBase
+using Statistics: mean
 using CairoMakie
 using BAT
 using Printf
@@ -20,8 +21,16 @@ using ..Newtrinos
     plot::Function
 end
 
-function default_physics()
-    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI()))
+function default_physics(; datadir = @__DIR__)
+    # Read energy grid to set Nyquist-matched spray σ_E (one log-E bin width)
+    h5file = h5open(joinpath(datadir, "ORCA6_433kton_v_0_5.h5"), "r")
+    e_fine = read(h5file["E_true_axis"]["centers"])
+    close(h5file)
+    dlogE   = mean(diff(log10.(e_fine)))
+    sigma_E = 10.0^dlogE - 1.0   # fractional energy smearing ≈ 0.259 for 40-bin log grid
+    @info "ORCA spray propagation: dlogE=$(round(dlogE,digits=4)), σ_E=$(round(sigma_E,digits=4)), σ_h=10 km"
+    propagation = Newtrinos.osc.Spray(averaging=:gaussian, σ_E=sigma_E, σ_h=10.0)
+    osc = Newtrinos.osc.configure(Newtrinos.osc.OscillationConfig(interaction=Newtrinos.osc.SI(), propagation=propagation))
     atm_flux = Newtrinos.atm_flux.configure(Newtrinos.atm_flux.AtmFluxConfig(nominal_model=Newtrinos.atm_flux.HKKM("frj-ally-20-01-mtn-solmin.d")))
     earth_layers = Newtrinos.earth_layers.configure()
     xsec = Newtrinos.xsec.configure(Newtrinos.xsec.H2O_PCA(mc_nominal=:G00_00a))
