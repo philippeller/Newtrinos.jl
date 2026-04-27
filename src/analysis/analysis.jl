@@ -73,6 +73,16 @@ function parse_command_line()
         help = "Number of fits per scan point from randomized starting values (best fit is kept)"
         arg_type = Int
         default = 1
+
+        "--outlier-threshold"
+        help = "For refine_profile: log-posterior drop below best neighbour to flag a point as a failed fit"
+        arg_type = Float64
+        default = 10.0
+
+        "--gaussian-sigma"
+        help = "For refine_profile: Gaussian blur sigma in grid units applied to parameter arrays after outlier repair"
+        arg_type = Float64
+        default = 1.0
     end
 
     return parse_args(s)
@@ -267,6 +277,17 @@ else
         result = Newtrinos.profile(likelihood, priors, vars_to_scan, p; cache_dir=name, map_func=map_func, nseeds=args["nseeds"])
     elseif lowercase(args["task"]) == "scan"
         result = Newtrinos.scan(likelihood, priors, vars_to_scan, p)
+    elseif lowercase(args["task"]) == "refine_profile"
+        isnothing(args["seed"]) && error("--task refine_profile requires --seed <result.jld2>")
+        seed_result = FileIO.load(args["seed"])["result"]
+        smoothed = Newtrinos.smooth_result(seed_result;
+            outlier_threshold = args["outlier-threshold"],
+            gaussian_sigma    = args["gaussian-sigma"])
+        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p;
+            cache_dir   = name,
+            map_func    = map_func,
+            nseeds      = args["nseeds"],
+            seed_result = smoothed)
     end
 
     save_result(result, name)
