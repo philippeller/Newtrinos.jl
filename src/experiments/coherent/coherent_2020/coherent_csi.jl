@@ -24,7 +24,74 @@ import ..Newtrinos
     plot::Function
 end
 
-function configure(; datadir = @__DIR__, use_flux_data::Bool = true, ff_model::Symbol = :helm, ff_kwargs::NamedTuple = (;))
+function rebin_1d_projection(centers, weights, edges)
+    rebinned = zeros(eltype(weights), length(edges) - 1)
+    for i in eachindex(rebinned)
+        idx = findall(c -> c >= edges[i] && c < edges[i + 1], centers)
+        if !isempty(idx)
+            rebinned[i] = sum(weights[idx])
+        end
+    end
+    return rebinned
+end
+
+function edges_from_centers(centers)
+    n = length(centers)
+    @assert n >= 2
+    edges = similar(centers, n + 1)
+    edges[2:n] .= (centers[1:end-1] .+ centers[2:end]) ./ 2
+    edges[1] = centers[1] - (edges[2] - centers[1])
+    edges[end] = centers[end] + (centers[end] - edges[end-1])
+    return edges
+end
+
+function rebin_histogram_1d(source_weights, source_edges, target_edges)
+    T = promote_type(eltype(source_weights), eltype(source_edges), eltype(target_edges))
+    rebinned = zeros(T, length(target_edges) - 1)
+    dt = diff(source_edges)
+    density = source_weights ./ dt
+
+    for out_bin in eachindex(rebinned)
+        out_lo = target_edges[out_bin]
+        out_hi = target_edges[out_bin + 1]
+        for in_bin in eachindex(source_weights)
+            in_lo = source_edges[in_bin]
+            in_hi = source_edges[in_bin + 1]
+            overlap = min(out_hi, in_hi) - max(out_lo, in_lo)
+            if overlap > zero(overlap)
+                rebinned[out_bin] += density[in_bin] * overlap
+            end
+        end
+    end
+
+    return rebinned
+end
+
+function get_timing_efficiency(time_edges)
+    a_ns = 520.0
+    b_per_ns = 0.0494 / 1e3
+    eff = zeros(Float64, length(time_edges) - 1)
+
+    for i in eachindex(eff)
+        lo = time_edges[i]
+        hi = time_edges[i + 1]
+        width = hi - lo
+
+        integral = if hi <= a_ns
+            width
+        elseif lo >= a_ns
+            (exp(-b_per_ns * (lo - a_ns)) - exp(-b_per_ns * (hi - a_ns))) / b_per_ns
+        else
+            (a_ns - lo) + (1 - exp(-b_per_ns * (hi - a_ns))) / b_per_ns
+        end
+
+        eff[i] = integral / width
+    end
+
+    return eff
+end
+
+function configure(; datadir = @__DIR__, use_flux_data::Bool = true, ff_model::Symbol = :helm, ff_kwargs::NamedTuple = (;), sns_flux_kwargs::NamedTuple = (;))
     assets = get_assets(datadir)
 
     # Configure the SNS flux module
@@ -32,6 +99,7 @@ function configure(; datadir = @__DIR__, use_flux_data::Bool = true, ff_model::S
         exposure = assets.exposure,
         distance = assets.distance,
         use_data = use_flux_data,
+        sns_flux_kwargs...
     )
 
     # Reconfigure assets with data loaded from sns_flux
@@ -61,34 +129,24 @@ end
 
 function get_params(ss_bkg_nom, brn_nom, nin_nom)
     params = (
-        coherent_csi_eff_a = 1.32045,
-        coherent_csi_eff_b = 0.285979,
-        coherent_csi_eff_c = 10.8646,
-        coherent_csi_eff_d = -0.333322,
-        coherent_csi_qfa_a = 0.0554628,  # QF polynomial coefficients
-        coherent_csi_qfa_b = 4.30681,
-        coherent_csi_qfa_c = -111.707,
-        coherent_csi_qfa_d = 840.384,
-        brn_norm= brn_nom,  # Normalization factor for BRN
-        nin_norm= nin_nom,  # Normalization factor for NIN
-        ss_bkg_norm= ss_bkg_nom,  # Normalization factor for SS background
+    coherent_csi_eff_sigma = 0.0,
+    coherent_csi_qf_pc0 = 0.0,
+    coherent_csi_qf_pc1 = 0.0,
+        coherent_csi_brn_norm = brn_nom,  # Normalization factor for BRN
+        coherent_csi_nin_norm = nin_nom,  # Normalization factor for NIN
+        coherent_csi_ss_bkg_norm = ss_bkg_nom,  # Normalization factor for SS background
         )
 end
 
 # TODO!
 function get_priors(ss_bkg_nom, brn_nom, nin_nom)
     priors = (
-        coherent_csi_eff_a = Normal(1.32045, 0.02),
-        coherent_csi_eff_b = Normal(0.285979, 0.0006),
-        coherent_csi_eff_c = Normal(10.8646, 1.),
-        coherent_csi_eff_d = Normal(-0.333322, 0.03),
-        coherent_csi_qfa_a = Normal(0.0554628, 0.0059),
-        coherent_csi_qfa_b = Normal(4.30681, 0.79),
-        coherent_csi_qfa_c = Normal(-111.707, 26.15),
-        coherent_csi_qfa_d = Normal(840.384, 244.82),
-        brn_norm= truncated(Normal(brn_nom, 0.25 * brn_nom), 0.0, brn_nom + 3 * 0.25 * brn_nom),  # Normalization factor for BRN
-        nin_norm= truncated(Normal(nin_nom, 0.36 * nin_nom), 0.0, nin_nom + 3 * 0.36 * nin_nom),  # Normalization factor for NIN
-        ss_bkg_norm= truncated(Normal(ss_bkg_nom, 0.021 * ss_bkg_nom), 0.0, ss_bkg_nom + 3 * 0.021 * ss_bkg_nom),  # Normalization factor for SS background
+    coherent_csi_eff_sigma = truncated(Normal(0.0, 1.0), -3.0, 3.0),
+    coherent_csi_qf_pc0 = truncated(Normal(0.0, 1.0), -3.0, 3.0),
+    coherent_csi_qf_pc1 = truncated(Normal(0.0, 1.0), -3.0, 3.0),
+        coherent_csi_brn_norm = truncated(Normal(brn_nom, 0.25 * brn_nom), 0.0, brn_nom + 3 * 0.25 * brn_nom),  # Normalization factor for BRN
+        coherent_csi_nin_norm = truncated(Normal(nin_nom, 0.36 * nin_nom), 0.0, nin_nom + 3 * 0.36 * nin_nom),  # Normalization factor for NIN
+        coherent_csi_ss_bkg_norm = truncated(Normal(ss_bkg_nom, 0.021 * ss_bkg_nom), 0.0, ss_bkg_nom + 3 * 0.021 * ss_bkg_nom),  # Normalization factor for SS background
         )
 end
 
@@ -123,12 +181,20 @@ function get_assets(datadir = @__DIR__, sns_flux = nothing)
     nin_nom = nothing
     time_bins = nothing
     time_edges = nothing
+    time_efficiency = nothing
+    brn_time_source = nothing
+    nin_time_source = nothing
+    brn_time_source_edges = nothing
+    nin_time_source_edges = nothing
+    brn_pe_pdf = nothing
+    nin_pe_pdf = nothing
     # Check if sns_flux is provided and has time bin centers
     if sns_flux !== nothing && haskey(sns_flux.assets, :T)
         @info "Loading and binning CsI data"
         @info "Configuring Flux"
         time_edges = sns_flux.assets.T  # Extract time bin-edges from sns_flux (nanoseconds)
         time_bins = midpoints(time_edges)  # Bin centers
+        time_efficiency = get_timing_efficiency(time_edges)
         # Import Data
         ssBkg_df = CSV.read(joinpath(datadir, "csi/dataBeamOnAC.txt"), DataFrame, comment="#", header=false, delim=' ')  # columns: PE, timestamp
         observed_df = CSV.read(joinpath(datadir, "csi/dataBeamOnC.txt"), DataFrame, comment="#", header=false, delim=' ')  # columns: PE, timestamp
@@ -162,35 +228,33 @@ function get_assets(datadir = @__DIR__, sns_flux = nothing)
         ssBkg = ssBkg_hist.weights
         observed = observed_hist.weights
 
-        # Rebin BRN and NIN data into desired bins
-        #@info "Rebinning binned CsI data"
+        # BRN and NIN are provided as uncorrelated PE and time projections.
+        # PE distributions already include epsilon_PE, while time distributions do not include epsilon_T.
+        brn_pe_pdf = rebin_1d_projection(brnPE_df[:, 1], brnPE_df[:, 2], out_edges)
+        nin_pe_pdf = rebin_1d_projection(ninPE_df[:, 1], ninPE_df[:, 2], out_edges)
+        brn_time_source = brnTrec_df[:, 2]
+        nin_time_source = ninTrec_df[:, 2]
+        brn_time_source_edges = edges_from_centers(brnTrec_df[:, 1])
+        nin_time_source_edges = edges_from_centers(ninTrec_df[:, 1])
 
-        # Convert zipped data into an array of tuples
-        brn_data = collect(zip(brnPE_df[:, 1], brnTrec_df[:, 1]))
-        nin_data = collect(zip(ninPE_df[:, 1], ninTrec_df[:, 1]))
+        if sum(brn_pe_pdf) > 0
+            brn_pe_pdf ./= sum(brn_pe_pdf)
+        end
+        if sum(nin_pe_pdf) > 0
+            nin_pe_pdf ./= sum(nin_pe_pdf)
+        end
 
-        # Filter out events outside the range of out_edges and time_bins
-        valid_brn = filter(row -> row[1] >= first(out_edges) && row[1] <= last(out_edges) &&
-                            row[2] >= first(time_edges) && row[2] <= last(time_edges), brn_data)
-        valid_nin = filter(row -> row[1] >= first(out_edges) && row[1] <= last(out_edges) &&
-                            row[2] >= first(time_edges) && row[2] <= last(time_edges), nin_data)
-
-        # Convert filtered data back to DataFrame
-        brnPE_df = DataFrame(PE=[row[1] for row in valid_brn], Time=[row[2] for row in valid_brn])
-        ninPE_df = DataFrame(PE=[row[1] for row in valid_nin], Time=[row[2] for row in valid_nin])
-
-        # Perform rebinning
-        brn_hist = fit(Histogram, (brnPE_df.PE, brnPE_df.Time), (out_edges, time_edges))
-        nin_hist = fit(Histogram, (ninPE_df.PE, ninPE_df.Time), (out_edges, time_edges))
-        brn = brn_hist.weights
-        nin = nin_hist.weights
+        brn_time_counts = rebin_histogram_1d(brn_time_source, brn_time_source_edges, time_edges)
+        nin_time_counts = rebin_histogram_1d(nin_time_source, nin_time_source_edges, time_edges)
+        brn = reshape(brn_pe_pdf, :, 1) .* reshape(brn_time_counts, 1, :)
+        nin = reshape(nin_pe_pdf, :, 1) .* reshape(nin_time_counts, 1, :)
 
         # Get initial nominal value for Bkg normalizations
         ss_bkg_nom = sum(ssBkg)
         #@info "Initial SS background normalization: $ss_bkg_nom"
-        brn_nom = sum(brn)
+        brn_nom = sum(brn .* reshape(time_efficiency, 1, :))
         #@info "Initial BRN background normalization: $brn_nom"
-        nin_nom = sum(nin)
+        nin_nom = sum(nin .* reshape(time_efficiency, 1, :))
         #@info "Initial NIN background normalization: $nin_nom"
     else
         @info "Flux is not fully configured yet."
@@ -198,6 +262,11 @@ function get_assets(datadir = @__DIR__, sns_flux = nothing)
 
     distance = 1930  # cm
     exposure = 13.99  # GWh
+    eff_nominal = (1.32045, 0.285979, 10.8646, -0.333322)
+    eff_delta = (0.02345, -0.000613, -1.01862, -0.023042)
+    qf_nominal = (0.0554628, 4.30681, -111.707, 840.384)
+    qf_pc0_delta = (0.0059004, -0.79134, 26.1515, -244.819)
+    qf_pc1_delta = (-4.98e-5, -0.37084, 18.60225, -210.294)
 
     # Return assets as a NamedTuple
     return (;
@@ -213,22 +282,46 @@ function get_assets(datadir = @__DIR__, sns_flux = nothing)
         light_yield,
         resolution,
         brn,
+        brn_pe_pdf,
         brn_nom,
         nin,
+        nin_pe_pdf,
         nin_nom,
+        brn_time_source,
+        nin_time_source,
+        brn_time_source_edges,
+        nin_time_source_edges,
         ssBkg,
         ss_bkg_nom,
         distance,
         exposure,
+        time_efficiency,
+        eff_nominal,
+        eff_delta,
+        qf_nominal,
+        qf_pc0_delta,
+        qf_pc1_delta,
     )
 end
 
+function construct_time_response_matrix(assets)
+    Diagonal(assets.time_efficiency)
+end
+
+function csi_qf_coefficients(params, assets)
+    z0 = params.coherent_csi_qf_pc0
+    z1 = params.coherent_csi_qf_pc1
+    return ntuple(i -> assets.qf_nominal[i] + z0 * assets.qf_pc0_delta[i] + z1 * assets.qf_pc1_delta[i], 4)
+end
+
+function csi_eff_coefficients(params, assets)
+    z = params.coherent_csi_eff_sigma
+    return ntuple(i -> assets.eff_nominal[i] + z * assets.eff_delta[i], 4)
+end
+
 # QF: accepts scalar or array, returns same shape, type-generic
-function qf(er, params)
-    a = params.coherent_csi_qfa_a
-    b = params.coherent_csi_qfa_b
-    c = params.coherent_csi_qfa_c
-    d = params.coherent_csi_qfa_d
+function qf(er, params, assets)
+    a, b, c, d = csi_qf_coefficients(params, assets)
     x = er .* 1e-3                         # MeV
     vals = (a .* x .+ b .* x.^2 .+ c .* x.^3 .+ d .* x.^4) .* 1e3  # keVee
     z = vals isa AbstractArray ? zero(eltype(vals)) : zero(vals)
@@ -236,11 +329,8 @@ function qf(er, params)
 end
 
 # Efficiency: accepts scalar or array of PE, type-generic
-function eff(pe, params)
-    a = params.coherent_csi_eff_a
-    b = params.coherent_csi_eff_b
-    c = params.coherent_csi_eff_c
-    d = params.coherent_csi_eff_d
+function eff(pe, params, assets)
+    a, b, c, d = csi_eff_coefficients(params, assets)
     vals = @. a / (1 + exp(-b * (pe - c))) + d
     z = vals isa AbstractArray ? zero(eltype(vals)) : zero(vals)
     return max.(vals, z)
@@ -295,19 +385,19 @@ end
 
 # Single ER-bin response column, AD-safe
 function response_matrix_per_er_bin(keVnr, params, assets)
-    keVee = qf(keVnr, params)                    # scalar (possibly Dual)
+    keVee = qf(keVnr, params, assets)            # scalar (possibly Dual)
     weights = gamma_pdf_integrated_over_bins(keVee, assets.out_centers, assets.out_edges,
                                              assets.resolution, assets.light_yield)
     s = sum(weights)
     if iszero(s)
         return weights  # already zeros of correct type
     end
-    eff_vals = eff(assets.out_centers, params)
+    eff_vals = eff(assets.out_centers, params, assets)
     return weights .* eff_vals
 end
 
-# Full response matrix, AD-safe
-function construct_response_matrix(params, assets)
+# Full PE response matrix, AD-safe
+function construct_pe_response_matrix(params, assets)
     n_out = length(assets.out_centers)
     n_er = length(assets.er_centers)
 
@@ -323,6 +413,13 @@ function construct_response_matrix(params, assets)
     return A
 end
 
+function construct_detector_response(params, assets)
+    return (
+        pe = construct_pe_response_matrix(params, assets),
+        time = construct_time_response_matrix(assets),
+    )
+end
+
 function build_rate_matrix(er_centers, enu_centers, nupar, physics, params, Rn_key)
     physics.cevns_xsec.diff_xsec_csi(er_centers, enu_centers, params, nupar, Rn_key)
 end
@@ -334,7 +431,7 @@ end
 
 function get_expected(params, physics, assets)
     # --- Step 1: Construct detector response (n_out × n_Er)
-    response_matrix = construct_response_matrix(params, assets)
+    detector_response = construct_detector_response(params, assets)
 
     # --- Step 2: Get flux and differential cross-sections
     flux = physics.sns_flux.flux(params)                  # (n_Enu, n_time)
@@ -364,19 +461,64 @@ function get_expected(params, physics, assets)
     # --- Step 6: Multiply by number of target nuclei
     integrated_rate .*= assets.Nt                    # counts/s per E_r, per time bin
 
-    # --- Step 7: Apply detector response
-    predicted_counts = response_matrix * integrated_rate  # (n_out × n_time)
+    # --- Step 7: Apply PE response on the left and time response on the right
+    predicted_counts = detector_response.pe * integrated_rate * detector_response.time  # (n_out × n_time)
 
     return predicted_counts
+end
+
+function shift_time_template_1d(template, time_edges, dt_shift)
+    if time_edges === nothing || iszero(dt_shift)
+        return template
+    end
+
+    n_time = length(template)
+    T = promote_type(eltype(template), typeof(dt_shift), eltype(time_edges))
+    shifted = zeros(T, n_time)
+    dt = diff(time_edges)
+    density = template ./ dt
+
+    for out_bin in eachindex(template)
+        out_lo = time_edges[out_bin] - dt_shift
+        out_hi = time_edges[out_bin + 1] - dt_shift
+
+        for in_bin in eachindex(template)
+            in_lo = time_edges[in_bin]
+            in_hi = time_edges[in_bin + 1]
+            overlap = min(out_hi, in_hi) - max(out_lo, in_lo)
+            if overlap > zero(overlap)
+                shifted[out_bin] += density[in_bin] * overlap
+            end
+        end
+    end
+
+    return shifted
 end
 
 function get_backgrounds(params, assets)
     scale_template(template, norm) = sum(template) > 0 ?
         norm .* (template ./ sum(template)) :
         fill(zero(norm), length(template))
-    brn = scale_template(assets.brn, params.brn_norm)
-    nin = scale_template(assets.nin, params.nin_norm)
-    ssBkg = scale_template(assets.ssBkg, params.ss_bkg_norm)
+    flux_onset = if haskey(params, :flux_onset)
+        params.flux_onset
+    else
+        @warn "Missing flux_onset in parameter set; using flux_onset = 0.0 for CsI beam-related backgrounds. Pass merged experiment+physics params to apply the shared timing shift."
+        0.0
+    end
+    detector_response = construct_detector_response(params, assets)
+
+    brn_time_shifted = shift_time_template_1d(assets.brn_time_source, assets.brn_time_source_edges, flux_onset)
+    nin_time_shifted = shift_time_template_1d(assets.nin_time_source, assets.nin_time_source_edges, flux_onset)
+    brn_time_counts = rebin_histogram_1d(brn_time_shifted, assets.brn_time_source_edges, assets.time_edges)
+    nin_time_counts = rebin_histogram_1d(nin_time_shifted, assets.nin_time_source_edges, assets.time_edges)
+
+    brn_template = reshape(assets.brn_pe_pdf, :, 1) .* reshape(brn_time_counts, 1, :)
+    nin_template = reshape(assets.nin_pe_pdf, :, 1) .* reshape(nin_time_counts, 1, :)
+    brn_template = brn_template * detector_response.time
+    nin_template = nin_template * detector_response.time
+    brn = scale_template(brn_template, params.coherent_csi_brn_norm)
+    nin = scale_template(nin_template, params.coherent_csi_nin_norm)
+    ssBkg = scale_template(assets.ssBkg, params.coherent_csi_ss_bkg_norm)
     return (brn, nin, ssBkg)
 end
 

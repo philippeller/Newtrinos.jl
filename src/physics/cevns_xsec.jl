@@ -58,7 +58,7 @@ function build_params_and_priors(isotopes)
     )
     for iso in isotopes
         param_dict[iso.Rn_key] = iso.Rn_nom
-        prior_dict[iso.Rn_key] = Uniform(0.0, iso.Rn_nom + 2 * 1)
+        prior_dict[iso.Rn_key] = Uniform(iso.Rn_nom - 0.05*iso.Rn_nom, iso.Rn_nom + 0.05*iso.Rn_nom) # allow up to ±5% expansion from nominal Rn
     end
     return ((; param_dict...), (; prior_dict...))
 end
@@ -93,11 +93,6 @@ end
 @inline function _three_j1_over_x(x)
     j1 = sphericalbesselj(1, x)
     return iszero(x) ? one(j1) : (3 * j1) / x
-end
-
-# Backward-compatible default: Helm
-function ffsq(er, mn, rn)
-    return ffsq(er, mn, rn; model = :helm)
 end
 
 """
@@ -241,7 +236,8 @@ function get_diff_xsec(assets)
     ffsq_fn = ffsq(assets)
 
     return function (params)
-        param_type = eltype(params[:cevns_xsec_a])
+        #param_type = eltype(params[:cevns_xsec_a])
+        param_type = promote_type(typeof(params.cevns_xsec_a), typeof(params.sin2thetaW))
         xsec_dict = Dict{Symbol, Matrix{param_type}}()
 
         for (Rn_key, iso) in isotopes

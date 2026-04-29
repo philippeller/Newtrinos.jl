@@ -72,9 +72,9 @@ function get_params(ss_bkg_nom, pbrn_nom, delbrn_nom)
         coherent_lar_qfa_a = 0.246,  # QF polynomial coefficients
         coherent_lar_qfa_b = 0.00078,
         coherent_lar_mass = 24.4,  # kg
-        pbrn_norm= pbrn_nom,  # Normalization factor for BRN
-        delbrn_norm= delbrn_nom,  # Normalization factor for delBRN
-        ss_bkg_norm= ss_bkg_nom,  # Normalization factor for SS background
+        coherent_lar_pbrn_norm = pbrn_nom,  # Normalization factor for BRN
+        coherent_lar_delbrn_norm = delbrn_nom,  # Normalization factor for delBRN
+        coherent_lar_ss_bkg_norm = ss_bkg_nom,  # Normalization factor for SS background
         )
 end
 
@@ -84,9 +84,9 @@ function get_priors(ss_bkg_nom, pbrn_nom, delbrn_nom)
         coherent_lar_qfa_a = Normal(0.246, 0.006),
         coherent_lar_qfa_b = Normal(0.00078, 0.00009),
         coherent_lar_mass = truncated(Normal(24.4, 0.61), 0.0, 24.4 + 3 * 0.61),
-        pbrn_norm= truncated(Normal(pbrn_nom, 0.32 * pbrn_nom), 0.0, pbrn_nom + 3 * 0.32 * pbrn_nom),  # Normalization factor for BRN
-        delbrn_norm= truncated(Normal(delbrn_nom, 1.0 * delbrn_nom), 0.0, delbrn_nom + 3 * 1.0 * delbrn_nom),  # Normalization factor for delBRN
-        ss_bkg_norm= truncated(Normal(ss_bkg_nom, 0.008 * ss_bkg_nom), 0.0, ss_bkg_nom + 3 * 0.008 * ss_bkg_nom),  # Normalization factor for SS background
+        coherent_lar_pbrn_norm = truncated(Normal(pbrn_nom, 0.32 * pbrn_nom), 0.0, pbrn_nom + 3 * 0.32 * pbrn_nom),  # Normalization factor for BRN
+        coherent_lar_delbrn_norm = truncated(Normal(delbrn_nom, 1.0 * delbrn_nom), 0.0, delbrn_nom + 3 * 1.0 * delbrn_nom),  # Normalization factor for delBRN
+        coherent_lar_ss_bkg_norm = truncated(Normal(ss_bkg_nom, 0.008 * ss_bkg_nom), 0.0, ss_bkg_nom + 3 * 0.008 * ss_bkg_nom),  # Normalization factor for SS background
         )
 end
 
@@ -347,9 +347,9 @@ function get_backgrounds(params, assets)
     ss_bkg_counts = assets.ss_bkg
 
     # Scale the templates
-    pbrn = scale_template(pbrn_counts, params.pbrn_norm)
-    delbrn = scale_template(delbrn_counts, params.delbrn_norm)
-    ss_bkg = scale_template(ss_bkg_counts, params.ss_bkg_norm)
+    pbrn = scale_template(pbrn_counts, params.coherent_lar_pbrn_norm)
+    delbrn = scale_template(delbrn_counts, params.coherent_lar_delbrn_norm)
+    ss_bkg = scale_template(ss_bkg_counts, params.coherent_lar_ss_bkg_norm)
 
     return (pbrn, delbrn, ss_bkg)
 end

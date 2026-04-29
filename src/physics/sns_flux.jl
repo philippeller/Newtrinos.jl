@@ -40,6 +40,7 @@ function get_params(use_data)
     if use_data
         (
             flux_norm = 1.0,
+            flux_onset = 0.0,
         )
     else
         (
@@ -52,6 +53,7 @@ function get_priors(use_data)
     if use_data
         (
             flux_norm = truncated(Normal(1.0, 0.1), 0.7, 1.3),
+            flux_onset = truncated(Normal(0.0, 100.0), -500.0, 500.0),
         )
     else
         (
@@ -222,6 +224,32 @@ function flux_nu_mu_bar(E, eta, Emax, bin_width)
     return (E, flux .* T(bin_width))
 end
 
+function shift_time_histogram(weights, time_edges, dt_shift)
+    iszero(dt_shift) && return weights
+
+    n_energy, n_time = size(weights)
+    T = promote_type(eltype(weights), typeof(dt_shift), eltype(time_edges))
+    shifted = zeros(T, n_energy, n_time)
+    dt = diff(time_edges)
+    density = weights ./ reshape(dt, 1, :)
+
+    for out_bin in 1:n_time
+        out_lo = time_edges[out_bin] - dt_shift
+        out_hi = time_edges[out_bin + 1] - dt_shift
+
+        for in_bin in 1:n_time
+            in_lo = time_edges[in_bin]
+            in_hi = time_edges[in_bin + 1]
+            overlap = min(out_hi, in_hi) - max(out_lo, in_lo)
+            if overlap > zero(overlap)
+                shifted[:, out_bin] .+= density[:, in_bin] .* overlap
+            end
+        end
+    end
+
+    return shifted
+end
+
 function get_flux(use_data, assets)
     if use_data
         # Extract fluxes and energy/time centers from assets
@@ -236,18 +264,24 @@ function get_flux(use_data, assets)
         return function (params)
             # Extract normalization parameters
             norm = params.flux_norm
+            time_shift = params.flux_onset
+
+            shifted_flux_mu = shift_time_histogram(flux_mu, T, time_shift)
+            shifted_flux_e = shift_time_histogram(flux_e, T, time_shift)
+            shifted_flux_mu_bar = shift_time_histogram(flux_mu_bar, T, time_shift)
+            shifted_flux_e_bar = shift_time_histogram(flux_e_bar, T, time_shift)
 
             # Compute total flux
-            total = flux_mu .+ flux_e .+ flux_mu_bar .+ flux_e_bar
+            total = shifted_flux_mu .+ shifted_flux_e .+ shifted_flux_mu_bar .+ shifted_flux_e_bar
 
             return (;
                 E,  # Energy grid
                 T,  # Time grid
                 total_flux = total .* norm,
-                flux_e,
-                flux_mu,
-                flux_mu_bar,
-                flux_e_bar,
+                flux_e = shifted_flux_e,
+                flux_mu = shifted_flux_mu,
+                flux_mu_bar = shifted_flux_mu_bar,
+                flux_e_bar = shifted_flux_e_bar,
             )
         end
     else
