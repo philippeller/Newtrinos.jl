@@ -1140,7 +1140,8 @@ function get_forward_model(physics, assets)
         expected = get_expected(params, physics, assets)
         total = reduce(+, values(expected))
         total = total[assets.analysis_mask]
-        clamped = max.(1e-3, total)
+        # max(1e-3, NaN) = NaN in IEEE 754, so guard NaN explicitly
+        clamped = ifelse.(isnan.(total), 1e-3, max.(1e-3, total))
         distprod(Poisson.(clamped))
     end
 end
