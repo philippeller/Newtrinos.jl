@@ -364,10 +364,12 @@ function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
         @info msg
         res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
 
-        return logdensityof(likelihood, res.result), logdensityof(posterior, res.result), res.result
+        converged = string(res.info.retcode) == "Success"
+        converged || @warn "Optimizer did not converge (retcode=$(res.info.retcode), iters=$(res.info.stats.iterations))"
+        return logdensityof(likelihood, res.result), logdensityof(posterior, res.result), res.result, converged
     catch e
         if e isa ArgumentError
-            return NaN, NaN, (; (k => NaN for k in keys(params))... )
+            return NaN, NaN, (; (k => NaN for k in keys(params))... ), false
         else
             rethrow(e)
         end
@@ -390,7 +392,8 @@ function find_mle_cached(likelihood, prior, params, cache_dir)
         if isfile(fname)
             @info "using cached file $fname"
             cached = FileIO.load(fname)
-            opt_result = (cached["llh"], cached["log_posterior"], cached["result"])
+            converged = get(cached, "converged", true)  # default true for old cache files
+            opt_result = (cached["llh"], cached["log_posterior"], cached["result"], converged)
         end
     end
 
@@ -400,7 +403,7 @@ function find_mle_cached(likelihood, prior, params, cache_dir)
 
     if !isnothing(cache_dir)
         fname = joinpath(cache_dir, "$h.jld2")
-        FileIO.save(fname, OrderedDict("llh"=>opt_result[1], "log_posterior"=>opt_result[2], "result"=>opt_result[3]))
+        FileIO.save(fname, OrderedDict("llh"=>opt_result[1], "log_posterior"=>opt_result[2], "result"=>opt_result[3], "converged"=>opt_result[4]))
     end
 
     opt_result
@@ -446,14 +449,19 @@ function assemble_profile_results(opt_results, result_size)
     results = Array{Any}(undef, result_size)
     llhs = Array{Float64}(undef, result_size)
     log_posteriors = Array{Float64}(undef, result_size)
+    convergeds = Array{Bool}(undef, result_size)
     for (i, opt_result) in enumerate(opt_results)
         llhs[i] = opt_result[1]
         log_posteriors[i] = opt_result[2]
         results[i] = opt_result[3]
+        convergeds[i] = length(opt_result) >= 4 ? opt_result[4] : true
     end
+    n_failed = count(!, convergeds)
+    n_failed > 0 && @warn "$n_failed / $(prod(result_size)) scan points did not converge"
     s = OrderedDict(key=>[x[key] for x in results] for key in keys(first(results)))
     s[:llh] = llhs
     s[:log_posterior] = log_posteriors
+    s[:converged] = convergeds
     NamedTuple(s)
 end
 

@@ -348,6 +348,7 @@ function ift_profile(likelihood, priors, vars_to_scan, params;
             z_init = _ift_predict_z(pstr_prev, pstr_k, Σ, z_prev)
         end
 
+        converged = true
         if polish
             set_batcontext(ad = select_ad(length(z_init)))
             r = bat_findmode(pstr_k, OptimizationAlg(
@@ -356,6 +357,8 @@ function ift_profile(likelihood, priors, vars_to_scan, params;
                 kwargs = (reltol=1e-7, maxiters=1000)
             ))
             z_results[idx] = collect(Float64, r.result)
+            converged = string(r.info.retcode) == "Success"
+            converged || @warn "ift_profile point $idx did not converge (retcode=$(r.info.retcode), iters=$(r.info.stats.iterations))"
         else
             z_results[idx] = collect(Float64, z_init)
         end
@@ -369,7 +372,7 @@ function ift_profile(likelihood, priors, vars_to_scan, params;
 
         llh      = logdensityof(likelihood, p_result)
         log_post = logdensityof(PosteriorMeasure(likelihood, prior_k), p_result)
-        opt_results[idx] = (llh, log_post, p_result)
+        opt_results[idx] = (llh, log_post, p_result, converged)
 
         ProgressMeter.next!(prog)
     end
