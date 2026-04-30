@@ -362,7 +362,7 @@ function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
         end
 
         @info msg
-        res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (reltol=1e-7, maxiters=1000)))
+        res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (g_tol=1e-5, maxiters=2000)))
 
         converged = string(res.info.retcode) == "Success"
         converged || @warn "Optimizer did not converge (retcode=$(res.info.retcode), iters=$(res.info.stats.iterations))"

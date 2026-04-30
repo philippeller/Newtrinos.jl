@@ -354,7 +354,7 @@ function ift_profile(likelihood, priors, vars_to_scan, params;
             r = bat_findmode(pstr_k, OptimizationAlg(
                 optalg = Optimization.LBFGS(),
                 init   = ExplicitInit([z_init]),
-                kwargs = (reltol=1e-7, maxiters=1000)
+                kwargs = (g_tol=1e-5, maxiters=2000)
             ))
             z_results[idx] = collect(Float64, r.result)
             converged = string(r.info.retcode) == "Success"
