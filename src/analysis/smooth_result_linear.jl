@@ -53,8 +53,8 @@ coord_grids = [reshape(v, ntuple(d -> d == i ? length(v) : 1, N)...) .*
 # Design matrix: [1, x1, x2, ...] — shape (n_total, 1+N)
 X = hcat(ones(Float64, n_total), [vec(g) for g in coord_grids]...)
 
-# Fields to skip — leave llh and log_posterior untouched
-const SKIP = (:llh, :log_posterior)
+# Fields to skip — leave llh, log_posterior, and converged untouched
+const SKIP = (:llh, :log_posterior, :converged)
 
 fitted_arrays = map(keys(result.values)) do k
     arr = result.values[k]
