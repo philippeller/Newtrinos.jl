@@ -256,3 +256,128 @@ function whack_many_moles(posterior, init_samples; target_efficiency=Inf, target
 
     (approx_dist=approx_mix, samples_p=samples_mix, samples_user=bat_transform(inverse(f_trafo), samples_mix).result)
 end
+
+# ── IFT-guided profile scan ────────────────────────────────────────────────────
+
+# Extract the fixed scalar value from a scan-point prior entry.
+# Handles both ConstValueDist (from distprod with scalar) and plain numbers.
+_scan_val(d::ValueShapes.ConstValueDist) = d.value
+_scan_val(d::Real) = d
+
+"""
+    _ift_predict_z(pstr_prev, pstr_next, Σ_prev, z_ν)
+
+IFT predictor in prior-normalized z-space.
+
+At the previous optimum `z_ν`, the gradient of `pstr_prev` is zero.
+The gradient of `pstr_next` at `z_ν` approximates H_zθ·dθ (cross-derivative × scan step).
+One Newton step with MGVI covariance Σ_prev = H_zz⁻¹ gives the IFT prediction.
+
+Cost: one gradient evaluation of `pstr_next` at `z_ν`.
+"""
+function _ift_predict_z(pstr_prev, pstr_next, Σ_prev::AbstractMatrix, z_ν::AbstractVector)
+    g = ForwardDiff.gradient(z -> logdensityof(pstr_next, z), z_ν)
+    z_ν .+ Σ_prev * g
+end
+
+"""
+    ift_profile(likelihood, priors, vars_to_scan, params; cache_dir, start_from, polish)
+
+IFT-guided profile posterior scan. At each scan step:
+1. Compute MGVI covariance Σ at the previous optimum (actual H_zz⁻¹, not prior approximation)
+2. Evaluate gradient of the new scan point's posterior at the previous z — gives H_zθ·dθ
+3. Predict: z_new ≈ z_old + Σ·∇log_post_new(z_old)  (IFT Newton step)
+4. Polish with bat_findmode in z-space (optional, enabled by default)
+
+Works in prior-normalized z-space throughout (same as molewhacker); transforms back to
+user space only at the end.
+"""
+function ift_profile(likelihood, priors, vars_to_scan, params;
+                     cache_dir=nothing, start_from=nothing, polish=true)
+    t_start = time()
+    values, scanpoints, _ = generate_scanpoints(vars_to_scan, priors)
+    grid_shape  = size(scanpoints)
+    flat_sp     = vec(scanpoints)
+    n_pts       = prod(grid_shape)
+
+    center_linear = if !isnothing(start_from)
+        axis_keys = collect(keys(vars_to_scan))
+        idxs = [argmin(abs.(values[findfirst(==(k), axis_keys)] .- Float64(start_from[k])))
+                for k in axis_keys]
+        LinearIndices(grid_shape)[CartesianIndex(Tuple(idxs))]
+    else
+        div(n_pts, 2) + 1
+    end
+    order, parent = _sequential_order(grid_shape, center_linear)
+
+    @info "IFT profile: $n_pts scan points" * (polish ? " + LBFGS polish in z-space" : " (prediction only, no polish)")
+
+    z_results   = Vector{Vector{Float64}}(undef, n_pts)
+    pstr_cache  = Vector{Any}(undef, n_pts)
+    f_trafo_ref = Ref{Any}(nothing)
+    opt_results = Vector{Any}(undef, n_pts)
+
+    prog = ProgressMeter.Progress(n_pts)
+
+    for idx in order
+        sp      = flat_sp[idx]
+        prior_k = distprod(; sp...)
+        pstr_k, f_trafo_k = bat_transform(PriorToNormal(), PosteriorMeasure(likelihood, prior_k))
+        pstr_cache[idx] = pstr_k
+        isnothing(f_trafo_ref[]) && (f_trafo_ref[] = f_trafo_k)
+
+        if parent[idx] < 0
+            # Seed: project starting params to z-space at this scan point
+            p_seed = deepcopy(params)
+            if !isnothing(start_from)
+                for (k, v) in pairs(start_from)
+                    haskey(p_seed, k) && (@reset p_seed[k] = v)
+                end
+            end
+            for k in keys(vars_to_scan)
+                @reset p_seed[k] = _scan_val(sp[k])
+            end
+            z_init = collect(Float64, f_trafo_k(p_seed))
+        else
+            z_prev    = z_results[parent[idx]]
+            pstr_prev = pstr_cache[parent[idx]]
+
+            mgvi_approx = local_MGVI_approx(pstr_prev, z_prev)
+            Σ           = Matrix(mgvi_approx.Σ)
+
+            z_init = _ift_predict_z(pstr_prev, pstr_k, Σ, z_prev)
+        end
+
+        if polish
+            set_batcontext(ad = select_ad(length(z_init)))
+            r = bat_findmode(pstr_k, OptimizationAlg(
+                optalg = Optimization.LBFGS(),
+                init   = ExplicitInit([z_init]),
+                kwargs = (reltol=1e-7, maxiters=1000)
+            ))
+            z_results[idx] = collect(Float64, r.result)
+        else
+            z_results[idx] = collect(Float64, z_init)
+        end
+
+        # Recover user-space params for result storage
+        f_trafo    = f_trafo_ref[]
+        p_nuisance = inverse(f_trafo)(z_results[idx])
+        scan_keys  = Tuple(keys(vars_to_scan))
+        scan_vals  = NamedTuple{scan_keys}(_scan_val(sp[k]) for k in scan_keys)
+        p_result   = merge(p_nuisance, scan_vals)
+
+        llh      = logdensityof(likelihood, p_result)
+        log_post = logdensityof(PosteriorMeasure(likelihood, prior_k), p_result)
+        opt_results[idx] = (llh, log_post, p_result)
+
+        ProgressMeter.next!(prog)
+    end
+
+    res  = assemble_profile_results(opt_results, grid_shape)
+    meta = Dict("task"=>"ift_profile", "priors"=>priors, "vars_to_scan"=>vars_to_scan,
+                "params"=>params, "exec_time"=>time()-t_start, "sequential"=>true, "polish"=>polish)
+    add_meta!(meta)
+    axes = NamedTuple{tuple(keys(vars_to_scan)...)}(values)
+    NewtrinosResult(axes=axes, values=res, meta=meta)
+end

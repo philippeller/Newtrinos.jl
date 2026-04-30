@@ -69,6 +69,12 @@ function parse_command_line()
         arg_type = String
         default = nothing
 
+        "--seed-files"
+        help = "Multiple JLD2 result files to merge as independent per-point seeds for refine_profile. Parameters in multiple files are averaged; no smoothing is applied."
+        nargs = '+'
+        arg_type = String
+        default = nothing
+
         "--nseeds"
         help = "Number of fits per scan point from randomized starting values (best fit is kept)"
         arg_type = Int
@@ -296,19 +302,29 @@ else
     elseif lowercase(args["task"]) == "scan"
         result = Newtrinos.scan(likelihood, priors, vars_to_scan, p)
     elseif lowercase(args["task"]) == "refine_profile"
-        isnothing(args["seed"]) && error("--task refine_profile requires --seed <result.jld2>")
-        seed_result = FileIO.load(args["seed"])["result"]
-        smoothed = Newtrinos.smooth_result(seed_result;
-            outlier_threshold = args["outlier-threshold"],
-            gaussian_sigma    = args["gaussian-sigma"])
-        start_from = sequential ? Newtrinos.bestfit(seed_result) : nothing
-        result = Newtrinos.profile(likelihood, priors, vars_to_scan, p;
-            cache_dir   = name,
-            map_func    = map_func,
-            nseeds      = args["nseeds"],
-            seed_result = smoothed,
-            sequential  = sequential,
-            start_from  = start_from)
+        if !isnothing(args["seed-files"])
+            seed_results_list = [FileIO.load(f)["result"] for f in args["seed-files"]]
+            @info "Loaded $(length(seed_results_list)) seed files for merged per-point seeding"
+            result = Newtrinos.profile(likelihood, priors, vars_to_scan, p;
+                cache_dir    = name,
+                map_func     = map_func,
+                nseeds       = args["nseeds"],
+                seed_results = seed_results_list)
+        else
+            isnothing(args["seed"]) && error("--task refine_profile requires --seed or --seed-files")
+            seed_result = FileIO.load(args["seed"])["result"]
+            smoothed = Newtrinos.smooth_result(seed_result;
+                outlier_threshold = args["outlier-threshold"],
+                gaussian_sigma    = args["gaussian-sigma"])
+            start_from = sequential ? Newtrinos.bestfit(seed_result) : nothing
+            result = Newtrinos.profile(likelihood, priors, vars_to_scan, p;
+                cache_dir   = name,
+                map_func    = map_func,
+                nseeds      = args["nseeds"],
+                seed_result = smoothed,
+                sequential  = sequential,
+                start_from  = start_from)
+        end
     end
 
     save_result(result, name)

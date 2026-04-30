@@ -602,7 +602,7 @@ Set `sequential=true` to compute scan points in BFS order starting from `start_f
 by its BFS parent's optimised result, ensuring smooth profiles. Incompatible with `map_func`.
 If `start_from` is not given with `sequential=true`, starts from the grid's central point.
 """
-function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1, seed_result=nothing, sequential=false, start_from=nothing)
+function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing, nseeds=1, seed_result=nothing, seed_results=nothing, sequential=false, start_from=nothing)
     t1 = time()
     # check if there is actually any variable to be profiled over, or if they are all just Numbers
     if all([isa(priors[var], Number) for var in setdiff(keys(priors), keys(vars_to_scan))])
@@ -628,6 +628,15 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, ma
             merge(params, NamedTuple{Tuple(param_keys)}(itps[k](coords...) for k in param_keys))
         end for i in eachindex(mesh_flat)]
         @info "Using per-point seeds from smoothed result ($(length(param_keys)) params interpolated)"
+    elseif !isnothing(seed_results)
+        merged_itps = make_merged_seed_interpolants(seed_results, keys(vars_to_scan))
+        merged_keys = collect(keys(merged_itps))
+        n_axes = length(keys(vars_to_scan))
+        seed_params = [let coords = Tuple(Float64(mesh_flat[i][d]) for d in 1:n_axes)
+            nt_vals = [merged_itps[k](coords...) for k in merged_keys]
+            merge(params, NamedTuple{Tuple(merged_keys)}(nt_vals))
+        end for i in eachindex(mesh_flat)]
+        @info "Using merged per-point seeds from $(length(seed_results)) files ($(length(merged_keys)) params interpolated)"
     end
 
     # Determine BFS center for sequential mode
@@ -857,4 +866,47 @@ function make_seed_interpolants(result::NewtrinosResult)
         itps[k] = extrapolate(itp, Linear())
     end
     itps
+end
+
+"""
+    make_merged_seed_interpolants(seed_results, joint_axis_keys)
+
+Build merged per-parameter seed evaluators from multiple `NewtrinosResult` files.
+
+For each parameter:
+- Present in one file: use that file's interpolant.
+- Present in multiple files: evaluate each and take the mean.
+
+`joint_axis_keys`: the scan axis symbols of the new joint scan (e.g. `keys(vars_to_scan)`).
+Source files scanned over a subset of these axes are handled via coordinate projection.
+
+Returns a `Dict{Symbol, Function}` where each function takes `(coords...)` positional
+coordinates aligned to `joint_axis_keys`.
+"""
+function make_merged_seed_interpolants(
+    seed_results::AbstractVector{NewtrinosResult},
+    joint_axis_keys
+)
+    joint_keys = collect(joint_axis_keys)
+    source_groups = map(seed_results) do r
+        src_keys = collect(keys(r.axes))
+        idxs = [findfirst(==(ak), joint_keys) for ak in src_keys]
+        bad = findfirst(isnothing, idxs)
+        isnothing(bad) || error("Seed file axis $(src_keys[bad]) not in joint axes $joint_keys")
+        (idxs, make_seed_interpolants(r))
+    end
+
+    all_param_keys = unique(reduce(vcat, [collect(keys(sg[2])) for sg in source_groups]))
+
+    merged = Dict{Symbol, Function}()
+    for k in all_param_keys
+        sources_k = [(idxs, itps[k]) for (idxs, itps) in source_groups if haskey(itps, k)]
+        if length(sources_k) == 1
+            (idxs, itp) = sources_k[1]
+            merged[k] = (coords...) -> itp(coords[idxs]...)
+        else
+            merged[k] = (coords...) -> mean(itp(coords[idxs]...) for (idxs, itp) in sources_k)
+        end
+    end
+    merged
 end
