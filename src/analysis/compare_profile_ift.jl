@@ -36,13 +36,22 @@ nuisance_keys = setdiff(collect(keys(p)), [:θ₂₃, :θ₁₂, :Δm²₂₁, :
 @info "Free nuisance parameters ($(length(nuisance_keys))): $(nuisance_keys)"
 @info "Scan: θ₂₃ over $(vars_to_scan[:θ₂₃]) points"
 
+# ── Find global best-fit (shared seed for both methods) ───────────────────────
+
+@info "Finding ORCA best-fit (MLE) to use as shared seed..."
+prior = Newtrinos.distprod(; priors_cond...)
+posterior = PosteriorMeasure(likelihood, prior)
+mle = bat_findmode(posterior).result
+p_bf = merge(p, mle)
+@info "Best-fit θ₂₃ = $(p_bf.θ₂₃)  Δm²₃₁ = $(p_bf.Δm²₃₁)"
+
 # ── Old method: profile with sequential warm-starting ──────────────────────────
 
 @info "Running profile (sequential warm-start)..."
 t0 = time()
-result_old = Newtrinos.profile(likelihood, priors_cond, vars_to_scan, p;
+result_old = Newtrinos.profile(likelihood, priors_cond, vars_to_scan, p_bf;
     sequential = true,
-    start_from = (θ₂₃ = p.θ₂₃,))
+    start_from = (θ₂₃ = p_bf.θ₂₃,))
 t_old = time() - t0
 @info "profile done in $(round(t_old, digits=1))s"
 
@@ -50,8 +59,8 @@ t_old = time() - t0
 
 @info "Running ift_profile..."
 t0 = time()
-result_ift = Newtrinos.ift_profile(likelihood, priors_cond, vars_to_scan, p;
-    start_from = (θ₂₃ = p.θ₂₃,),
+result_ift = Newtrinos.ift_profile(likelihood, priors_cond, vars_to_scan, p_bf;
+    start_from = (θ₂₃ = p_bf.θ₂₃,),
     polish = true)
 t_ift = time() - t0
 @info "ift_profile done in $(round(t_ift, digits=1))s"
@@ -62,8 +71,11 @@ t_ift = time() - t0
 
 llh_old = result_old.values.llh
 llh_ift = result_ift.values.llh
-Δχ²_old = -2 .* (llh_old .- maximum(llh_old))
-Δχ²_ift = -2 .* (llh_ift .- maximum(llh_ift))
+# Common reference: the best llh found by either method
+llh_ref = max(maximum(llh_old), maximum(llh_ift))
+Δχ²_old = -2 .* (llh_old .- llh_ref)
+Δχ²_ift = -2 .* (llh_ift .- llh_ref)
+@info "Best llh: profile=$(maximum(llh_old))  ift=$(maximum(llh_ift))  ref=$llh_ref"
 
 dm31_old  = result_old.values.Δm²₃₁
 dm31_ift  = result_ift.values.Δm²₃₁
@@ -77,7 +89,7 @@ fig = Figure(size=(900, 1100))
 ax1 = Axis(fig[1, 1],
     xlabel = "θ₂₃",
     ylabel = "Δχ²",
-    title  = "ORCA 1D θ₂₃ profile: sequential profile vs ift_profile (42 nuisances)")
+    title  = "ORCA 1D θ₂₃ profile: sequential profile vs ift_profile (42 nuisances, shared MLE seed)")
 
 lines!(ax1, θ_grid, Δχ²_old, label="profile (sequential)", color=:steelblue, linewidth=2)
 scatter!(ax1, θ_grid, Δχ²_old, color=:steelblue, markersize=6)

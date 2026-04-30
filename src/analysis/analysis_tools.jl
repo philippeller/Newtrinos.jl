@@ -884,7 +884,7 @@ Returns a `Dict{Symbol, Function}` where each function takes `(coords...)` posit
 coordinates aligned to `joint_axis_keys`.
 """
 function make_merged_seed_interpolants(
-    seed_results::AbstractVector{NewtrinosResult},
+    seed_results::AbstractVector,
     joint_axis_keys
 )
     joint_keys = collect(joint_axis_keys)
