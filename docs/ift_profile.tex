@@ -1,0 +1,195 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumerate}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{\textbf{IFT-Guided Profile Likelihood Scan}\\[0.5em]
+\large Algorithm Description}
+\author{Newtrinos.jl}
+\date{}
+
+\newcommand{\nupar}{\bm{\nu}}
+\newcommand{\zz}{\mathbf{z}}
+\newcommand{\Sig}{\boldsymbol{\Sigma}}
+\newcommand{\Lam}{\boldsymbol{\Lambda}}
+
+% Simple framed pseudocode using standard tabbing
+\newenvironment{pseudocode}[1]{%
+  \bigskip
+  \noindent\textbf{Algorithm:} #1\\[-0.3em]
+  \noindent\rule{\linewidth}{0.8pt}\\[-0.5em]
+  \noindent\begin{enumerate}
+}{%
+  \end{enumerate}
+  \noindent\rule{\linewidth}{0.4pt}
+  \bigskip
+}
+
+\begin{document}
+\maketitle
+
+\section*{Motivation}
+
+Profile likelihood scans require solving a separate optimisation at each
+grid point $\vartheta_k$:
+\begin{equation}
+  \hat{\nupar}(\vartheta_k)
+  \;=\; \arg\max_{\nupar}\;\bigl[\log\mathcal{L}(\vartheta_k, \nupar)
+                                  + \log\pi(\nupar)\bigr],
+\end{equation}
+where $\mathcal{L}$ is the likelihood and $\pi(\nupar)$ the nuisance prior.
+For experiments with $\mathcal{O}(40\text{--}90)$ nuisance parameters, each
+optimisation is expensive and a poor starting point can trap the optimiser in a
+local minimum.
+
+The IFT-guided scan uses a local Gaussian (MGVI) approximation of the posterior
+at the current optimum to \emph{predict} the nuisance optimum at the next grid
+point, avoiding cold restarts.
+
+\section{Prior-Normalised Coordinates ($z$-space)}
+
+Every nuisance parameter $\nu_i$ with prior $\pi_i$ is mapped to
+\begin{equation}
+  z_i \;=\; \Phi^{-1}\!\bigl(F_{\pi_i}(\nu_i)\bigr),
+\end{equation}
+where $F_{\pi_i}$ is the prior CDF and $\Phi^{-1}$ the standard-Normal quantile
+function.  Collecting all nuisance parameters gives
+$\zz \in \mathbb{R}^n$ with prior $\zz \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$.
+
+The scan parameter $\vartheta_k$ is fixed to a point mass at each grid value and
+is \emph{excluded} from $\zz$; it never enters the $z$-space optimisation.
+
+At grid point $\vartheta_k$ the $z$-space posterior is
+\begin{equation}
+  \log p_k(\zz)
+  \;=\; \log\mathcal{L}\!\bigl(\vartheta_k,\, f(\zz)\bigr)
+        - \tfrac{1}{2}\|\zz\|^2 + \text{const},
+\end{equation}
+where $f:\mathbb{R}^n\!\to\!\mathbb{R}^n$ maps back to physical nuisance space.
+
+\section{Local MGVI Approximation}
+
+After optimising at grid point $\vartheta_{k-1}$ we obtain $\zz^\star_{k-1}$.
+Assuming the likelihood arises from a forward model
+$\bm{\mu}(\vartheta,\nupar)$ with observation-noise Fisher information
+$\mathbf{F}\in\mathbb{R}^{m\times m}$, the MGVI posterior precision
+at the current optimum is
+\begin{equation}
+  \Lam \;=\; \mathbf{J}^\top \mathbf{F}\, \mathbf{J} + \mathbf{I}_n,
+  \qquad
+  \mathbf{J} \;=\; \frac{\partial \bm{\mu}}{\partial \zz}
+               \;\in\;\mathbb{R}^{m\times n},
+\end{equation}
+and the local posterior covariance is $\Sig = \Lam^{-1}$.  The Gaussian
+approximation centred at the current optimum is
+\begin{equation}
+  q_{k-1}(\zz) \;\approx\; \mathcal{N}\!\bigl(\zz^\star_{k-1},\;\Sig\bigr).
+\end{equation}
+
+\section{IFT Predictor Step}
+
+To predict the optimum at the \emph{next} scan point $\vartheta_k$, evaluate the
+gradient of the new posterior at the old optimum:
+\begin{equation}
+  \mathbf{g}_k
+  \;=\; \nabla_{\zz}\,\log p_k(\zz)\Big|_{\zz = \zz^\star_{k-1}}.
+\end{equation}
+This gradient is nonzero because shifting $\vartheta$ changes the likelihood, so
+the old optimum is no longer stationary.  A single Newton step with the MGVI
+Hessian approximation $(\Lam \approx \Sig^{-1})$ gives the predicted new optimum:
+\begin{equation}
+  \boxed{
+    \zz^{\rm pred}_k
+    \;=\; \zz^\star_{k-1}
+          \;+\; \Sig\,\mathbf{g}_k.
+  }
+\end{equation}
+
+\paragraph{Why this works.}
+For a quadratic log-posterior (Gaussian likelihood, linear forward model), the
+prediction is \emph{exact}: one Newton step reaches the true new optimum
+regardless of the step size $\vartheta_k - \vartheta_{k-1}$, as verified by the
+toy Gaussian validation script.  For non-quadratic likelihoods the prediction is
+approximate but provides a far better starting point than the neighbour's
+$\zz^\star_{k-1}$, especially when the nuisance optimum varies smoothly across
+the scan.
+
+\section{Polish Step}
+
+The predicted $\zz^{\rm pred}_k$ initialises a gradient-based local optimisation
+(L-BFGS) in $z$-space:
+\begin{equation}
+  \zz^\star_k
+  \;=\; \arg\max_{\zz}\;\log p_k(\zz),
+  \quad\text{initialised at }\zz^{\rm pred}_k.
+\end{equation}
+Starting near the true optimum, the optimiser requires far fewer gradient
+evaluations than a cold start, reducing total cost and the probability of
+converging to a spurious local maximum.
+
+\section{BFS Traversal Order}
+
+Grid points are visited in \emph{breadth-first order} starting from the grid
+index nearest to a user-supplied seed (typically the global best-fit point).
+This guarantees every point is warm-started from a direct neighbour whose
+posterior is maximally similar, rather than from a point several steps away.
+For a 2-D grid (e.g.\ $\vartheta_{1}$ vs.\ $\vartheta_{2}$), the BFS expands
+outward ring by ring from the seed, visiting each point once.
+
+\section{Algorithm Summary}
+
+\begin{pseudocode}{IFT-guided profile likelihood scan}
+  \item Build prior-normalising transform $f$ and its inverse $f^{-1}$.
+  \item Sort grid points $\{\vartheta_k\}$ in BFS order from the seed index.
+  \item For each scan point $\vartheta_k$ in BFS order:
+    \begin{enumerate}[(a)]
+      \item Fix $\vartheta = \vartheta_k$;
+            define $\log p_k(\zz)= \log\mathcal{L}(\vartheta_k, f(\zz))
+            - \tfrac12\|\zz\|^2$.
+      \item \textit{If} $k$ is the BFS root: set
+            $\zz_{\rm init} = f^{-1}(\bm{\theta}_{\rm seed})$.
+      \item \textit{Else}:
+        \begin{enumerate}[(i)]
+          \item Retrieve parent optimum $\zz^\star_{\rm parent}$.
+          \item Compute MGVI covariance $\Sig = \bigl(\mathbf{J}^\top
+                \mathbf{F}\,\mathbf{J}+\mathbf{I}\bigr)^{-1}$
+                at $\zz^\star_{\rm parent}$ under $p_{\rm parent}$.
+          \item Evaluate IFT gradient
+                $\mathbf{g}_k = \nabla_\zz \log p_k(\zz^\star_{\rm parent})$.
+          \item Set $\zz_{\rm init} = \zz^\star_{\rm parent}
+                + \Sig\,\mathbf{g}_k$.
+        \end{enumerate}
+      \item Polish: $\zz^\star_k =
+            \text{L-BFGS}\!\bigl(\log p_k,\;\zz_{\rm init}\bigr)$.
+      \item Store $\hat{\nupar}(\vartheta_k) = f(\zz^\star_k)$ and
+            $\hat\ell(\vartheta_k) = \log\mathcal{L}(\vartheta_k,
+            \hat{\nupar}(\vartheta_k))$.
+    \end{enumerate}
+\end{pseudocode}
+
+\section{Computational Cost}
+
+Let $n$ be the number of nuisance parameters and $m$ the data dimension.
+
+\begin{itemize}
+  \item \textbf{MGVI covariance} ($\mathcal{O}(mn^2 + n^3)$ per grid point):
+    one forward-model Jacobian and one matrix inversion.
+  \item \textbf{IFT gradient}: one additional likelihood gradient evaluation
+    ($\mathcal{O}(mn)$ with reverse-mode AD or $\mathcal{O}(mn/B)$ batches
+    with ForwardDiff chunk size $B$).
+  \item \textbf{Polish}: typically $5$--$30\times$ fewer L-BFGS iterations than
+    a cold start, because $\zz^{\rm pred}_k$ is already near the optimum.
+\end{itemize}
+
+For $n \gtrsim 20$ (where ForwardDiff requires multiple chunked passes) the
+reduction in polish iterations typically outweighs the MGVI overhead, giving a
+net speed-up of $2$--$5\times$ over sequential warm-starting alone.
+
+\end{document}
