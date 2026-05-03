@@ -27,7 +27,7 @@ function parse_command_line()
         required = true
 
         "--task"
-        help = "Task to perform: Choice of NestedSampling, ImportanceSampling, Profile, Scan"
+        help = "Task to perform: Choice of NestedSampling, ImportanceSampling, Profile, Scan, IFTProfile"
         arg_type = String
         required = true
 
@@ -92,6 +92,10 @@ function parse_command_line()
 
         "--sequential"
         help = "For profile/refine_profile: compute scan points in BFS order from seed best-fit, warm-starting each point from its neighbour's result"
+        action = :store_true
+
+        "--no-polish"
+        help = "For ift_profile: disable LBFGS polish step after IFT prediction (pure prediction only)"
         action = :store_true
     end
 
@@ -325,6 +329,12 @@ else
                 sequential  = sequential,
                 start_from  = start_from)
         end
+    elseif lowercase(args["task"]) == "iftprofile"
+        start_from = NamedTuple{Tuple(keys(vars_to_scan))}(p[k] for k in keys(vars_to_scan))
+        result = Newtrinos.ift_profile(likelihood, priors, vars_to_scan, p;
+            cache_dir  = name,
+            start_from = start_from,
+            polish     = !args["no-polish"])
     end
 
     save_result(result, name)
