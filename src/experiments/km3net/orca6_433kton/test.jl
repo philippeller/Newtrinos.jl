@@ -12,8 +12,8 @@ using CSV
 experiments = (orca = Newtrinos.orca.configure(),)
 
 vars_to_scan = OrderedDict()
-vars_to_scan[:θ₂₃] = 11
-vars_to_scan[:Δm²₃₁] = 11
+vars_to_scan[:θ₂₃] = 7
+vars_to_scan[:Δm²₃₁] = 7
 
 likelihood = Newtrinos.generate_likelihood(experiments);
 
@@ -25,9 +25,14 @@ priors = Newtrinos.get_priors(experiments)
 @reset priors.δCP = p.δCP
 @reset priors.θ₁₃ = Truncated(Normal(0.156, 0.008), 0.13, 0.18)
 
-@reset priors.Δm²₃₁ = Uniform(0.0015, 0.003)
-@reset priors.θ₂₃ = Uniform(pi/4-0.25, pi/4+0.25)
+@reset priors.Δm²₃₁ = Uniform(0.0016, 0.0027)
+@reset priors.θ₂₃ = Uniform(pi/4-0.15, pi/4+0.15)
 @reset priors.atm_flux_updown_sigma = 0.0
+@reset priors.atm_flux_nuenuebar_sigma_lo = 0.
+@reset priors.atm_flux_nuenumu_sigma_lo = 0.
+@reset priors.atm_flux_numunumubar_sigma_lo = 0.
+
+
 
 result = Newtrinos.profile(likelihood, priors, vars_to_scan, p, cache_dir="test")
 

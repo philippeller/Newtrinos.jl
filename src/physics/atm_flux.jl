@@ -57,8 +57,6 @@ function get_params(cfg::Barr)
         atm_flux_delta_spectral_index = 0.,
         atm_flux_uphorizontal_sigma = 0.,
         atm_flux_updown_sigma = 0.,
-        atm_flux_norm_ratio_lo = 1.,
-        atm_flux_norm_ratio_hi = 1.,
         )
 end
 
@@ -76,8 +74,6 @@ function get_priors(cfg::Barr)
         atm_flux_delta_spectral_index = Truncated(Normal(0., 0.1), -0.3, 0.3),
         atm_flux_uphorizontal_sigma = Truncated(Normal(0., 1.), -3, 3),
         atm_flux_updown_sigma = Truncated(Normal(0., 1.), -3, 3),
-        atm_flux_norm_ratio_lo = Normal(1, 0.15),
-        atm_flux_norm_ratio_hi = Normal(1, 0.15),
         )
 end
 
@@ -169,11 +165,6 @@ function get_sys_flux(cfg::Barr)
         # spectral
         f_spectral_shift = (e ./ 24.0900951261) .^ params.atm_flux_delta_spectral_index
 
-        # Energy-dependent normalization tilt, split at 1 GeV
-        f_norm_tilt = e .^ (0.15 .* ifelse.(mask_lo,
-            params.atm_flux_norm_ratio_lo .- 1,
-            params.atm_flux_norm_ratio_hi .- 1))
-
         # all coefficients below come from fits to the Figs. 7 & 9 in Uncertainties in Atmospheric Neutrino Fluxes by Barr & Robbins
 
         # nue - nuebar (3 energy ranges, coszen-dependent)
@@ -206,14 +197,14 @@ function get_sys_flux(cfg::Barr)
         # nue
         uncert = (-0.43*log10e.^5 .+ 1.17*log10e.^4 .+ 0.89*log10e.^3 .- 0.36*log10e.^2 .- 1.59*log10e .+ 1.96) / 100.
         f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizontal_sigma) 
-        flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
-        flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
+        flux_nue3 = flux_nue2 .* f_spectral_shift .* f_uphorizontal .* f_updown
+        flux_nuebar3 = flux_nuebar2 .* f_spectral_shift .* f_uphorizontal .* f_updown
 
         #numu
         uncert = (-0.16*log10e.^5 .+ 0.45*log10e.^4 .+ 0.48*log10e.^3 .+ 0.17*log10e.^2 .- 1.88*log10e .+ 1.88) / 100.
         f_uphorizontal = uphorizontal.(cz, 1 .+ uncert * params.atm_flux_uphorizontal_sigma)
-        flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
-        flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal .* f_updown .* f_norm_tilt
+        flux_numu3 = flux_numu2 .* f_spectral_shift .* f_uphorizontal .* f_updown
+        flux_numubar3 = flux_numubar2 .* f_spectral_shift .* f_uphorizontal .* f_updown
 
         return (nue=flux_nue3, numu=flux_numu3, nuebar=flux_nuebar3, numubar=flux_numubar3)
     
