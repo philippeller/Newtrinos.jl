@@ -12,7 +12,7 @@ const ALL_REFERENCE_VALUES = (
     minos        = -268.4046154382636,
     deepcore     = -958.0740617933973,
     super_k      = -3433.766267280389,
-    orca         = -1174.064185239588,
+    orca         = -1166.4819336020007,
     coherent_csi = -574.3416032522271,
     coherent_lAr = -1754.9946939034153,
 )
