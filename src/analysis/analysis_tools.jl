@@ -6,6 +6,7 @@ import ForwardDiff
 import PolyesterForwardDiff
 using BAT
 using Optimization
+import Optim
 using IterTools
 using DataStructures
 using ADTypes
@@ -362,10 +363,10 @@ function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
         end
 
         @info msg
-        res = bat_findmode(posterior, OptimizationAlg(optalg=Optimization.LBFGS(), init = ExplicitInit([params]), kwargs = (g_tol=1e-5, maxiters=2000)))
+        res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([params]), maxiters=2000, kwargs = (g_tol=1e-5,)))
 
-        converged = string(res.info.retcode) == "Success"
-        converged || @warn "Optimizer did not converge (retcode=$(res.info.retcode), iters=$(res.info.stats.iterations))"
+        converged = Optim.converged(res.info)
+        converged || @warn "Optimizer did not converge (iters=$(Optim.iterations(res.info)), g_residual=$(Optim.g_residual(res.info)))"
         return logdensityof(likelihood, res.result), logdensityof(posterior, res.result), res.result, converged
     catch e
         if e isa ArgumentError
