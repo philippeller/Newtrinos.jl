@@ -7,12 +7,57 @@ using Interpolations
 using FunctionChains
 using ..Newtrinos
 
+"""
+    XsecModel
+
+Abstract type for neutrino cross-section models.
+
+Each subtype defines how cross-section normalization factors are applied to event rates.
+Subtypes:
+- [`SimpleScaling`](@ref): global normalization for NC and ``\\nu_\\tau`` CC channels.
+- [`Differential_H2O`](@ref): per-interaction-mode differential scaling for water
+  Cherenkov detectors.
+"""
 abstract type XsecModel end
 
+"""
+    SimpleScaling <: XsecModel
+
+Simple cross-section model applying global normalization factors.
+
+Provides two nuisance parameters:
+- `nc_norm`: neutral-current cross-section scale factor.
+- `nutau_cc_norm`: ``\\nu_\\tau`` charged-current cross-section scale factor.
+
+All other flavour/interaction combinations return unit scaling.
+"""
 struct SimpleScaling <: XsecModel end
 
+"""
+    Differential_H2O <: XsecModel
+
+Differential cross-section model for water (H₂O) targets.
+
+Provides per-interaction-mode normalization parameters (`cc1p1h_norm`, `cc2p2h_norm`,
+`cc1pi_norm`, `ccother_norm`, `ccdis_norm`) in addition to `nc_norm` and `nutau_cc_norm`.
+Energy-dependent CC interaction fractions are interpolated from digitized data
+(T. Wester, Super-K PhD thesis, Figure 4.7) for ``\\nu_e`` and ``\\bar{\\nu}_e``
+separately.
+"""
 struct Differential_H2O <: XsecModel end
 
+"""
+    Xsec <: Newtrinos.Physics
+
+Configured cross-section physics module, returned by [`configure`](@ref).
+
+# Fields
+- `cfg::XsecModel`: the cross-section model used to build this module.
+- `params::NamedTuple`: default normalization parameter values.
+- `priors::NamedTuple`: prior distributions for each parameter.
+- `scale::Function`: closure that computes the cross-section scale factor.
+  See [`get_scale`](@ref) for the call signatures.
+"""
 @kwdef struct Xsec <: Newtrinos.Physics
     cfg::XsecModel
     params::NamedTuple
@@ -20,7 +65,31 @@ struct Differential_H2O <: XsecModel end
     scale::Function
 end
 
+"""
+    configure(cfg::XsecModel=SimpleScaling()) -> Xsec
 
+Create a fully configured cross-section physics module.
+
+Assembles default parameters, priors, and the scaling closure into an [`Xsec`](@ref)
+struct ready for use in experiment forward models.
+
+# Arguments
+- `cfg::XsecModel`: cross-section model (defaults to [`SimpleScaling`](@ref)).
+
+# Returns
+An [`Xsec`](@ref) instance.
+
+# Examples
+```julia
+using Newtrinos
+
+# Default simple scaling
+xsec_physics = Newtrinos.xsec.configure()
+
+# Differential water cross-sections for Super-K
+xsec_physics = Newtrinos.xsec.configure(Differential_H2O())
+```
+"""
 function configure(cfg::XsecModel=SimpleScaling())
     Xsec(
         cfg=cfg,
@@ -30,6 +99,17 @@ function configure(cfg::XsecModel=SimpleScaling())
         )
 end
 
+"""
+    get_params(cfg::XsecModel) -> NamedTuple
+
+Return the default cross-section normalization parameter values for the given model.
+
+# Arguments
+- `cfg::XsecModel`: a [`SimpleScaling`](@ref) or [`Differential_H2O`](@ref) instance.
+
+# Returns
+A `NamedTuple` mapping parameter names to their nominal values (all default to `1.0`).
+"""
 function get_params(cfg::SimpleScaling)
     (
         nc_norm = 1.,
@@ -37,6 +117,19 @@ function get_params(cfg::SimpleScaling)
     )
 end
 
+"""
+    get_priors(cfg::XsecModel) -> NamedTuple
+
+Return prior distributions for each cross-section normalization parameter.
+
+All priors are truncated normal distributions centred at 1.0.
+
+# Arguments
+- `cfg::XsecModel`: a [`SimpleScaling`](@ref) or [`Differential_H2O`](@ref) instance.
+
+# Returns
+A `NamedTuple` mapping parameter names to `Distributions.Truncated{Normal}` priors.
+"""
 function get_priors(cfg::SimpleScaling)
     (
         nc_norm = Truncated(Normal(1, 0.2), 0.4, 1.6),
@@ -68,6 +161,32 @@ function get_priors(cfg::Differential_H2O)
     )
 end
 
+"""
+    get_scale(cfg::XsecModel) -> Function
+
+Construct the cross-section scaling closure for the given model.
+
+**[`SimpleScaling`](@ref)** returns a function with signature:
+```julia
+scale(flav::Symbol, interaction::Symbol, params::NamedTuple) -> Real
+```
+Returns `params.nc_norm` for NC interactions, `params.nutau_cc_norm` for ``\\nu_\\tau`` CC,
+and `1.0` for everything else.
+
+**[`Differential_H2O`](@ref)** returns a function with signature:
+```julia
+scale(E::AbstractArray, flav::Symbol, interaction::Symbol, anti::Bool, params::NamedTuple) -> Real or AbstractArray
+```
+For NC interactions returns `params.nc_norm`. For CC interactions computes an
+energy-dependent weighted sum of per-mode normalizations using interpolated
+interaction fractions, with an additional ``\\nu_\\tau`` CC factor when applicable.
+
+# Arguments
+- `cfg::XsecModel`: cross-section model instance.
+
+# Returns
+A closure computing the cross-section scale factor.
+"""
 function get_scale(cfg::SimpleScaling)
     function scale(flav::Symbol, interaction::Symbol, params::NamedTuple)
         if interaction == :NC

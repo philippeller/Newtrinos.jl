@@ -10,21 +10,97 @@ using ..Newtrinos
 
 export AtmFluxConfig, HKKM, Barr
 
-const datadir = @__DIR__ 
+const datadir = @__DIR__
 
+"""
+    NominalFluxModel
+
+Abstract type for atmospheric neutrino flux predictions.
+
+Each subtype provides a recipe for computing the unoscillated neutrino flux as a function
+of energy and zenith angle. Currently the only implementation is [`HKKM`](@ref).
+"""
 abstract type NominalFluxModel end
+
+"""
+    HKKM <: NominalFluxModel
+
+Honda–Kajita–Kasahara–Midorikawa (HKKM) atmospheric neutrino flux model.
+
+Reads a site-specific flux table (`.d` file) and constructs cubic-spline interpolations
+over ``\\log_{10}(E)`` and ``\\cos\\theta_z`` for each neutrino flavour
+(``\\nu_\\mu``, ``\\bar\\nu_\\mu``, ``\\nu_e``, ``\\bar\\nu_e``).
+
+# Fields
+- `fname::String = "spl-nu-20-01-000.d"`: filename of the HKKM flux table (relative to
+  the `physics/` data directory).
+"""
 @kwdef struct HKKM <: NominalFluxModel
     fname::String = "spl-nu-20-01-000.d"
 end
 
+"""
+    FluxSystematicsModel
+
+Abstract type for atmospheric flux systematic uncertainty models.
+
+Each subtype defines a set of nuisance parameters and a function that modifies the
+nominal flux to account for systematic uncertainties. Currently the only implementation
+is [`Barr`](@ref).
+"""
 abstract type FluxSystematicsModel end
+
+"""
+    Barr <: FluxSystematicsModel
+
+Barr systematic uncertainty model for atmospheric neutrino fluxes.
+
+Parametrizes flux uncertainties as energy- and zenith-dependent modifications following
+Barr et al., "Uncertainties in Atmospheric Neutrino Fluxes." The systematics cover:
+
+| Parameter                          | Description                               |
+|:---------------------------------- |:----------------------------------------- |
+| `atm_flux_nuenuebar_sigma`         | ``\\nu_e / \\bar\\nu_e`` ratio uncertainty  |
+| `atm_flux_numunumubar_sigma`       | ``\\nu_\\mu / \\bar\\nu_\\mu`` ratio uncertainty |
+| `atm_flux_nuenumu_sigma`           | ``\\nu_e / \\nu_\\mu`` ratio uncertainty    |
+| `atm_flux_delta_spectral_index`    | Spectral index tilt                       |
+| `atm_flux_uphorizonzal_sigma`      | Up/horizontal anisotropy                  |
+| `atm_flux_updown_sigma`            | Up/down asymmetry                         |
+
+All sigma parameters are centred at 0 with unit Gaussian priors (truncated at ±3).
+"""
 struct Barr <: FluxSystematicsModel end
 
+"""
+    AtmFluxConfig{F, S}
+
+Configuration for the atmospheric neutrino flux module.
+
+# Fields
+- `nominal_model::F = HKKM()`: nominal flux prediction model ([`NominalFluxModel`](@ref)).
+- `systematics_model::S = Barr()`: systematic uncertainty model ([`FluxSystematicsModel`](@ref)).
+"""
 @kwdef struct AtmFluxConfig{F<:NominalFluxModel, S<:FluxSystematicsModel}
     nominal_model::F = HKKM()
     systematics_model::S = Barr()
 end
 
+"""
+    AtmFlux <: Newtrinos.Physics
+
+Configured atmospheric flux physics module, returned by [`configure`](@ref).
+
+# Fields
+- `cfg::AtmFluxConfig`: the configuration used to build this module.
+- `params::NamedTuple`: default systematic parameter values.
+- `priors::NamedTuple`: prior distributions for each systematic parameter.
+- `nominal_flux::Function`: closure
+  `nominal_flux(energy, coszen) -> Table` returning the unoscillated flux on a
+  fine ``(E, \\cos\\theta_z)`` grid.
+- `sys_flux::Function`: closure
+  `sys_flux(flux, params) -> NamedTuple` applying systematic modifications to the
+  nominal flux and returning per-flavour flux arrays.
+"""
 @kwdef struct AtmFlux <: Newtrinos.Physics
     cfg::AtmFluxConfig
     params::NamedTuple
@@ -33,6 +109,31 @@ end
     sys_flux::Function
 end
 
+"""
+    configure(cfg::AtmFluxConfig=AtmFluxConfig()) -> AtmFlux
+
+Create a fully configured atmospheric flux physics module.
+
+# Arguments
+- `cfg::AtmFluxConfig`: flux configuration (defaults to [`HKKM`](@ref) nominal model with
+  [`Barr`](@ref) systematics).
+
+# Returns
+An [`AtmFlux`](@ref) instance.
+
+# Examples
+```julia
+using Newtrinos
+
+# Default South Pole flux
+flux_physics = Newtrinos.atm_flux.configure()
+
+# Custom site flux file
+flux_physics = Newtrinos.atm_flux.configure(
+    AtmFluxConfig(nominal_model=HKKM(fname="spl-nu-20-12-000.d"))
+)
+```
+"""
 function configure(cfg::AtmFluxConfig=AtmFluxConfig())
     AtmFlux(
         cfg=cfg,
@@ -43,6 +144,17 @@ function configure(cfg::AtmFluxConfig=AtmFluxConfig())
         )
 end
 
+"""
+    get_params(cfg::FluxSystematicsModel) -> NamedTuple
+
+Return the default systematic parameter values for the given flux systematics model.
+
+# Arguments
+- `cfg::FluxSystematicsModel`: a [`Barr`](@ref) instance.
+
+# Returns
+A `NamedTuple` mapping parameter names to their nominal values (all default to `0.0`).
+"""
 function get_params(cfg::Barr)
     params = (
         atm_flux_nuenuebar_sigma = 0.,
@@ -54,6 +166,20 @@ function get_params(cfg::Barr)
         )
 end
 
+"""
+    get_priors(cfg::FluxSystematicsModel) -> NamedTuple
+
+Return prior distributions for each flux systematic parameter.
+
+For [`Barr`](@ref), all sigma parameters use `Truncated(Normal(0, 1), -3, 3)` and
+the spectral index uses `Truncated(Normal(0, 0.1), -0.3, 0.3)`.
+
+# Arguments
+- `cfg::FluxSystematicsModel`: a [`Barr`](@ref) instance.
+
+# Returns
+A `NamedTuple` of `Symbol => Distribution` priors.
+"""
 function get_priors(cfg::Barr)
     priors = (
         atm_flux_nuenuebar_sigma = Truncated(Normal(0., 1.), -3, 3),
@@ -65,7 +191,22 @@ function get_priors(cfg::Barr)
         )
 end
 
-function get_hkkm_flux(filename)    
+"""
+    get_hkkm_flux(filename) -> OrderedDict{Symbol, Extrapolation}
+
+Read an HKKM flux table and return cubic-spline interpolations for each flavour.
+
+Parses the fixed-format `.d` file into 20 cosine-zenith chunks of 101 energy bins each,
+then builds 2D cubic-spline interpolations over ``(\\log_{10}(E/\\text{GeV}),\\, \\cos\\theta_z)``.
+
+# Arguments
+- `filename::String`: absolute path to the HKKM flux data file.
+
+# Returns
+An `OrderedDict` with keys `:numu`, `:numubar`, `:nue`, `:nuebar`, each mapping to a
+`Interpolations.Extrapolation` with linear extrapolation boundary conditions.
+"""
+function get_hkkm_flux(filename)
 
     flux_chunks = Matrix{Float32}[]
     for i in 19:-1:0
@@ -92,6 +233,22 @@ function get_hkkm_flux(filename)
     return flux
 end
 
+"""
+    get_nominal_flux(cfg::NominalFluxModel) -> Function
+
+Construct the nominal flux closure for the given flux model.
+
+For [`HKKM`](@ref), returns a function `nominal_flux(energy, coszen) -> Table` that
+evaluates the HKKM spline interpolations on a meshgrid of `energy` [GeV] and `coszen`
+values. The returned `Table` contains columns `true_energy`, `log10_true_energy`,
+`true_coszen`, and per-flavour flux values (`:numu`, `:numubar`, `:nue`, `:nuebar`).
+
+# Arguments
+- `cfg::NominalFluxModel`: a [`HKKM`](@ref) instance.
+
+# Returns
+A closure `nominal_flux(energy, coszen) -> Table`.
+"""
 function get_nominal_flux(cfg::HKKM)
     function nominal_flux(energy, coszen)
         # make fine grid
@@ -110,6 +267,22 @@ function get_nominal_flux(cfg::HKKM)
         end
 end
 
+"""
+    scale_flux(A, B, scale) -> (mod_A, mod_B)
+
+Scale the ratio between two flux components while conserving their sum.
+
+Given fluxes `A` and `B`, modifies their ratio by the factor `scale` while keeping
+``A + B`` constant: ``A' / B' = (A / B) \\cdot \\text{scale}``.
+
+# Arguments
+- `A`: flux array for the first component.
+- `B`: flux array for the second component.
+- `scale`: multiplicative factor applied to the ``A/B`` ratio.
+
+# Returns
+A tuple `(mod_A, mod_B)` of rescaled flux arrays.
+"""
 function scale_flux(A, B, scale)
     # scale a ratio between A and B
     r = A ./ B
@@ -119,6 +292,21 @@ function scale_flux(A, B, scale)
     return mod_A, mod_B  # Returns two separate vectors instead of tuples
 end
 
+"""
+    uphorizontal(coszen, rel_error) -> Real
+
+Compute the up/horizontal flux anisotropy correction factor.
+
+Models the zenith-dependent flux distortion as the ratio of an ellipse to a circle,
+where the ellipse semi-axes are `a = 1/rel_error` and `b = rel_error`.
+
+# Arguments
+- `coszen`: cosine of the zenith angle.
+- `rel_error`: relative error parameter controlling the ellipticity.
+
+# Returns
+A multiplicative correction factor for the flux.
+"""
 function uphorizontal(coszen, rel_error)
     # ratio of an ellipse to a circle
     b = rel_error
@@ -126,6 +314,21 @@ function uphorizontal(coszen, rel_error)
     1 / sqrt((b^2 - a^2) * coszen^2 + a^2)
 end
 
+"""
+    updown(coszen, up_down_ratio) -> AbstractArray
+
+Compute the up/down flux asymmetry correction factor.
+
+Uses a smooth ``\\tanh(3\\,\\cos\\theta_z)`` transition to interpolate between
+`1/up_down_ratio` (downgoing) and `up_down_ratio` (upgoing).
+
+# Arguments
+- `coszen`: cosine of the zenith angle (scalar or array).
+- `up_down_ratio`: ratio of upgoing to downgoing flux modification.
+
+# Returns
+A multiplicative correction factor array.
+"""
 function updown(coszen, up_down_ratio)
     # Smooth transition function: ranges from -1 (down) to +1 (up)
     transition = tanh.(3 * coszen)
@@ -134,6 +337,30 @@ function updown(coszen, up_down_ratio)
     return scale
 end
 
+"""
+    get_sys_flux(cfg::FluxSystematicsModel) -> Function
+
+Construct the systematic flux modification closure for the given systematics model.
+
+For [`Barr`](@ref), returns a function `sys_flux(flux, params) -> NamedTuple` that applies
+the following energy- and zenith-dependent corrections to the nominal flux:
+
+1. **Spectral tilt**: ``(E / E_\\text{pivot})^{\\Delta\\gamma}`` with
+   ``E_\\text{pivot} \\approx 24.1`` GeV.
+2. **``\\nu_e / \\bar\\nu_e`` ratio** scaling via [`scale_flux`](@ref).
+3. **``\\nu_\\mu / \\bar\\nu_\\mu`` ratio** scaling via [`scale_flux`](@ref).
+4. **``\\nu_e / \\nu_\\mu`` ratio** scaling via [`scale_flux`](@ref).
+5. **Up/down asymmetry** via [`updown`](@ref).
+6. **Up/horizontal anisotropy** via [`uphorizontal`](@ref) (separate polynomial
+   uncertainty fits for ``\\nu_e`` and ``\\nu_\\mu``).
+
+# Arguments
+- `cfg::FluxSystematicsModel`: a [`Barr`](@ref) instance.
+
+# Returns
+A closure `sys_flux(flux, params) -> NamedTuple{(:nue, :numu, :nuebar, :numubar)}` of
+modified flux arrays.
+"""
 function get_sys_flux(cfg::Barr)
     function sys_flux(flux, params)
     
