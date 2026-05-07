@@ -363,7 +363,7 @@ function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
         end
 
         @info msg
-        res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([params]), maxiters=2000, kwargs = (g_tol=1e-5,)))
+        res = bat_findmode(posterior, OptimAlg(optalg=Optim.LBFGS(), init = ExplicitInit([params]), maxiters=2000, kwargs = (f_abstol=1e-2,)))
 
         converged = Optim.converged(res.info)
         converged || @warn "Optimizer did not converge (iters=$(Optim.iterations(res.info)), g_residual=$(Optim.g_residual(res.info)))"
@@ -371,6 +371,104 @@ function find_mle(likelihood, prior, params; adsel = select_ad(length(params)))
     catch e
         if e isa ArgumentError
             return NaN, NaN, (; (k => NaN for k in keys(params))... ), false
+        else
+            rethrow(e)
+        end
+    end
+end
+
+"""
+    find_mle_ext(likelihood, prior, params; g_tol=1e-6, maxiters=2000)
+
+Like [`find_mle`](@ref) but bypasses BAT entirely. Uses `Optim.Fminbox(LBFGS(m=20))`
+with bounds derived directly from the prior distributions and ForwardDiff gradients.
+More robust for combined fits where one experiment dominates the gradient.
+
+Parameters with `ConstValueDist` (or a raw number) in the prior are treated as fixed
+and excluded from the optimization. All other parameters are optimized with bounds
+`[minimum(d), maximum(d)]` from their prior distribution (Uniform/Truncated give finite
+bounds; Normal gives ±Inf, which Fminbox treats as unconstrained).
+"""
+function find_mle_ext(likelihood, prior, params; g_tol=1e-6, maxiters=2000)
+    all_keys = tuple(keys(prior)...)
+    n = length(all_keys)
+
+    # Separate fixed (ConstValueDist or raw Number) from free params
+    is_free_mask  = Vector{Bool}(undef, n)
+    fixed_float   = Vector{Float64}(undef, n)  # sentinel 0.0 for free slots
+    free_x_index  = Vector{Int}(undef, n)       # free_x_index[i] = position in x vector (0 if fixed)
+    free_dists    = Any[]
+    lo_vec        = Float64[]
+    hi_vec        = Float64[]
+    x0_vec        = Float64[]
+    n_free        = 0
+
+    for (i, k) in enumerate(all_keys)
+        d = prior[k]
+        if d isa ValueShapes.ConstValueDist
+            is_free_mask[i]  = false
+            fixed_float[i]   = Float64(d.value)
+            free_x_index[i]  = 0
+        elseif d isa Number
+            is_free_mask[i]  = false
+            fixed_float[i]   = Float64(d)
+            free_x_index[i]  = 0
+        else
+            n_free          += 1
+            is_free_mask[i]  = true
+            fixed_float[i]   = 0.0
+            free_x_index[i]  = n_free
+            push!(free_dists, d)
+            lo = Float64(minimum(d))
+            hi = Float64(maximum(d))
+            push!(lo_vec, lo)
+            push!(hi_vec, hi)
+            θ0   = Float64(params[k])
+            ε    = 1e-8
+            lo_s = isfinite(lo) ? lo + ε : θ0 - 1e10
+            hi_s = isfinite(hi) ? hi - ε : θ0 + 1e10
+            push!(x0_vec, clamp(θ0, lo_s, hi_s))
+        end
+    end
+
+    function obj(x::AbstractVector{T}) where T
+        all_x = [is_free_mask[i] ? x[free_x_index[i]] : T(fixed_float[i]) for i in 1:n]
+        full_params = NamedTuple{all_keys}(Tuple(all_x))
+        llh_val   = logdensityof(likelihood, full_params)
+        prior_val = sum(logpdf(free_dists[j], x[j]) for j in 1:n_free)
+        return -(llh_val + prior_val)
+    end
+
+    msg = "Running Optimization (ext) for point"
+    for (i, k) in enumerate(all_keys)
+        is_free_mask[i] || (msg *= " $(k): $(fixed_float[i])")
+    end
+    @info msg
+
+    try
+        result = Optim.optimize(
+            obj,
+            (G, x) -> ForwardDiff.gradient!(G, obj, x),
+            lo_vec, hi_vec, x0_vec,
+            Optim.Fminbox(Optim.LBFGS(m=20)),
+            Optim.Options(g_tol=g_tol, outer_iterations=maxiters)
+        )
+
+        x_opt      = Optim.minimizer(result)
+        opt_params = NamedTuple{all_keys}(Tuple(
+            is_free_mask[i] ? x_opt[free_x_index[i]] : fixed_float[i] for i in 1:n
+        ))
+
+        converged = Optim.converged(result)
+        converged || @warn "Optimizer (ext) did not converge (iters=$(Optim.iterations(result)), g_residual=$(Optim.g_residual(result)))"
+
+        llh      = logdensityof(likelihood, opt_params)
+        log_post = -(Optim.minimum(result))
+        return llh, log_post, opt_params, converged
+    catch e
+        if e isa ArgumentError
+            nan_params = NamedTuple{all_keys}(ntuple(_ -> NaN, n))
+            return NaN, NaN, nan_params, false
         else
             rethrow(e)
         end
@@ -399,7 +497,7 @@ function find_mle_cached(likelihood, prior, params, cache_dir)
     end
 
     if isnothing(opt_result)
-        opt_result = find_mle(likelihood, prior, params)
+        opt_result = find_mle_ext(likelihood, prior, params)
     end
 
     if !isnothing(cache_dir)

@@ -167,15 +167,24 @@ end
 
 function apply_energy_scale(counts, log_e_edges, delta)
     n_e = length(log_e_edges) - 1
-    T = [begin
-            shifted_lo = (i == 1) ? log_e_edges[1] : log_e_edges[i] + delta
-            shifted_hi = (i == n_e) ? log_e_edges[end] : log_e_edges[i+1] + delta
-            overlap = max(zero(delta), min(shifted_hi, log_e_edges[j+1]) - max(shifted_lo, log_e_edges[j]))
-            nom_width = log_e_edges[j+1] - log_e_edges[j]
-            overlap / nom_width
-        end for i in 1:n_e, j in 1:n_e]
-    flat = reshape(counts, n_e, :)
-    return reshape(T * flat, size(counts))
+    result = copy(counts)
+    flat_in  = reshape(counts, n_e, :)
+    flat_out = reshape(result, n_e, :)
+    for i in 1:n_e
+        shifted_lo = (i == 1)   ? log_e_edges[1]   : log_e_edges[i]   + delta
+        shifted_hi = (i == n_e) ? log_e_edges[end] : log_e_edges[i+1] + delta
+        for k in axes(flat_in, 2)
+            acc = zero(eltype(flat_in))
+            for j in 1:n_e
+                inner = min(shifted_hi, log_e_edges[j+1]) - max(shifted_lo, log_e_edges[j])
+                overlap = ifelse(inner >= zero(inner), inner, zero(inner))
+                nom_width = log_e_edges[j+1] - log_e_edges[j]
+                acc += (overlap / nom_width) * flat_in[j, k]
+            end
+            flat_out[i, k] = acc
+        end
+    end
+    return result
 end
 
 function make_hist_per_channel(mc, osc_flux_cc, osc_flux_nc, lifetime_seconds, params, assets)
@@ -254,8 +263,9 @@ function get_expected(params, physics, assets)
     )
 
     hists_nc = reduce(+, map(h -> h[:, :, :, 1], values(hists)))
-    hists_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2] .+ hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]
-    expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc .+ hists_cc) * params.orca_norm_all
+    hists_nontau_cc = hists.nue[:, :, :, 2] .+ hists.nuebar[:, :, :, 2] .+ hists.numu[:, :, :, 2] .+ hists.numubar[:, :, :, 2]
+    hists_nutau_cc  = hists.nutau[:, :, :, 2] .+ hists.nutaubar[:, :, :, 2]
+    expected = (assets.muon_hist * params.orca_norm_muons .+ hists_nc * params.nc_norm .+ hists_nontau_cc .+ hists_nutau_cc * params.nutau_cc_norm) * params.orca_norm_all
 
     delta = log10(params.orca_energy_scale)
     expected = apply_energy_scale(expected, assets.log_e_reco_edges, delta)
