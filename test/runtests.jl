@@ -18,6 +18,7 @@ using Test
         include("test_analysis.jl")
         include("test_autodiff.jl")
         include("test_regression.jl")
+        include("test_cli_common.jl")
     end
     
     #@testset "experiments" begin 
