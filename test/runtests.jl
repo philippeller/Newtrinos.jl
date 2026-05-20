@@ -19,6 +19,7 @@ using Test
         include("test_autodiff.jl")
         include("test_regression.jl")
         include("test_cli_common.jl")
+        include("test_molewhacker.jl")
     end
     
     #@testset "experiments" begin 
