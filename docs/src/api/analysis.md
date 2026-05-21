@@ -13,15 +13,6 @@ It is composed of three source files:
 
 ---
 
-## Core Types
-
-```@docs
-Newtrinos.NewtrinosResult
-Newtrinos.Wrapper
-```
-
----
-
 ## Parameter Utilities
 
 These functions collect and merge parameters and priors across physics and experiment

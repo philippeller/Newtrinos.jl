@@ -1,5 +1,11 @@
 # Types
 
+## Module
+
+```@docs
+Newtrinos.Newtrinos
+```
+
 ## Core Abstract Types
 
 ```@docs
