@@ -17,6 +17,31 @@ using MGVI
 using ForwardDiff
 using ProgressMeter
 
+"""
+    importance_sampling(pstr, approx_dist, nsamples) -> DensitySampleVector
+
+Draw importance-weighted samples from `pstr` using `approx_dist` as the proposal.
+
+Samples `nsamples` points from `approx_dist`, evaluates ``\\log p`` (pstr) and ``\\log q`` (approx_dist)
+at each point, and computes normalized importance weights. The evaluation of ``\\log p`` is
+parallelized over threads. The weights are calculated as:
+
+```math
+\\log \\tilde{w}_i = \\log p - \\log q
+w_i = \\exp\\!\\bigl( \\log \\tilde{w}_i - \\max(\\log \\tilde{w}_i) \\bigr)
+```
+
+with the ``\\max(\\log \\tilde{w}_i)`` substracted in the exponent such that 
+``\\max_i w_i = 1`` for numerical stability. 
+
+# Arguments
+- `pstr`: BAT posterior (typically already transformed via `PriorToNormal`).
+- `approx_dist`: proposal distribution supporting `bat_sample` and `logdensityof`.
+- `nsamples::Int`: number of samples to draw from `approx_dist`.
+
+# Returns
+A `DensitySampleVector` with samples from `approx_dist`, their respective ``\\log p``, and their importance weights.
+"""
 function importance_sampling(pstr, approx_dist, nsamples)
     smpls_q, _ = bat_sample(approx_dist, IIDSampling(nsamples = nsamples))
     x_q = smpls_q.v
@@ -30,6 +55,29 @@ function importance_sampling(pstr, approx_dist, nsamples)
     smpls_p = DensitySampleVector(x_q, logd_p, weight=w)
 end
 
+"""
+    local_MGVI_approx(pstr, θ_sel) -> MvNormal
+
+Fit a local Gaussian approximation to `pstr` at the selected point `θ_sel`.
+
+Uses the MGVI (Metric Gaussian Variational Inference) approach: the covariance is
+
+```math
+\\Sigma = \\bigl(J^\\top\\, F(\\theta)\\, J + I\\bigr)^{-1}
+```
+
+where ``F(\\theta)`` is the Fisher information matrix of the likelihood model
+evaluated at ``\\theta``, and ``J = \\partial_\\theta(\\texttt{flat\\_params} \\circ m)``
+is the Jacobian of the parameter reparameterization. The result is regularized with
+a Cholesky decomposition via `PositiveFactorizations`.
+
+# Arguments
+- `pstr`: BAT posterior with a `likelihood` field exposing the forward model `k`.
+- `θ_sel`: parameter vector (in the transformed space) at which to centre the Gaussian.
+
+# Returns
+A `MvNormal` distribution centred at `θ_sel` with covariance ``\\Sigma``.
+"""
 function local_MGVI_approx(pstr, θ_sel)
     m_tr=pstr.likelihood.k
     FI_inner = MGVI.fisher_information(m_tr(θ_sel))
@@ -40,6 +88,25 @@ function local_MGVI_approx(pstr, θ_sel)
     return approx_dist
 end
 
+"""
+    make_prior_samples(posterior, nsamples::Int=10_000) -> NamedTuple
+
+Initialize importance samples by using a standard normal as the proposal distribution.
+
+Transforms `posterior` to the standard-normal space via BAT's `PriorToNormal`
+reparameterization, then generates `nsamples` samples by calling [`importance_sampling`](@ref) 
+with the transformed posterior and the standard normal ``\\mathcal{N}(0, I)`` as the proposal distribution. 
+
+# Arguments
+- `posterior`: a BAT posterior measure.
+- `nsamples::Int`: number of importance samples to draw (default: `10_000`).
+
+# Returns
+A `NamedTuple` with fields:
+- `approx_dist`: the standard normal proposal used.
+- `samples_p`: `DensitySampleVector` in the transformed (normal) space.
+- `samples_user`: samples back-transformed to the original parameter space.
+"""
 function make_prior_samples(posterior, nsamples::Int=10_000)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
     pr_dist = MvNormal(zeros(pstr.prior.dist._dim), ones(pstr.prior.dist._dim))
@@ -50,6 +117,36 @@ function make_prior_samples(posterior, nsamples::Int=10_000)
     (approx_dist=pr_dist, samples_p=smpls_p, samples_user=bat_transform(inverse(f_trafo), smpls_p).result)
 end
 
+"""
+    make_init_samples(posterior, nseeds::Int=10, nsamples::Int=10_000) -> NamedTuple
+
+Initialize importance samples by fitting a mixture of local Gaussian approximations
+at posterior modes.
+
+Finds `nseeds` approximate modes via L-BFGS optimization (using Sobol-sequence
+starting points), fits a [`local_MGVI_approx`](@ref) at each mode, and combines
+them into a `MixtureModel`. The mixture model weights are calculated as 
+
+```math
+\\log \\tilde{w}_i &= \\log p (\\mu_i) - \\log q (\\mu_i) 
+\\tilde{w}_i &= \\exp\\bigl(\\log \\tilde{w}_i - \\max(\\log \\tilde{w})\\bigr) 
+w_i &= \\frac{\\tilde{w}_i}{\\sum_j \\tilde{w}_j} 
+```
+
+where ``\\mu_i`` is the mode of the ``i``-th component. Importance samples are
+then drawn from the mixture via [`importance_sampling`](@ref).
+
+# Arguments
+- `posterior`: a BAT posterior measure.
+- `nseeds::Int`: number of mode-finding restarts (default: `10`).
+- `nsamples::Int`: number of importance samples to draw (default: `10_000`).
+
+# Returns
+A `NamedTuple` with fields:
+- `approx_dist::MixtureModel`: the weighted Gaussian mixture proposal.
+- `samples_p`: `DensitySampleVector` in the transformed space.
+- `samples_user`: samples back-transformed to the original parameter space.
+"""
 function make_init_samples(posterior, nseeds::Int=10, nsamples::Int=10_000)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
 
@@ -82,9 +179,35 @@ function make_init_samples(posterior, nseeds::Int=10, nsamples::Int=10_000)
     (approx_dist=approx_dist, samples_p=smpls_p, samples_user=bat_transform(inverse(f_trafo), smpls_p).result)
 end
 
-# NOTE: This method contains hardcoded field names (Darkdim_radius, ca1, ca2, ca3)
-# specific to Darkdim models. Consider generalizing if used with other models.
+"""
+    make_init_samples(posterior, seed_points::DataFrame, nsamples::Int=10_000) -> NamedTuple
+
+Initialize importance samples from user-supplied seed points given as a DataFrame.
+
+Like the integer-seed form but uses rows of `seed_points` as starting points for
+mode-finding instead of Sobol samples. Each row is projected into the transformed
+parameter space and L-BFGS is run from there.
+
+!!! warning
+    This method contains hardcoded field names (`Darkdim_radius`, `ca1`, `ca2`,
+    `ca3`) specific to Darkdim models. It must be generalized before use with
+    other parameter sets.
+
+# Arguments
+- `posterior`: a BAT posterior measure.
+- `seed_points::DataFrame`: each row provides the starting parameter values.
+  Must contain columns `Darkdim_radius`, `ca1`, `ca2`, `ca3`.
+- `nsamples::Int`: number of importance samples to draw (default: `10_000`).
+
+# Returns
+A `NamedTuple` with fields:
+- `approx_dist::MixtureModel`: the weighted Gaussian mixture proposal.
+- `samples_p`: `DensitySampleVector` in the transformed space.
+- `samples_user`: samples back-transformed to the original parameter space.
+"""
 function make_init_samples(posterior, seed_points::DataFrame, nsamples::Int=10_000)
+    # NOTE: This method contains hardcoded field names (Darkdim_radius, ca1, ca2, ca3)
+    # specific to Darkdim models. Consider generalizing if used with other models.
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
 
     seeds = []
@@ -125,6 +248,35 @@ function make_init_samples(posterior, seed_points::DataFrame, nsamples::Int=10_0
     (approx_dist=approx_dist, samples_p=smpls_p, samples_user=bat_transform(inverse(f_trafo), smpls_p).result)
 end
 
+"""
+    whack_a_mole(posterior, init_samples, n_whack=100) -> NamedTuple
+
+Refine an importance sampling approximation by iteratively adding Gaussian
+components at high-weight sample points.
+
+At each of `n_whack` iterations:
+1. The highest-weight sample in the current mixture is identified.
+2. A [`local_MGVI_approx`](@ref) is fitted at that point.
+3. The new component is added to the mixture with weight proportional to its
+   posterior density at its mode relative to the mixture density.
+4. New samples are drawn from the new component and importance-reweighted.
+
+This "whack-a-mole" strategy adaptively targets undersampled regions of the
+posterior. Use [`whack_many_moles`](@ref) for a parallelized variant with
+convergence criteria.
+
+# Arguments
+- `posterior`: a BAT posterior measure.
+- `init_samples`: initialization NamedTuple as returned by [`make_init_samples`](@ref)
+  or [`make_prior_samples`](@ref).
+- `n_whack::Int`: number of refinement iterations (default: `100`).
+
+# Returns
+A `NamedTuple` with fields:
+- `approx_dist::MixtureModel`: the refined Gaussian mixture proposal.
+- `samples_p`: accumulated `DensitySampleVector` in the transformed space.
+- `samples_user`: samples back-transformed to the original parameter space.
+"""
 function whack_a_mole(posterior, init_samples, n_whack=100)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
     smpls_p = init_samples.samples_p
@@ -180,6 +332,44 @@ function whack_a_mole(posterior, init_samples, n_whack=100)
     (approx_dist=approx_mix, samples_p=samples_mix, samples_user=bat_transform(inverse(f_trafo), samples_mix).result)
 end
 
+"""
+    whack_many_moles(posterior, init_samples;
+                     target_efficiency=Inf, target_samplesize=Inf,
+                     maxiter=100, n_parallel=Threads.nthreads(),
+                     cache_dir=nothing) -> NamedTuple
+
+Parallelized adaptive importance sampling with convergence criteria.
+
+Like [`whack_a_mole`](@ref) but processes `n_parallel` high-weight sample
+points simultaneously per each iteration using `Threads.@threads`. Iteration stops
+when any of the following conditions is met:
+
+- Effective sample size (ESS) exceeds `target_samplesize`.
+- Efficiency (ESS / total samples) exceeds `target_efficiency`.
+- Number of iterations reaches `maxiter`.
+
+Intermediate results can be saved to disk after each iteration for fault tolerance.
+
+# Arguments
+- `posterior`: a BAT posterior measure.
+- `init_samples`: initialization NamedTuple as returned by [`make_init_samples`](@ref)
+  or [`make_prior_samples`](@ref).
+- `target_efficiency::Real`: stop when ESS / n_samples exceeds this value
+  (default: `Inf`, i.e. no efficiency target).
+- `target_samplesize::Real`: stop when ESS exceeds this value
+  (default: `Inf`, i.e. no ESS target).
+- `maxiter::Int`: maximum number of refinement iterations (default: `100`).
+- `n_parallel::Int`: number of new components to fit per iteration
+  (default: `Threads.nthreads()`).
+- `cache_dir::Union{String,Nothing}`: if provided, saves a JLD2 checkpoint after
+  each iteration to this directory. (Default: `nothing`).
+
+# Returns
+A `NamedTuple` with fields:
+- `approx_dist::MixtureModel`: the refined Gaussian mixture proposal.
+- `samples_p`: accumulated `DensitySampleVector` in the transformed space.
+- `samples_user`: samples back-transformed to the original parameter space.
+"""
 function whack_many_moles(posterior, init_samples; target_efficiency=Inf, target_samplesize=Inf, maxiter=100, n_parallel=Threads.nthreads(), cache_dir=nothing)
     pstr, f_trafo = bat_transform(PriorToNormal(), posterior)
     smpls_p = init_samples.samples_p

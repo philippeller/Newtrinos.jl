@@ -33,7 +33,7 @@ across all layers.
 # Fields
 - `zones::Array{Float64} = [0., 4., 7.5, 12.5, 13.1]`: density boundaries [g/cm³]
   defining the constant-density zones. Adjacent PREM rows whose density falls within the
-  same bin are averaged into a single [`Layer`](@ref).
+  same bin are averaged into a single [`Newtrinos.osc.Layer`](@ref).
 - `p_fractions::Float64 = 0.5`: proton number fraction ``Y_p = N_p / (N_p + N_n)``.
 - `atm_heihgt::Float64 = 20.`: atmospheric shell thickness [km] added above the Earth's
   surface (density = 0).
@@ -184,9 +184,9 @@ end
     compute_paths(cz::Number, layers, r_detector) -> StructArray{Path}
     compute_paths(cz::AbstractArray, layers; r_detector=6369) -> VectorOfVectors{Path}
 
-Compute the sequence of [`Path`](@ref) segments a neutrino traverses through the Earth.
+Compute the sequence of [`Newtrinos.osc.Path`](@ref) segments a neutrino traverses through the Earth.
 
-For a single cosine-zenith value, determines which [`Layer`](@ref) shells are crossed
+For a single cosine-zenith value, determines which [`Newtrinos.osc.Layer`](@ref) shells are crossed
 using [`ray_circle_path_length`](@ref), then builds an ordered list of segments. Layers
 below the detector are traversed twice (entry and exit), while layers above the detector
 are traversed once.

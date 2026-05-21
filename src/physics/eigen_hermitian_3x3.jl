@@ -11,7 +11,7 @@ Implements the algorithm of Deledalle et al. (2017),
 This avoids the iterative LAPACK `eigen` call and is significantly faster for the
 small matrices that arise in three-flavour neutrino oscillations with matter effects.
 
-Called by [`BargerEigen`](@ref) via [`decompose`](@ref).
+Called by [`Newtrinos.BargerEigen`](@ref) via [`Newtrinos.osc.decompose`](@ref).
 
 **Eigenvalue algorithm:** Computes the three roots of the characteristic polynomial
 via the Cardano trigonometric method. With ``x_1`` and ``x_2`` defined from the matrix
