@@ -269,10 +269,12 @@ DensityInterface.logdensityof(::ArgumentErrorDensity, x) = throw(ArgumentError("
         corr_prior, other_prior = Newtrinos.correlated_priors_vars(priors, [:x, :y], target_dist)
         
         # 'z' should be the only thing left in other_prior
-        @test haskey(other_prior, :z)
-        @test !haskey(other_prior, :x)
-        @test !haskey(other_prior, :y)
-        @test other_prior.z isa Exponential
+        s = rand(other_prior) #other_prior is a NamedTupleDist, not a plain NamedTuple => haskey has no method for it.
+        # The fix is to check keys through a sample — rand(NamedTupleDist) always returns a NamedTuple which does support haskey
+        @test haskey(s, :z)
+        @test !haskey(s, :x)
+        @test !haskey(s, :y)
+        @test s.z isa Real
 
         # 'x' and 'y' should be in the shape of corr_prior
         @test :x in keys(corr_prior().shape)
