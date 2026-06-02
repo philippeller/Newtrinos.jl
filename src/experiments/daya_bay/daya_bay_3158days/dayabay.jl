@@ -488,7 +488,7 @@ function get_plot(physics, assets)
 
     function plot(params, data = assets.observed)
 
-        r_values = [1e-8, 1e-4, 0.5, 1]
+        r_values = [1e-6, 1e-4, 0.5, 1]
 
         palette = cgrad(:Dark2_8, categorical=true)
 
@@ -520,7 +520,7 @@ function get_plot(physics, assets)
         ax = Axis(f[1,1], 
             #xlabel = "Eₚ (MeV)",
             ylabel = "Counts", 
-            title = "DayaBay Data and Predictions - Majorana - NO, N=20",
+            title = "DayaBay Data and Predictions - Dirac - NO, N=20",
             xlabelsize=28,
             ylabelsize=28,
             titlesize=26,
@@ -628,8 +628,8 @@ function get_plot(physics, assets)
         axislegend(ax, framevisible=false, position=:rt, labelsize=28)
 
         #display("image/png", f)
-        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NNM_NO_r.png",f)
-        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NNM_NO_r.svg", f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_r.png",f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_r.svg", f)
 
         # save("dayabay_r_comparison.pdf", f)
 
@@ -637,7 +637,7 @@ function get_plot(physics, assets)
 end
 
 
-function get_plotNnew(physics, assets)
+function get_plotNnew(physics, assets) #Nnew
 
     function plot(params, data = assets.observed)
 
@@ -777,7 +777,7 @@ function get_plotNnew(physics, assets)
         xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
 
         ylims!(ax, 0, 60000)
-        ylims!(ax2, 0.9, 1.1)
+        ylims!(ax2, 0.9, 1.2)
 
         axislegend(ax, framevisible=false, position=:rt, labelsize=28)
 
