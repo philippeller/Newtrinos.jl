@@ -13,6 +13,9 @@ authors:
   - name: Philipp Eller
     orcid: 0000-0001-6354-5209
     affiliation: 1
+  - name: David Schultheiß
+    orcid: 0009-0000-3027-684X
+    affiliation: 1
 affiliations:
  - name: Technical University of Munich, Germany
    index: 1

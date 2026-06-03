@@ -13,23 +13,31 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
+        "Installation" => "installation.md", 
         "Getting Started" => "getting_started.md",
         "Tutorials" => [
-            "Single Experiment" => "tutorials/single_experiment.md",
-            "Joint Analysis" => "tutorials/joint_analysis.md",
-            "Custom Physics" => "tutorials/custom_physics.md",
+            "Architecture" => "tutorials/architecture.md",
+            "Neutrino physics" => "tutorials/neutrino_physics.md",
+            "Experiments" => "tutorials/experiments.md",
+            "Assemble a physics model" => "tutorials/physics_model.md",
+            "configure an experiment" => "tutorials/configure_experiment.md",
+            "analyse data" => "tutorials/analyse_data.md",
+        ], 
+        "examples" => [ 
+            "Single Experiment" => "examples/single_experiment.md",
+            "Joint Analysis" => "examples/joint_analysis.md",
+            "Custom Physics" => "examples/custom_physics.md",
+            "CLI Reference" => "examples/cli.md",
+            "Performance" => "examples/performance.md",
         ],
-        "Manual" => [
-            "Architecture" => "manual/architecture.md",
-            "Experiments" => "manual/experiments.md",
-            "CLI Reference" => "manual/cli.md",
-            "Performance" => "manual/performance.md",
-        ],
-        "API Reference" => [
+        "API Documentation" => [
             "Types" => "api/types.md",
-            "Analysis" => "api/analysis.md",
             "Physics" => "api/physics.md",
+            "Analysis" => "api/analysis.md",
+            "internal" => "api/internal.md",
         ],
+        "Contribution guidelines" => "contribution_guidelines.md",
+
     ],
     warnonly = [:missing_docs, :cross_references],
 )
