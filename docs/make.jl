@@ -13,13 +13,15 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
-        "Installation" => "installation.md", 
-        "Getting Started" => "getting_started.md",
+        "Getting Started" => [
+            "Installation" => "installation.md", 
+            "First example" => "getting_started.md",
+        ],
         "Tutorials" => [
             "Architecture" => "tutorials/architecture.md",
             "Neutrino physics" => "tutorials/neutrino_physics.md",
-            "Experiments" => "tutorials/experiments.md",
             "Assemble a physics model" => "tutorials/physics_model.md",
+            "Experiments" => "tutorials/experiments.md",
             "configure an experiment" => "tutorials/configure_experiment.md",
             "analyse data" => "tutorials/analyse_data.md",
         ], 
