@@ -22,21 +22,20 @@ makedocs(
             "Neutrino physics" => "tutorials/neutrino_physics.md",
             "Assemble a physics model" => "tutorials/physics_model.md",
             "Experiments" => "tutorials/experiments.md",
-            "configure an experiment" => "tutorials/configure_experiment.md",
-            "analyse data" => "tutorials/analyse_data.md",
+            "Configure an experiment" => "tutorials/configure_experiment.md",
+            "Analyse data" => "tutorials/analyse_data.md",
+            "Analysis CLI Reference" => "examples/cli.md",
         ], 
-        "examples" => [ 
+        "Examples" => [ 
             "Single Experiment" => "examples/single_experiment.md",
             "Joint Analysis" => "examples/joint_analysis.md",
             "Custom Physics" => "examples/custom_physics.md",
-            "CLI Reference" => "examples/cli.md",
             "Performance" => "examples/performance.md",
         ],
         "API Documentation" => [
             "Types" => "api/types.md",
             "Physics" => "api/physics.md",
             "Analysis" => "api/analysis.md",
-            "internal features" => "api/internal.md",
         ],
         "Contribution guidelines" => "contribution_guidelines.md",
 

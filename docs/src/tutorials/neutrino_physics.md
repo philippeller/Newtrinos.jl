@@ -26,12 +26,16 @@ $$
 
 The PMNS matrix relates flavor and mass eigenstates via:
 
-$$\begin{pmatrix} \nu_e \\ \nu_\mu \\ \nu_\tau \end{pmatrix} = U_{\text{PMNS}} \begin{pmatrix} \nu_1 \\ \nu_2 \\ \nu_3 \end{pmatrix}$$, 
+$$
+\begin{pmatrix} \nu_e \\ \nu_\mu \\ \nu_\tau \end{pmatrix} = U_{\text{PMNS}} \begin{pmatrix} \nu_1 \\ \nu_2 \\ \nu_3 \end{pmatrix}
+$$
 
 it is parametrized as 
 $$
 U_{\text{PMNS}} = \underbrace{\begin{pmatrix} 1 & 0 & 0 \\ 0 & c_{23} & s_{23} \\ 0 & -s_{23} & c_{23} \end{pmatrix}}_{R_{23}} \underbrace{\begin{pmatrix} c_{13} & 0 & s_{13}e^{-i\delta} \\ 0 & 1 & 0 \\ -s_{13}e^{i\delta} & 0 & c_{13} \end{pmatrix}}_{R_{13}(\delta)} \underbrace{\begin{pmatrix} c_{12} & s_{12} & 0 \\ -s_{12} & c_{12} & 0 \\ 0 & 0 & 1 \end{pmatrix}}_{R_{12}} \cdot P_M, 
-$$ where $c_{ij} = \cos(\theta_{ij}), s_{ij} = \sin(\theta_{ij}),$ and $P_M = \text{diag}(1, e^{i\alpha/2}, e^{i\beta/2})$ contains the **Majorana phases**.
+$$
+
+where $c_{ij} = \cos(\theta_{ij}), s_{ij} = \sin(\theta_{ij}),$ and $P_M = \text{diag}(1, e^{i\alpha/2}, e^{i\beta/2})$ contains the **Majorana phases**.
 
 So the PMNS matrix is parametrized by three mixing angles $\theta_{ij}$, the CP violating phase $\delta$, and the two Majorana phases $\alpha, \beta$.
 
@@ -289,10 +293,6 @@ Beyond the standard three-flavor oscillation framework, Newtrinos.jl implements 
 **Large Extra Dimensions** (`Newtrinos.osc.ADD`) build on the Arkani-Hamed–Dimopoulos–Dvali framework: if right-handed neutrinos propagate into $n$ compact extra dimensions of radius $R$, a tower of Kaluza–Klein (KK) mass states appears. The oscillation probability becomes a sum over KK modes weighted by mixing coefficients determined by $R$ and the fundamental mass scale, modifying the standard $L/E$ pattern at short baselines.
 
 **Dark Dimensions** (`Newtrinos.osc.Darkdim_*`) are variants of the LED scenario where the extra-dimensional bulk is populated by a dark sector. Several sub-models are implemented (`Darkdim_radius`, `Darkdim_mass`, etc.), each parametrizing the dark-dimension radius and the bulk-to-brane coupling differently. Like ADD, the signature is a deviation from standard oscillations due to active–KK mixing.
-
-**Quantum Decoherence** (`Newtrinos.osc.Decoherent`) models the loss of quantum coherence between mass eigenstates during propagation — for example due to wave-packet separation (see Wave Packet Treatment above) or interactions with a stochastic environment. The oscillation term is multiplied by a damping factor $e^{-\Gamma_{ij} L}$ where $\Gamma_{ij}$ is a decoherence rate. At $\Gamma \to 0$ the standard result is recovered; at large $L$ the probability approaches the incoherent average.
-
-**Damping** (`Newtrinos.osc.Damping`) is a phenomenological model that applies energy-dependent exponential suppression to all off-diagonal oscillation terms, $\exp(-(E/\Lambda)^n)$, without specifying the underlying mechanism. It serves as a model-independent probe of new physics that suppresses coherence, including neutrino absorption, neutrino decay, and exotic interactions.
 
 For **Non-Standard Interactions** in matter, see [Non-Standard Interactions](#non-standard-interactions) above.
 
