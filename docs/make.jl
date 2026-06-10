@@ -36,7 +36,7 @@ makedocs(
             "Types" => "api/types.md",
             "Physics" => "api/physics.md",
             "Analysis" => "api/analysis.md",
-            "internal" => "api/internal.md",
+            "internal features" => "api/internal.md",
         ],
         "Contribution guidelines" => "contribution_guidelines.md",
 
