@@ -789,7 +789,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(10)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
 
@@ -815,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(10)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
     

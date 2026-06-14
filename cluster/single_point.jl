@@ -9,7 +9,7 @@ using FileIO
 import JLD2
 using Setfield
 using Accessors
-using Revise
+#using Revise
 using Newtrinos
 
 # Parse command line arguments
@@ -125,7 +125,7 @@ toy_data = (juno=Int64.(toy_data_j), tao=Int64.(toy_data_t))
 likelihood = Newtrinos.generate_likelihood(experiments, toy_data)
 
 # === GENERATE SCAN POINTS ===
-vars_to_scan = (r=31, N=31)
+vars_to_scan = (r=5, N=5)
 values, scanpoints = Newtrinos.generate_scanpoints(vars_to_scan, modified_priors)
 
 # === PROCESS THIS POINT ===

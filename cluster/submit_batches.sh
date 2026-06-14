@@ -1,11 +1,8 @@
 #!/bin/bash
-# Wrapper to submit the full 961-task workload in smaller Slurm array chunks.
-# This waits for each chunk to complete before submitting the next one.
-# Adjust CHUNK_SIZE if you need a different maximum array size.
 
 CHUNK_SIZE=25
 TOTAL_POINTS=961
-SUBMIT_SCRIPT="submit.sh"
+SUBMIT_SCRIPT="cluster/submit.sh"
 
 previous_job_id=""
 

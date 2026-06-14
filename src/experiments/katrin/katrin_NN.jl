@@ -108,7 +108,7 @@ function get_posterior_SM(params)
 
 end    
 
-# function to get m0 posterior from m_nu posterior in NNM-NNM
+# function to get m0 posterior from m_nu posterior in NND-NND
 
 
 function get_posterior_NN(params, cfg)
@@ -232,8 +232,8 @@ end
 
 
 
-function get_neutrinomass_old(cfg=NNM)
-    function NeutrinoMassNNM_old(params::NamedTuple)
+function get_neutrinomass_old(cfg=NND)
+    function NeutrinoMassNND_old(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -315,14 +315,14 @@ function get_neutrinomass_old(cfg=NNM)
         return sum
      
     end
-    return NeutrinoMassNNM
+    return NeutrinoMassNND
 end
 
 
 
 
 
-function get_neutrinomass(cfg=NNM)
+function get_neutrinomass_12_06(cfg=NND)
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -434,7 +434,121 @@ end
 
 
 
-function get_neutrinomass_a(cfg=NNM)   #with analytical formula for eigenvalues
+function get_neutrinomass(cfg=NND)
+    function NeutrinoMassNN(params::NamedTuple)
+        U = Newtrinos.osc.get_PMNS(params)
+  
+        N = round(Int, params[:N])
+
+        func = Newtrinos.osc.get_matrices(cfg)
+        final, h, eigen, V_e, V_m, V_t = func(params)
+
+        x_e = U[1, :]
+        x_1_e = V_e[1, 1:N]
+        x_1_m = V_m[1, 1:N]
+        x_1_t = V_t[1, 1:N]
+     
+
+        #norms = sqrt.( Base.sum(abs2, V_t; dims=1))  # 1 × N row vector
+        #println("Norms of V_t: ", norms)
+
+
+        mass_e = eigen[1:3:end]      
+        mass_m = eigen[2:3:end]   
+        mass_t = eigen[3:3:end]      
+        N_e = length(mass_e)
+        N_m = length(mass_m)
+        N_t = length(mass_t)
+    
+       #cut=(18.6*1e3)^2
+       cut= (1)^2
+       if any(mass_e .> cut) 
+           #=mass_e = mass_e[mass_e .<= cut]
+            N_e = length(mass_e)
+            x_1_e = V_e[1, 1:N_e]=#
+            
+            mask = mass_e .<= cut
+
+            mass_e = mass_e[mask]
+            V_e    = V_e[mask, mask]
+            norms = sqrt.(Base.sum(abs2, V_e; dims=1))
+            V_e .= V_e ./ reshape(norms, 1, :)
+
+
+            N_e = length(mass_e)
+            x_1_e = V_e[1, 1:N_e]
+
+        end
+
+        if any(mass_m .> cut) 
+           #= mass_m = mass_m[mass_m .<= cut]
+            N_m = length(mass_m)
+            x_1_m = V_m[1, 1:N_m]=#
+            
+            mask = mass_m .<= cut
+
+            mass_m = mass_m[mask]
+            V_m    = V_m[mask, mask]
+            norms = sqrt.(Base.sum(abs2, V_m; dims=1))
+            V_m .= V_m ./ reshape(norms, 1, :)
+
+
+            N_m = length(mass_m)
+            x_1_m = V_m[1, 1:N_m]
+
+        end
+
+        if any(mass_t .> cut) 
+           #= println("Masses in tau exceed cut-off, applying filter.")
+            mass_t = mass_t[mass_t .<= cut]
+            N_t = length(mass_t)
+            x_1_t = V_t[1, 1:N_t]=#
+
+           
+            mask = mass_t .<= cut
+
+            mass_t = mass_t[mask]
+            V_t    = V_t[mask, mask]
+            norms = sqrt.(Base.sum(abs2, V_t; dims=1))
+            V_t .= V_t ./ reshape(norms, 1, :)
+
+            N_t = length(mass_t)
+            x_1_t = V_t[1, 1:N_t]
+
+        end
+
+        
+        #norms = sqrt.(Base.sum(abs2, V_t; dims=2))  # 1 × N row vector
+        #println("Norms of V_t: ", norms)
+     
+        N = [N_e, N_m, N_t]
+        masses_NN = [mass_e, mass_m, mass_t]
+
+        X = [x_1_e, x_1_m, x_1_t]
+        sum = Float64(0.0)
+
+        for i in 1:3
+            squared_x_e = abs(x_e[i])^2
+        
+            for j in 1:N[i]
+                mass = masses_NN[i][j]
+                integrand = squared_x_e * abs(X[i][j])^2 *mass /(1-(1/N^2))
+                sum += integrand
+            end
+        end
+        
+       
+        return sum
+            
+    end
+    return NeutrinoMassNN
+end
+
+
+
+
+
+function get_neutrinomass_a(cfg=NND)   #with analytical formula for eigenvalues
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -515,7 +629,7 @@ function get_neutrinomass_a(cfg=NNM)   #with analytical formula for eigenvalues
 end
 
 
-function mixing_angles(params::NamedTuple,cfg=NNM)
+function mixing_angles(params::NamedTuple,cfg=NND)
 
     U = Newtrinos.osc.get_PMNS(params)
     N = round(Int, params[:N])
@@ -544,8 +658,8 @@ function mixing_angles(params::NamedTuple,cfg=NNM)
 end    
 
 
-function get_neutrinomass_new(cfg=NNM)
-    function NeutrinoMassNNM_new(params::NamedTuple)
+function get_neutrinomass_new(cfg=NND)
+    function NeutrinoMassNND_new(params::NamedTuple)
 
         U= Newtrinos.osc.get_PMNS(params)
 
@@ -628,7 +742,7 @@ function get_neutrinomass_new(cfg=NNM)
 
      
     end
-    return NeutrinoMassNNM
+    return NeutrinoMassNND
 end
 
 

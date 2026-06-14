@@ -481,10 +481,9 @@ function get_plotr(physics, assets)
     
 end
 
-using CairoMakie
-using ColorSchemes
 
-function get_plot(physics, assets)
+
+function get_plotrN(physics, assets)
 
     function plot(params, data = assets.observed)
 
@@ -789,4 +788,712 @@ function get_plotNnew(physics, assets) #Nnew
 
     end
 end
+
+using CairoMakie
+using ColorSchemes
+function get_plotrr(physics, assets)
+
+    function plot(params, data = assets.observed)
+
+        r_values = [10^-6, 10^-4, 0.5, 1]
+        r_labels = ["10⁻⁶", "10⁻⁴", "0.5", "1"] 
+
+        # Color palette matching oscillation plots (Dark2_8 categorical)
+        palette = cgrad(:Dark2_8, categorical=true)
+        
+        # Color associations consistent with oscillation plots:
+        # SM/black is separate, here we use colors for r values
+        c_1 = palette[1]  # r = 1e-6
+        c_2 = palette[2]  # r = 1e-4
+        c_3 = palette[3]  # r = 0.5
+        c_4 = palette[4] 
+        c_5 = palette[5] # r = 1
+
+        colors = [c_3, c_4, c_5, c_2]
+
+        # --- compute means and variances ---
+        all_means = []
+        all_variances = []
+
+        forward = get_forward_model(physics, assets)
+
+        for r in r_values
+            p_r = merge(params, (r = Float64(r),))
+            m = mean(forward(p_r))
+            v = var(forward(p_r))
+
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+
+        # --- figure layout with PRD styling (BIGGER VERSION) ---
+       fig = Figure(size=(8.6*72, 6.5*72), font="CMU Serif")  # PRD single column width
+
+        ax = Axis(fig[1,1], 
+            ylabel = "Counts", 
+            xlabelsize = 16,
+            ylabelsize = 16,
+            titlesize = 18,
+            xticklabelsize = 14,
+            yticklabelsize = 14,
+            xgridvisible = true,
+            ygridvisible = true,
+            xgridcolor = :gray90,
+            ygridcolor = :gray90,
+            xticksmirrored = true,
+            yticksmirrored = true,
+            xminorticksvisible = true,
+            yminorticksvisible = true,
+            xminorgridvisible = true,
+            yminorgridvisible = true
+        )
+
+        ax2 = Axis(
+            fig[2,1],
+            xlabel = "E (MeV)",
+            ylabel = "Data / Predictions",
+            xlabelsize = 16,
+            ylabelsize = 16,
+            titlesize = 18,
+            xticklabelsize = 14,
+            yticklabelsize = 14,
+            xgridvisible = true,
+            ygridvisible = true,
+            xgridcolor = :gray90,
+            ygridcolor = :gray90,
+            xticksmirrored = true,
+            yticksmirrored = true,
+            xminorticksvisible = true,
+            yminorticksvisible = true,
+            xminorgridvisible = true,
+            yminorgridvisible = true
+        )
+        
+        # Make second subplot larger
+        rowsize!(fig.layout, 1, Relative(0.45))  # 45% for top
+        rowsize!(fig.layout, 2, Relative(0.55))  # 55% for bottom
+        rowgap!(fig.layout, 5)
+
+        # --- expected spectra ---
+        for (i, r) in enumerate(r_values)
+
+            m = all_means[i]
+            v = all_variances[i]
+            col = colors[i]
+
+            stephist!(
+                ax,
+                assets.energy,
+                weights = m,
+                bins = assets.energy_bins,
+                color = col,
+                label = "Expected r = $(r_labels[i])",
+                linewidth = 2
+            )
+
+            barplot!(
+                ax,
+                assets.energy,
+                m .+ sqrt.(v),
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = m .- sqrt.(v),
+                alpha = 0.25,
+                color = col
+            )
+
+            # --- ratio ---
+            stephist!(
+                ax2,
+                assets.energy,
+                weights = data ./ m,
+                bins = assets.energy_bins,
+                color = col,
+                label = "Ratio r = $(r_labels[i])",
+                linewidth = 2
+            )
+        end
+        
+        # Add gray error band only for the last prediction (r=1)
+        last_idx = length(r_values)
+        m_last = all_means[last_idx]
+        v_last = all_variances[last_idx]
+        
+        barplot!(
+            ax2,
+            assets.energy,
+            1 .+ sqrt.(v_last) ./ m_last,
+            width = diff(assets.energy_bins),
+            gap = 0,
+            fillto = 1 .- sqrt.(v_last) ./ m_last,
+            alpha = 0.25,
+            color = :gray
+        )
+             
+        plot!(
+            ax,
+            assets.energy,
+            data,
+            color = :black,
+            label = "Observed",
+    
+        )
+        hlines!(ax2, 1, color=:black, linestyle=:dash, linewidth=2.5)
+
+        # --- axes cleanup ---
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+
+        ylims!(ax, 0, 60000)
+        ylims!(ax2, 0.9, 1.1)
+
+        # Create legend with box matching PRD style (BIGGER VERSION)
+        legend_elements = []
+        for (i, r) in enumerate(r_values)
+            push!(legend_elements, LineElement(color=colors[i], linewidth=2.5, linestyle=:solid))
+        end
+        push!(legend_elements, MarkerElement(color=:black, marker=:circle, markersize=10))
+        
+        legend_labels = ["r = $(r_labels[i])" for i in 1:length(r_values)]
+        push!(legend_labels, "Observed")
+        
+        Legend(
+            fig[1,1],
+            legend_elements,
+            legend_labels;
+            tellwidth = false,
+            tellheight = false,
+            halign = :right,
+            valign = :top,
+            fontsize = 14,
+            framevisible = true,
+            backgroundcolor = (:white, 0.95),
+            strokecolor = :black,
+            strokewidth = 0.5,
+            title = "r values",
+            titlefont = :bold,
+            titlesize = 16
+        )
+
+        save("/home/sofialon/Newtrinos.jl/scan_plot_paper/dayabay_data_NND_NO_r_new.png", fig)
+        save("/home/sofialon/Newtrinos.jl/scan_plot_paper/dayabay_data_NND_NO_r_new.svg", fig)
+    end
+end
+
+function get_plot(physics, assets) #nNew
+
+    function plot(params, data = assets.observed)
+
+        N_values = [5, 10, 20, 50]
+
+        # Color palette matching oscillation plots (Dark2_8 categorical)
+        palette = cgrad(:Dark2_8, categorical=true)
+        
+        # Color associations consistent with oscillation plots:
+        # N=50 -> palette[1], N=5 -> palette[3], N=10 -> palette[4], N=20 -> palette[5]
+        # But here we have 4 values, so we use palette[1-4]
+        c_1 = palette[1]  # N=50
+        c_2 = palette[2]  # N=5 (or adjust based on preference)
+        c_3 = palette[3]  # N=10
+        c_4 = palette[4]
+        c_5 = palette[5]  # N=20
+
+        # Reorder to match typical presentation (small to large N)
+        # N=5: c_2, N=10: c_3, N=20: c_4, N=50: c_1
+        colors = Dict(
+            5 => c_3,
+            10 => c_4,
+            20 => c_5,
+            50 => c_2
+        )
+
+        # --- compute means and variances ---
+        all_means = Dict()
+        all_variances = Dict()
+
+        forward = get_forward_model(physics, assets)
+       
+        for N in N_values
+            p_N = merge(params, (N = Float64(N),))
+            m = mean(forward(p_N))
+            v = var(forward(p_N))
+            all_means[N] = m
+            all_variances[N] = v
+        end
+
+        # --- figure layout with PRD styling (BIGGER VERSION) ---
+        fig = Figure(size=(8.6*72, 6.5*72), font="CMU Serif")  # PRD single column width
+
+        ax = Axis(fig[1,1], 
+            ylabel = "Counts", 
+            xlabelsize = 16,
+            ylabelsize = 16,
+            titlesize = 18,
+            xticklabelsize = 14,
+            yticklabelsize = 14,
+            xgridvisible = true,
+            ygridvisible = true,
+            xgridcolor = :gray90,
+            ygridcolor = :gray90,
+            xticksmirrored = true,
+            yticksmirrored = true,
+            xminorticksvisible = true,
+            yminorticksvisible = true,
+            xminorgridvisible = true,
+            yminorgridvisible = true
+        )
+
+        ax2 = Axis(
+            fig[2,1],
+            xlabel = "E (MeV)",
+            ylabel = "Data / Predictions",
+            xlabelsize = 16,
+            ylabelsize = 16,
+            titlesize = 18,
+            xticklabelsize = 14,
+            yticklabelsize = 14,
+            xgridvisible = true,
+            ygridvisible = true,
+            xgridcolor = :gray90,
+            ygridcolor = :gray90,
+            xticksmirrored = true,
+            yticksmirrored = true,
+            xminorticksvisible = true,
+            yminorticksvisible = true,
+            xminorgridvisible = true,
+            yminorgridvisible = true
+        )
+        
+        # Make second subplot larger
+        rowsize!(fig.layout, 1, Relative(0.45))  # 45% for top
+        rowsize!(fig.layout, 2, Relative(0.55))  # 55% for bottom
+        rowgap!(fig.layout, 5)
+
+        # --- expected spectra (plot in order of increasing N) ---
+        for N in sort(N_values)
+            m = all_means[N]
+            v = all_variances[N]
+            col = colors[N]
+
+            stephist!(
+                ax,
+                assets.energy,
+                weights = m,
+                bins = assets.energy_bins,
+                color = col,
+                label = "Expected N = $(N)",
+                linewidth = 2
+            )
+
+            barplot!(
+                ax,
+                assets.energy,
+                m .+ sqrt.(v),
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = m .- sqrt.(v),
+                alpha = 0.25,
+                color = col
+            )
+
+            # --- ratio ---
+            stephist!(
+                ax2,
+                assets.energy,
+                weights = data ./ m,
+                bins = assets.energy_bins,
+                color = col,
+                linewidth = 2
+            )
+        end
+        
+        # Add gray error band only for the last prediction (N=50)
+        last_N = sort(N_values)[end]
+        m_last = all_means[last_N]
+        v_last = all_variances[last_N]
+        
+        barplot!(
+            ax2,
+            assets.energy,
+            1 .+ sqrt.(v_last) ./ m_last,
+            width = diff(assets.energy_bins),
+            gap = 0,
+            fillto = 1 .- sqrt.(v_last) ./ m_last,
+            alpha = 0.25,
+            color = :gray
+        )
+             
+        plot!(
+            ax,
+            assets.energy,
+            data,
+            color = :black,
+            label = "Observed"      
+              )
+
+
+        hlines!(ax2, 1, color=:black, linestyle=:dash, linewidth=2)
+
+        # --- axes cleanup ---
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+
+        ylims!(ax, 0, 60000)
+        ylims!(ax2, 0.9, 1.2)
+
+        # Create legend with box matching PRD style (BIGGER VERSION)
+        legend_elements = []
+        for N in sort(N_values)
+            push!(legend_elements, LineElement(color=colors[N], linewidth=2.5, linestyle=:solid))
+        end
+        push!(legend_elements, MarkerElement(color=:black, marker=:circle, markersize=10))
+        
+        legend_labels = ["N = $(N)" for N in sort(N_values)]
+        push!(legend_labels, "Observed")
+        
+        Legend(
+            fig[1,1],
+            legend_elements,
+            legend_labels;
+            tellwidth = false,
+            tellheight = false,
+            halign = :right,
+            valign = :top,
+            labelsize = 14,
+            framevisible = true,
+            backgroundcolor = (:white, 0.95),
+            strokecolor = :black,
+            strokewidth = 0.5,
+            title = "N values",
+            titlefont = :bold,
+            titlesize = 16
+        )
+
+        save("/home/sofialon/Newtrinos.jl/scan_plot_paper/dayabay_data_NND_NO_N_new.png", fig)
+        save("/home/sofialon/Newtrinos.jl/scan_plot_paper/dayabay_data_NND_NO_N_new.svg", fig)
+    end
+end
+#=
+function get_plotrr(physics, assets)
+
+    function plot(params, data = assets.observed)
+
+        r_values = [10^-6, 10^-4, 0.5, 1]
+        r_labels = ["10⁻⁶", "10⁻⁴", "0.5", "1"] 
+
+        # Color palette matching oscillation plots (Dark2_8 categorical)
+        palette = cgrad(:Dark2_8, categorical=true)
+        
+        # Color associations consistent with oscillation plots:
+        # SM/black is separate, here we use colors for r values
+        c_1 = palette[1]  # r = 1e-6
+        c_2 = palette[2]  # r = 1e-4
+        c_3 = palette[3]  # r = 0.5
+        c_4 = palette[4] 
+        c_5 = palette[5] # r = 1
+
+        colors = [c_3, c_4, c_5, c_2]
+
+        # --- compute means and variances ---
+        all_means = []
+        all_variances = []
+
+        forward = get_forward_model(physics, assets)
+
+        for r in r_values
+            p_r = merge(params, (r = Float64(r),))
+            m = mean(forward(p_r))
+            v = var(forward(p_r))
+
+            push!(all_means, m)
+            push!(all_variances, v)
+        end
+
+        # --- figure layout with larger second subplot ---
+        f = Figure(resolution=(850, 600), font="CMU Serif")
+
+        ax = Axis(f[1,1], 
+            ylabel = "Counts", 
+            #title = "Daya Bay Data and Predictions - Dirac - NO, N=20",
+            xlabelsize=28,
+            ylabelsize=28,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+
+        ax2 = Axis(
+            f[2,1],
+            xlabel = "E (MeV)",
+            ylabel = "Data / Predictions",
+            xlabelsize=28,
+            ylabelsize=22,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+        
+        # Make second subplot larger
+        rowsize!(f.layout, 1, Relative(0.45))  # 45% for top
+        rowsize!(f.layout, 2, Relative(0.55))  # 55% for bottom
+        rowgap!(f.layout, 5)
+
+        # --- expected spectra ---
+        for (i, r) in enumerate(r_values)
+
+            m = all_means[i]
+            v = all_variances[i]
+            col = colors[i]
+
+            stephist!(
+                ax,
+                assets.energy,
+                weights = m,
+                bins = assets.energy_bins,
+                color = col,
+                label = "Expected r = $(r_labels[i])"
+            )
+
+            barplot!(
+                ax,
+                assets.energy,
+                m .+ sqrt.(v),
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = m .- sqrt.(v),
+                alpha = 0.25,
+                color = col
+            )
+
+            # --- ratio ---
+            stephist!(
+                ax2,
+                assets.energy,
+                weights = data ./ m,
+                bins = assets.energy_bins,
+                color = col,
+                label = "Ratio r = $(r_labels[i])"  
+            )
+        end
+        
+        # Add gray error band only for the last prediction (r=1)
+        last_idx = length(r_values)
+        m_last = all_means[last_idx]
+        v_last = all_variances[last_idx]
+        
+        barplot!(
+            ax2,
+            assets.energy,
+            1 .+ sqrt.(v_last) ./ m_last,
+            width = diff(assets.energy_bins),
+            gap = 0,
+            fillto = 1 .- sqrt.(v_last) ./ m_last,
+            alpha = 0.25,
+            color = :gray
+        )
+             
+        plot!(
+            ax,
+            assets.energy,
+            data,
+            color = :black,
+            label = "Observed"
+        )
+        hlines!(ax2, 1, color=:black, linestyle=:dash, linewidth=2)
+
+        # --- axes cleanup ---
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+
+        ylims!(ax, 0, 60000)
+        ylims!(ax2, 0.9, 1.1)
+
+        axislegend(ax, framevisible=false, position=:rt, labelsize=28)
+
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_r_new.png", f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_r_new.svg", f)
+    end
+end
+function get_plot(physics, assets) #nNew
+
+    function plot(params, data = assets.observed)
+
+        N_values = [5, 10, 20, 50]
+
+        # Color palette matching oscillation plots (Dark2_8 categorical)
+        palette = cgrad(:Dark2_8, categorical=true)
+        
+        # Color associations consistent with oscillation plots:
+        # N=50 -> palette[1], N=5 -> palette[3], N=10 -> palette[4], N=20 -> palette[5]
+        # But here we have 4 values, so we use palette[1-4]
+        c_1 = palette[1]  # N=50
+        c_2 = palette[2]  # N=5 (or adjust based on preference)
+        c_3 = palette[3]  # N=10
+        c_4 = palette[4]
+        c_5 = palette[5]  # N=20
+
+        # Reorder to match typical presentation (small to large N)
+        # N=5: c_2, N=10: c_3, N=20: c_4, N=50: c_1
+        colors = Dict(
+            5 => c_3,
+            10 => c_4,
+            20 => c_5,
+            50 => c_2
+        )
+
+        # --- compute means and variances ---
+        all_means = Dict()
+        all_variances = Dict()
+
+        forward = get_forward_model(physics, assets)
+       
+        for N in N_values
+            p_N = merge(params, (N = Float64(N),))
+            m = mean(forward(p_N))
+            v = var(forward(p_N))
+            all_means[N] = m
+            all_variances[N] = v
+        end
+
+        # --- figure layout with larger second subplot ---
+        f = Figure(resolution=(850, 600), font="CMU Serif")
+
+        ax = Axis(f[1,1], 
+            ylabel = "Counts", 
+            #title = "Daya Bay Data and Predictions - Dirac - NO, r=1",
+            xlabelsize=28,
+            ylabelsize=28,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+
+        ax2 = Axis(
+            f[2,1],
+            xlabel = "Eₚ (MeV)",
+            ylabel = "Data / Predictions",
+            xlabelsize=28,
+            ylabelsize=22,
+            titlesize=26,
+            xticklabelsize=20,
+            yticklabelsize=20,
+            xgridvisible=true,
+            ygridvisible=true,
+            xgridcolor=:gray90,
+            ygridcolor=:gray90,
+            xticksmirrored=true,
+            yticksmirrored=true
+        )
+        
+        # Make second subplot larger
+        rowsize!(f.layout, 1, Relative(0.45))  # 45% for top
+        rowsize!(f.layout, 2, Relative(0.55))  # 55% for bottom
+        rowgap!(f.layout, 5)
+
+        # --- expected spectra (plot in order of increasing N) ---
+        for N in sort(N_values)
+            m = all_means[N]
+            v = all_variances[N]
+            col = colors[N]
+
+            stephist!(
+                ax,
+                assets.energy,
+                weights = m,
+                bins = assets.energy_bins,
+                color = col,
+                
+                label = "Expected N = $(N)"
+            )
+
+            barplot!(
+                ax,
+                assets.energy,
+                m .+ sqrt.(v),
+                width = diff(assets.energy_bins),
+                gap = 0,
+                fillto = m .- sqrt.(v),
+                alpha = 0.25,
+                color = col
+            )
+
+            # --- ratio ---
+            stephist!(
+                ax2,
+                assets.energy,
+                weights = data ./ m,
+                bins = assets.energy_bins,
+                color = col,
+               
+            )
+        end
+        
+        # Add gray error band only for the last prediction (N=50)
+        last_N = sort(N_values)[end]
+        m_last = all_means[last_N]
+        v_last = all_variances[last_N]
+        
+        barplot!(
+            ax2,
+            assets.energy,
+            1 .+ sqrt.(v_last) ./ m_last,
+            width = diff(assets.energy_bins),
+            gap = 0,
+            fillto = 1 .- sqrt.(v_last) ./ m_last,
+            alpha = 0.25,
+            color = :gray
+        )
+             
+        plot!(
+            ax,
+            assets.energy,
+            data,
+            color = :black,
+            label = "Observed"
+        )
+        hlines!(ax2, 1, color=:black, linestyle=:dash, linewidth=2)
+
+        # --- axes cleanup ---
+        ax.xticksvisible = false
+        ax.xticklabelsvisible = false
+
+        xlims!(ax, minimum(assets.energy_bins), maximum(assets.energy_bins))
+        xlims!(ax2, minimum(assets.energy_bins), maximum(assets.energy_bins))
+
+        ylims!(ax, 0, 60000)
+        ylims!(ax2, 0.9, 1.2)
+
+        axislegend(ax, framevisible=false, position=:rt, labelsize=28)
+
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_N_new.png", f)
+        save("/home/sofialon/Newtrinos.jl/plots_svg/dayabay/dayabay_data_NND_NO_N_new.svg", f)
+    end
+end=#
 end

@@ -1,0 +1,4 @@
+Loading julia/1.11.7
+  Loading requirement: intel/2024.1.0 intel-mpi/2021.12.0
+/var/slurmd-cm4/job174245/slurm_script: line 26: 215912 Killed                  julia $MYPROG $SLURM_ARRAY_TASK_ID 961
+slurmstepd: error: Detected 1 oom-kill event(s) in StepId=174245.batch cgroup. Some of your processes may have been killed by the cgroup out-of-memory handler.

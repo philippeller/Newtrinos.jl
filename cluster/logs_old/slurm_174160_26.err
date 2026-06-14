@@ -1,0 +1,10 @@
+Loading julia/1.11.7
+  Loading requirement: intel/2024.1.0 intel-mpi/2021.12.0
+[ Info: Loading juno data
+[ Info: Loading TAO data
+[ Info: Loading juno data
+[ Info: Loading TAO data
+[ Info: Poisson-based model. Rounding Asimov data to nearest integer.
+[ Info: Poisson-based model. Rounding Asimov data to nearest integer.
+[ Info: Setting new default BAT context BATContext{Float64}(Random123.Philox4x{UInt64, 10}(0x2d646060a457296e, 0xb88a002305f2ff2a, 0x11209c88d26f6a08, 0x41e770af66b541ad, 0xc2d18b9ef5d93190, 0x6b5bdb65c1bb43c2, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0), HeterogeneousComputing.CPUnit(), BAT._NoADSelected())
+[ Info: Running Optimization for point  N: 2 m₀: 0.01 r: 0.04641588833612786 Δm²₂₁: 7.53e-5 Δm²₃₁: 0.0024752999999999997 δCP: 1.0 η: 1.01 θ₁₂: 0.5872523687443223 θ₁₃: 0.1454258194533693 θ₂₃: 0.8556288707523761

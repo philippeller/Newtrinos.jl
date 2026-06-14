@@ -4,17 +4,25 @@
 # Each job computes ONE point
 
 #SBATCH --job-name=nnd_profile
-#SBATCH --array=1-961%25
+#SBATCH --array=1-25
 #SBATCH --output=cluster/logs/slurm_%A_%a.out
 #SBATCH --error=cluster/logs/slurm_%A_%a.err
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=2G
+#SBATCH --get-user-env
+#SBATCH --export=NONE
+
+
+#SBATCH --clusters=cm4
+#SBATCH --partition=cm4_tiny
+#SBATCH --qos=cm4_tiny
+
+#SBATCH --cpus-per-task=17
+#SBATCH --mem=50G
 #SBATCH --time=1:00:00
 
-# Load required modules (adjust for your cluster)
-# module load julia/1.9.0
+module load slurm_setup
+module load julia/1.11.7
 
-# Run the worker script
-echo "Starting job $SLURM_ARRAY_TASK_ID at $(date)"
-julia --project=@. cluster/single_point.jl $SLURM_ARRAY_TASK_ID 961
-echo "Finished job $SLURM_ARRAY_TASK_ID at $(date)"
+export JULIA_PROJECT=/dss/dsshome1/08/go67jac2/julia/my_env
+
+MYPROG=/dss/dsshome1/08/go67jac2/cluster/single_point.jl
+julia $MYPROG $SLURM_ARRAY_TASK_ID 25
