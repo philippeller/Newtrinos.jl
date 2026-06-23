@@ -8,7 +8,7 @@ Neutrino oscillations arise because the **flavor eigenstates** $|\nu_\alpha\rang
 A neutrino produced in flavor state $\alpha$ is a coherent superposition of mass eigenstates:
 
 $$
-\boxed{|\nu_\alpha\rangle = \sum_{i=1}^{3} U_{\alpha i}\,|\nu_i\rangle},
+|\nu_\alpha\rangle = \sum_{i=1}^{3} U_{\alpha i}\,|\nu_i\rangle,
 $$
 
 where $U$ is the **Pontecorvo-Maki-Nakagawa-Sakata (PMNS)** matrix. Conversely:

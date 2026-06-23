@@ -14,6 +14,48 @@ using PairPlots
 
 import Newtrinos.NewtrinosResult
 
+"""
+    plot!(ax, result::NewtrinosResult;
+          max_llh=maximum(result.values.log_posterior),
+          levels=1 .- 2*ccdf(Normal(), 1:3),
+          label=nothing, color=:blue, linestyle=:solid,
+          cmap=:Blues, filled=false, edge=true,
+          transform_x=identity, transform_y=identity) -> Axis
+
+Plot a [`NewtrinosResult`](@ref) into an existing `Makie` `Axis`.
+
+Dispatches on the dimensionality of `result.axes`:
+- **1D**: plots `-2Δllh` as a line with horizontal dotted lines at the
+  requested confidence levels.
+- **2D**: plots confidence contours via `contour!` and optionally a filled
+  version via `contourf!`.
+
+Confidence levels are converted to `-2Δllh` thresholds using the appropriate
+chi-squared distribution (`Chisq(1)` for 1D, `Chisq(2)` for 2D).
+
+# Arguments
+- `ax::Axis`: the Makie axis to plot into.
+- `result::NewtrinosResult`: scan or profile result to visualize.
+- `max_llh`: reference log-posterior value for computing `-2Δllh`; defaults
+  to the maximum in `result.values.log_posterior`.
+- `levels`: confidence levels to draw contours at; defaults to 1σ, 2σ, 3σ
+  Gaussian intervals.
+- `label`: legend label attached to the line or contour; default `nothing`.
+- `color`: line/contour color; default `:blue`.
+- `linestyle`: line style; default `:solid`.
+- `cmap`: colormap used for the filled contours (2D only); default `:Blues`.
+- `filled::Bool`: if `true`, draw filled contours via `contourf!` (2D only);
+  default `false`.
+- `edge::Bool`: if `true`, draw contour edges via `contour!` (2D only);
+  default `true`.
+- `transform_x`: function applied to the first axis before plotting;
+  default `identity`.
+- `transform_y`: function applied to the second axis before plotting;
+  default `identity`.
+
+# Returns
+The modified `Axis` `ax`.
+"""
 function plot!(ax, result::NewtrinosResult; max_llh=maximum(result.values.log_posterior), levels=1 .- 2*ccdf(Normal(), 1:3), label=nothing, color=:blue, linestyle=:solid, cmap=:Blues, filled=false, edge=true, transform_x=identity, transform_y=identity)
     neg2dllh = 2*(max_llh .- result.values.log_posterior)
 
@@ -52,6 +94,12 @@ function plot!(ax, result::NewtrinosResult; max_llh=maximum(result.values.log_po
     ax
 end
 
+"""
+    plot(result::NewtrinosResult; kwargs...) -> Figure
+
+Convenience wrapper that creates a new [`Figure`] and [`Axis`] and calls
+[`plot!`](@ref) with all `kwargs`. Returns the `Figure`.
+"""
 function plot(result::NewtrinosResult; kwargs...)
     fig = Figure()
     ax = Axis(fig[1, 1])

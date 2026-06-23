@@ -24,12 +24,13 @@ makedocs(
             "Experiments" => "tutorials/experiments.md",
             "Configure an experiment" => "tutorials/configure_experiment.md",
             "Analyse data" => "tutorials/analyse_data.md",
-            "Analysis CLI Reference" => "examples/cli.md",
+            "Analysis CLI Reference" => "tutorials/cli.md",
+            "Automatic Differentiation" => "tutorials/autodiff.md"
         ], 
         "Examples" => [ 
-            "Single Experiment" => "examples/single_experiment.md",
-            "Joint Analysis" => "examples/joint_analysis.md",
+            "Single Experiment" => "examples/single_experiment.md", 
             "Custom Physics" => "examples/custom_physics.md",
+            "Joint Analysis" => "examples/joint_analysis.md",
             "Performance" => "examples/performance.md",
         ],
         "API Documentation" => [

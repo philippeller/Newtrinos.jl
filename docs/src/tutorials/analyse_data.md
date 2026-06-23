@@ -75,7 +75,7 @@ A grid scan evaluates the likelihood on a fixed Cartesian grid of parameter valu
 
 ```julia
 # Define the scan grid: parameter name => number of evenly spaced points
-vars_to_scan = OrderedDict(:θ₂₃ => 21, :Δm²₃₁ => 21)
+vars_to_scan = OrderedDict(:θ₂₃ => 21, :Δm²₃₁ => 11)
 
 result = Newtrinos.scan(likelihood, priors_cond, vars_to_scan, params)
 ```
@@ -243,3 +243,16 @@ For the analysis API reference, see the [Analysis API Reference](../api/analysis
 Now you're ready to work with the Newtrinos.jl package by yourself. If you want to look at some further examples you can find them at the examples section. Have fun and play around to explore all the functionalities! 
 
 If you want to contribute to the package functionality or have some proposals for improvement, have a look at the [contribution guidelines](../contribution_guidelines.md).
+
+## Plotting Results
+
+You can use the built in `plot` function of Newtrinos.jl to visualize your results. For a 1D likelihood scan or profile it plots the $2 \Delta \text{LLH}$ against the scanned parameter values and also adds lines for the confidence levels for $1\sigma, 2\sigma, and 3\sigma$. For a 2D likelihood scan or profile it plots the $1\sigma, 2\sigma, and 3\sigma$ confidence contours for the scan grid values.
+
+For our 2D example from the likelihood profile, plotting the result just takes
+
+```julia
+using CairoMakie
+plot(result)
+```
+
+You can modify the appearing of the plot with some options. For more information have a look at the documentation.

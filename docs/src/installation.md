@@ -9,19 +9,16 @@ Download and install it from the [official downloads page](https://julialang.org
 
 ## 2. Install Newtrinos.jl
 
-Newtrinos.jl is not yet registered in the Julia General registry, so it must be
-installed directly from GitHub.
+Newtrinos.jl is not yet registered in the Julia General registry, so it must be installed directly from GitHub.
 
-Open a Julia session by running `julia` in your terminal (or launching the Julia
-application), then run:
+Open a Julia session by running `julia` in your terminal (or launching the Julia application), then run:
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/philippeller/Newtrinos.jl.git")
 ```
 
-Julia will download the package and all its dependencies automatically.
-This may take a few minutes the first time.
+Julia will download the package and all its dependencies automatically. This may take a few minutes the first time.
 
 !!! note
     You only need to do this once. After installation the package is available
@@ -41,8 +38,7 @@ using Newtrinos
 
 ## Development Installation (optional)
 
-If you want to modify the source code or contribute to Newtrinos.jl, clone the
-repository and activate it as a local project.
+If you want to modify the source code or contribute to Newtrinos.jl, clone the repository and activate it as a local project.
 
 **Step 1 — Clone the repository:**
 
