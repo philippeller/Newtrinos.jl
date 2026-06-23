@@ -57,5 +57,10 @@ grad.Δm²₃₁  # ∂llh/∂Δm²₃₁
 The gradient calculation can be automatically activated in likelihood scans by setting `gradient_map=true`. Then, at each grid point the ForwardDiff.gradient is evaluated and the per-parameter gradient is included in the `NewtrinosResult.values`.
 
 ```julia
+using DataStructures
+vars_to_scan=OrderedDict(:θ₂₃ => 21,)
 result=Newtrinos.scan(likelihood, priors, vars_to_scan, params, gradient_map=true)
+
+#acces gradient of parameter via result.values.paramter_grad
+result.values.θ₂₃_grad
 ```

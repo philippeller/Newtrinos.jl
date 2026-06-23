@@ -116,7 +116,7 @@ This merged `params` is the full parameter vector expected by `forward_model` an
 `forward_model(params)` maps a parameter vector to a statistical distribution over the observed data space. For most experiments this is a `ProductDistribution` of independent Poisson distributions — one per histogram bin.
 
 ```julia
-using DensityInterface
+using DensityInterface, Statistics
 
 exp    = Newtrinos.deepcore.configure()
 params = Newtrinos.get_params(exp)
@@ -150,11 +150,17 @@ fig = exp.plot(params)
 
 # Save to file
 save("deepcore_comparison.png", fig)
+```
 
+![png](./deepcore_comparison.png)
+
+```julia
 # Plot model vs a custom data array (e.g. Asimov data)
 asimov = Newtrinos.generate_asimov_data(exp, params)
 fig_asimov = exp.plot(params, asimov)
 ```
+
+![png](./experiment_prediction_vs_data_plot.png)
 
 ---
 

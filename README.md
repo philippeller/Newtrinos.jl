@@ -115,16 +115,18 @@ We can also run a likelihood analysis to construct confidence contours in the (�
 
 ```julia
 result = Newtrinos.scan(likelihood, priors, (θ₂₃=31, Δm²₃₁=31), mle_result)
+bf=Newtrinos.bestfit(result) # extract best fit result
 ```
 ```julia
 using CairoMakie
 fig = Figure()
 ax = Axis(fig[1, 1], xlabel="θ₂₃", ylabel="Δm²₃₁")
-plot!(ax, result, levels=[0, 0.68, 0.9, 0.99]) # 68%, 90%, and 99% CL 
+plot!(ax, result, levels=[0, 0.68, 0.9, 0.99], filled=true, color=:black, cmap=Reverse(:Blues)) # 68%, 90%, and 99% CL
+scatter!(ax, bf.θ₂₃, bf.Δm²₃₁, marker=:star5, color=:red) 
 fig
 ```
 
-![png](./README_files/README_quick_example.png)
+![png](./README_files/README_quick_example.png) 
 
 ## Further Reading / Examples
 

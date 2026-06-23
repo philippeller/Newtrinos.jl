@@ -66,11 +66,29 @@ Extract parameters and evaluate the likelihood:
 
 ```julia
 params = Newtrinos.get_params(experiments)
+priors = Newtrinos.get_priors(experiments)
 likelihood = Newtrinos.generate_likelihood(experiments)
-
-logdensityof(likelihood, params)  # returns a negative Float64 — the log-likelihood at the nominal parameters
 ```
 
+### Quick likelihood scan
+We can span a 2D grid of $\theta_{23}$ and $\Delta m^2_{31}$ values and evaluate the likelihood at each grid-point while keeping the other parameters at their default values. 
+
+```julia 
+using DataStructures
+vars_to_scan = OrderedDict(:Δm²₃₁ => 21, :θ₂₃ => 21) #21 x 21 scanpoints
+result = Newtrinos.scan(likelihood, priors, vars_to_scan, params)
+```
+
+We can also plot a CL contour plot with the built-in `plot` function of Newtrinos.jl.
+
+```julia
+using CairoMakie
+fig = Figure()
+ax = Axis(fig[1, 1], xlabel="θ₂₃", ylabel="Δm²₃₁")
+plot!(ax, result, levels=[0, 0.68, 0.9, 0.99], filled=true, color=:black, cmap=Reverse(:Blues))
+fig
+```
+![png](./first_example_plot.png)
 
 ## Next Step
-- go to the [tutorials](tutorials/) and work through the features in more detail to understand how the package works and to be able to do own analyses with Newtrinos.jl
+Go to the [tutorials](tutorials/) and work through the features in more detail to understand how the package works and to be able to do own analyses with Newtrinos.jl

@@ -7,33 +7,35 @@ Neutrino oscillations arise because the **flavor eigenstates** $|\nu_\alpha\rang
 
 A neutrino produced in flavor state $\alpha$ is a coherent superposition of mass eigenstates:
 
-$$
+```math
 |\nu_\alpha\rangle = \sum_{i=1}^{3} U_{\alpha i}\,|\nu_i\rangle,
-$$
+```
 
 where $U$ is the **Pontecorvo-Maki-Nakagawa-Sakata (PMNS)** matrix. Conversely:
 
-$$
+```math
 |\nu_i\rangle = \sum_{\alpha = e,\mu,\tau} U_{\alpha i}^*\,|\nu_\alpha\rangle,
-$$
+```
 
 For antineutrinos, $U \to U^*$:
-$$
+
+```math
 |\bar{\nu}_\alpha\rangle = \sum_i U_{\alpha i}^*\,|\bar{\nu}_i\rangle.
-$$
+```
 
 ## PMNS Matrix
 
 The PMNS matrix relates flavor and mass eigenstates via:
 
-$$
+```math
 \begin{pmatrix} \nu_e \\ \nu_\mu \\ \nu_\tau \end{pmatrix} = U_{\text{PMNS}} \begin{pmatrix} \nu_1 \\ \nu_2 \\ \nu_3 \end{pmatrix}
-$$
+```
 
 it is parametrized as 
-$$
-U_{\text{PMNS}} = \underbrace{\begin{pmatrix} 1 & 0 & 0 \\ 0 & c_{23} & s_{23} \\ 0 & -s_{23} & c_{23} \end{pmatrix}}_{R_{23}} \underbrace{\begin{pmatrix} c_{13} & 0 & s_{13}e^{-i\delta} \\ 0 & 1 & 0 \\ -s_{13}e^{i\delta} & 0 & c_{13} \end{pmatrix}}_{R_{13}(\delta)} \underbrace{\begin{pmatrix} c_{12} & s_{12} & 0 \\ -s_{12} & c_{12} & 0 \\ 0 & 0 & 1 \end{pmatrix}}_{R_{12}} \cdot P_M, 
-$$
+
+```math
+U_{\text{PMNS}} = \underbrace{\begin{pmatrix} 1 & 0 & 0 \\ 0 & c_{23} & s_{23} \\ 0 & -s_{23} & c_{23} \end{pmatrix}}_{R_{23}} \underbrace{\begin{pmatrix} c_{13} & 0 & s_{13}e^{-i\delta} \\ 0 & 1 & 0 \\ -s_{13}e^{i\delta} & 0 & c_{13} \end{pmatrix}}_{R_{13}(\delta)} \underbrace{\begin{pmatrix} c_{12} & s_{12} & 0 \\ -s_{12} & c_{12} & 0 \\ 0 & 0 & 1 \end{pmatrix}}_{R_{12}} \cdot P_M,
+```
 
 where $c_{ij} = \cos(\theta_{ij}), s_{ij} = \sin(\theta_{ij}),$ and $P_M = \text{diag}(1, e^{i\alpha/2}, e^{i\beta/2})$ contains the **Majorana phases**.
 
@@ -44,64 +46,65 @@ For simplicity we will start with the two flavour case and then go on with three
 
 Consider only two flavors ($\nu_\alpha, \nu_\beta$) and two mass eigenstates ($\nu_1, \nu_2$) related by a single mixing angle $\theta$:
 
-$$
+```math
 \begin{pmatrix} \nu_\alpha \\ \nu_\beta \end{pmatrix} = \begin{pmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{pmatrix} \begin{pmatrix} \nu_1 \\ \nu_2 \end{pmatrix}.
-$$
+```
 
 At $t = 0$, a $\nu_\alpha$ is produced:
 
-$$
+```math
 |\nu_\alpha(0)\rangle = \cos\theta\,|\nu_1\rangle + \sin\theta\,|\nu_2\rangle.
-$$
+```
 
 As the neutrino propagates, each mass eigenstate propagates differently as a plane wave:
 
-$$
+```math
 |\nu_i(t)\rangle = e^{-iE_i t}\,|\nu_i\rangle.
-$$
+```
 
 Since $m_\nu \ll E_\nu$ its common to use the **ultra-relativistic limit**:
 
-$$
+```math
 E_i = \sqrt{p^2 + m_i^2} \approx p + \frac{m_i^2}{2p} \approx E + \frac{m_i^2}{2E},
-$$
+```
 
 where we identify $p \approx E$ for ultra-relativistic neutrinos (We work in natural units $\hbar = c = 1$).
 
 The flavour transition amplitude is then given by 
 
-$$
+```math
 \langle\nu_\beta(t)|\nu_\alpha\rangle = -\sin\theta\cos\theta\,e^{-iE_1 t} + \sin\theta\cos\theta\,e^{-iE_2 t} = \sin\theta\cos\theta\left(e^{-iE_2 t} - e^{-iE_1 t}\right).
-$$ 
+```
 
 This yields the **transition probability**
 
-$$
+```math
 P(\nu_\alpha \to \nu_\beta) = |\langle\nu_\beta(t)|\nu_\alpha\rangle|^2,
-$$
+```
 
-$$
+```math
 \boxed{P(\nu_\alpha \to \nu_\beta) = \sin^2(2\theta)\,\sin^2\!\left(\frac{\Delta m^2 L}{4E}\right)},
-$$
+```
 
 where $\Delta m^2 = m_2^2 - m_1^2$ and $L$ is the source-detector distance (using $v_\nu \approx c \rightarrow t \approx L$).
 
 The survival probability is: 
-$$
+
+```math
 P(\nu_\alpha \to \nu_\alpha) = 1 - \sin^2(2\theta)\,\sin^2\!\left(\frac{\Delta m^2 L}{4E}\right).
-$$
+```
 
 The oscillation length is the distance over which the oscillation phase advances by $\pi$:
 
-$$
+```math
 L_{\text{osc}} = \frac{4\pi E}{\Delta m^2}
-$$
+```
 
 In **practical (SI-like) units**:
 
-$$
+```math
 \boxed{L_{\text{osc}} = 2.48\,\frac{E\,[\text{GeV}]}{\Delta m^2\,[\text{eV}^2]}\ \text{km}}
-$$
+```
 
 Typical Oscillation Lengths are: 
     - **Solar neutrinos** ($\Delta m^2_{21} \sim 7.5 \times 10^{-5}$ eV², $E \sim 1$ MeV): $L_{\text{osc}} \sim 33$ km
@@ -110,9 +113,9 @@ Typical Oscillation Lengths are:
 
 Restoring $\hbar$ and $c$ we get the practical transition probability with SI Units:
 
-$$
+```math
 P(\nu_\alpha \to \nu_\beta) = \sin^2(2\theta)\,\sin^2\!\left(1.27\,\frac{\Delta m^2\,[\text{eV}^2]\cdot L\,[\text{km}]}{E\,[\text{GeV}]}\right)
-$$
+```
 
 The factor $1.27$ comes from $\frac{1}{4}\frac{(\hbar c)}{(\text{GeV}\cdot\text{km}/\text{eV}^2)}$.
 
@@ -120,26 +123,27 @@ The factor $1.27$ comes from $\frac{1}{4}\frac{(\hbar c)}{(\text{GeV}\cdot\text{
 
 A neutrino produced as flavor $\alpha$ has a probability of being detected as flavor $\beta$ after propagating a distance $L$:
 
-$$
+```math
 P(\nu_\alpha \to \nu_\beta) = \left|\sum_i U_{\alpha i}^* U_{\beta i} e^{-im_i^2 L/(2E)}\right|^2
-$$
+```
 
-$$
- = \delta_{\alpha\beta} - 4\sum_{i>j}\text{Re}(U_{\alpha i}^*U_{\beta i}U_{\alpha j}U_{\beta j}^*)\sin^2\!\left(\frac{\Delta m^2_{ij}L}{4E}\right)
+```math
+= \delta_{\alpha\beta} - 4\sum_{i>j}\text{Re}(U_{\alpha i}^*U_{\beta i}U_{\alpha j}U_{\beta j}^*)\sin^2\!\left(\frac{\Delta m^2_{ij}L}{4E}\right)
 + 2\sum_{i>j}\text{Im}(U_{\alpha i}^*U_{\beta i}U_{\alpha j}U_{\beta j}^*)\sin\!\left(\frac{\Delta m^2_{ij}L}{2E}\right)
-$$
+```
 
 In the three-flavour framework it is possible to get CP violating processes due to the CP phase $\delta$. Generally CP violation can only be observed in comparison of particle $\leftrightarrow$ anti-particle. For $\nu \to \bar{\nu}$, only the last term changes sign (since $U \to U^*$), giving:
 
-$$
+```math
 P(\nu_\alpha \to \nu_\beta) \neq P(\bar{\nu}_\alpha \to \bar{\nu}_\beta) \quad \text{if } \delta_{CP} \neq 0, \pi
-$$
+```
 
 The CP asymmetry is:
 
-$$
+```math
 A_{CP}^{\alpha\beta} \propto P(\nu_\alpha \to \nu_\beta) - P(\bar{\nu}_\alpha \to \bar{\nu}_\beta) \propto J_{CP}\sin\!\left(\frac{\Delta m^2_{21}L}{4E}\right)\sin\!\left(\frac{\Delta m^2_{31}L}{4E}\right)\sin\!\left(\frac{\Delta m^2_{32}L}{4E}\right)
-$$
+```
+
 where $J_{CP} = \frac{1}{8}\sin 2\theta_{12}\sin 2\theta_{13}\sin 2\theta_{23}\cos\theta_{13}\sin\delta_{CP}$ is the leptonic Jarlskog invariant. 
 
 With this, it can also be seen that for $\alpha = \beta$ we get that $U_{\alpha i}^*U_{\beta i}U_{\alpha j}U_{\beta j}^* = |U_{\alpha i}|^2 |U_{\alpha j}|^2$ is real. Thus, we get $P(\nu_\alpha \to \nu_\beta) = P(\bar{\nu}_\alpha \to \bar{\nu}_\beta)$ and $A_{CP}^{\alpha\alpha}=0$. This means that CP violation in neutrino oscillations can only be measured with appearance experiments ($\alpha \neq \beta$).
@@ -157,37 +161,37 @@ The plane-wave derivation above has conceptual issues:
 
 **Solution**: Model each mass eigenstate as a Gaussian wave packet with spatial width $\sigma_x$:
 
-$$
+```math
 |\nu_i(x,t)\rangle \propto \int dp\, \exp\!\left(-\frac{(p-p_0)^2}{4\sigma_p^2}\right)\exp\!\left(i(px - E_i(p)t)\right),
-$$
+```
 
 where $\sigma_p \sim 1/(2\sigma_x)$ by the uncertainty principle. 
 
 Now each packet has a group velocity $v_i \approx 1-\frac{m_i^2}{2E^2}$ yielding a velocity difference 
 
-$$
+```math
 \Delta v_{ij} = \frac{\Delta m^2_{ij}}{2E^2}.
-$$
+```
 
 The wave packets of $\nu_i$ and $\nu_j$ overlap as long as their separation $\Delta v_{ij} \cdot t$ is smaller than the packet width $\sigma_x$. The **coherence length** is:
 
-$$
+```math
 \boxed{L_{\text{coh}} = \frac{4\sqrt{2}\,E^2\,\sigma_x}{\Delta m^2}}
-$$
+```
 
 When $L \gg L_{\text{coh}}$, the wave packets no longer overlap and the interference (oscillation) term averages to zero. The oscillation probability becomes:
 
-$$
+```math
 P(\nu_\alpha \to \nu_\beta) \xrightarrow{L \gg L_{\text{coh}}} \sum_i |U_{\alpha i}|^2 |U_{\beta i}|^2
-$$
+```
 
 This is the **incoherent (averaged) limit**.
 
 Including wave packet effects, the probability becomes:
 
-$$
+```math
 P(\nu_\alpha \to \nu_\beta) = \sum_i |U_{\alpha i}|^2|U_{\beta i}|^2 + 2\,\text{Re}\sum_{i>j} U_{\alpha i}^*U_{\beta i}U_{\alpha j}U_{\beta j}^*\, e^{-i\Delta m^2_{ij}L/2E}\, \exp\!\left(-\frac{L^2}{L_{\text{coh}}^2}\right)
-$$
+```
 
 The Gaussian damping factor $\exp(-L^2/L_{\text{coh}}^2)$ suppresses the oscillatory terms at large $L$.
 
@@ -203,17 +207,17 @@ In the presence of a medium, the neutrino effective Hamiltonian receives an addi
 
 The dominant contribution comes from CC scattering of $\nu_e$ on electrons (only $\nu_e$ participates in CC scattering at low energies). Adding this to the vacuum Hamiltonian gives:
 
-$$
+```math
 H_{\text{eff}} = H_{\text{vac}} + V,\qquad V = \sqrt{2}\,G_F\,n_e\,\text{diag}(1,\,0,\,0),
-$$
+```
 
 where $n_e$ is the local electron number density and $G_F$ is the Fermi constant.
 
 For two flavors, an **MSW resonance** occurs when the matter potential exactly cancels the vacuum splitting, maximizing the effective mixing angle in matter regardless of the vacuum value of $\theta$:
 
-$$
+```math
 \Delta m^2\cos 2\theta = 2\sqrt{2}\,G_F\,n_e\,E.
-$$
+```
 
 At the resonance the transition probability reaches unity even for small vacuum mixing. This mechanism explains the large flavor conversion of solar $\nu_e$ on their way out of the Sun (Mikheyev–Smirnov–Wolfenstein effect).
 
@@ -221,9 +225,9 @@ At the resonance the transition probability reaches unity even for small vacuum 
 
 **Non-Standard Interactions (NSI)** extend the matter potential with BSM couplings $\varepsilon_{\alpha\beta}$ between neutrinos and matter fermions $f$:
 
-$$
+```math
 V_{\text{NSI}} = \sqrt{2}\,G_F\,n_e\begin{pmatrix} \varepsilon_{ee} & \varepsilon_{e\mu} & \varepsilon_{e\tau} \\ \varepsilon_{e\mu}^* & \varepsilon_{\mu\mu} & \varepsilon_{\mu\tau} \\ \varepsilon_{e\tau}^* & \varepsilon_{\mu\tau}^* & \varepsilon_{\tau\tau} \end{pmatrix}.
-$$
+```
 
 The Hermitian $\varepsilon$ matrix adds both diagonal (flavor-universal shifting) and off-diagonal (flavor-changing) terms to the effective Hamiltonian. NSI can mimic or mask standard oscillation signals, shift the apparent values of mixing angles and mass splittings, and generate new matter resonances.
 

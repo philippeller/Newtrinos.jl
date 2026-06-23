@@ -63,7 +63,7 @@ osc = Newtrinos.osc.configure(osc_cfg)
 Atmospheric-neutrino experiments require not just oscillations but also a flux model, an Earth density model, and a cross-section model. Configure each independently and assemble them into a `NamedTuple`:
 
 ```julia
-osc          = Newtrinos.osc.configure()
+osc          = Newtrinos.osc.configure(osc_cfg) #use oscillation configuration from above
 atm_flux     = Newtrinos.atm_flux.configure()
 earth_layers = Newtrinos.earth_layers.configure()
 xsec         = Newtrinos.xsec.configure()
@@ -196,6 +196,8 @@ U_eff, h = osc.matrices(params)
 `get_abs_masses` reconstructs the three absolute neutrino masses from the mass splittings and the lightest-neutrino mass $m_0$ (set to 0 by `configure()` by default):
 
 ```julia
+# m₀ is only used within the ADD or Darkdim physics module, so you need to specify the physics configuration to a ADD or Darkdim model that the below code works.
+
 m1, m2, m3 = Newtrinos.osc.get_abs_masses(params)
 # returns masses in eV
 
