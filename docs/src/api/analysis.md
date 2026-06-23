@@ -89,6 +89,8 @@ Newtrinos.assemble_profile_results
 
 ```@docs
 Newtrinos.add_meta!
+Newtrinos.plot!
+Newtrinos.plot
 ```
 
 ---

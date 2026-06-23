@@ -37,13 +37,24 @@ osc_cfg = Newtrinos.osc.OscillationConfig(
 osc = Newtrinos.osc.configure(osc_cfg)
 ```
 
-Available sub-models per axis:
+#### Available Flavour Models
 
-| Axis | Options |
-|---|---|
-| `flavour` | `ThreeFlavour`, `Sterile`, `ADD`, `Darkdim_*` |
-| `interaction` | `Vacuum`, `SI`, `NSI` |
-| `propagation` | `Basic`, `Decoherent`, `Damping` |
+- `ThreeFlavour(ordering=:NO)` / `ThreeFlavour(ordering=:IO)` — standard 3-flavour
+- `Sterile()` — 3+1 sterile neutrino model
+- `ADD()` — large extra dimensions
+- `Darkdim_tower()`, `Darkdim_lightest()` — dark dimension models
+
+#### Available Interaction Models
+
+- `Vacuum()` — vacuum oscillations only
+- `SI()` — standard matter effects (MSW)
+- `NSI()` — non-standard interactions
+
+#### Available Propagation Models
+
+- `Basic()` — standard propagation
+- `Decoherent()` — quantum decoherence
+- `Damping()` — damped oscillations
 
 ---
 
