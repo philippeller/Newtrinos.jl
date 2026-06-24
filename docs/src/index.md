@@ -11,25 +11,10 @@ The key features of the package are:
 - **Fully differentiable**: All code supports ForwardDiff automatic differentiation for gradient-based optimization
 - **Scalable**: Threaded and distributed parallelism for profile likelihood scans
 
-## Quick Example
+## Typical Workflow
+An example of a typical workflow for a global analysis of Newtrinos.jl is visualized in the below picture. The layers communicate through two well-defined interfaces: NamedTuples of parameters and priors, and callable functions stored in structs.
 
-```julia
-using Newtrinos
-using DensityInterface
-
-# Configure experiments with default physics
-experiments = (
-    deepcore = Newtrinos.deepcore.configure(),
-    dayabay  = Newtrinos.dayabay.configure(),
-)
-
-# Build joint likelihood
-likelihood = Newtrinos.generate_likelihood(experiments)
-params = Newtrinos.get_params(experiments)
-
-# Evaluate
-logdensityof(likelihood, params)
-```
+![png](Workflow_Diagram.png)
 
 ## Julia programming language
 

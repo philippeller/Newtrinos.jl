@@ -76,13 +76,13 @@ using CairoMakie
 
 fig = Figure(size=(800,400))
 ax1 = Axis(fig[1, 1], xlabel="θ₂₃", ylabel="Δm²₃₁", title="scan")
-plot!(ax1, result_scan, levels=[0, 0.68, 0.9, 0.99], filled=true, edge=false)
+plot!(ax1, result_scan, levels=[0, 0.68, 0.9, 0.99], filled=true, color=:black,cmap=Reverse(:Blues))
 scatter!(ax1, bf_scan.θ₂₃, bf_scan.Δm²₃₁, marker=:star5, color=:red)
 
 ax2 = Axis(fig[1, 2], xlabel="θ₂₃", ylabel="Δm²₃₁", title="profile")
-plot!(ax2, result_profile, levels=[0, 0.68, 0.9, 0.99], filled=true, edge=false)
+plot!(ax2, result_profile, levels=[0, 0.68, 0.9, 0.99], filled=true, color=:black, cmap=Reverse(:Blues))
 scatter!(ax2, bf_profile.θ₂₃, bf_profile.Δm²₃₁, marker=:star5, color=:red)
 fig
 ```
 
-![png](./joint_analysis_plot.png) 
+![png](./joint_analysis_plot.png)

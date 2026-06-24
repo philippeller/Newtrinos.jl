@@ -20,6 +20,12 @@ Pkg.add(url="https://github.com/philippeller/Newtrinos.jl.git")
 
 Julia will download the package and all its dependencies automatically. This may take a few minutes the first time.
 
+Some key dependencies are: 
+- `BAT.jl` for Bayesian inference, 
+- `ForwardDiff.jl` for automatic differentiation, 
+- `DensityInterface.jl` for the likelihood interface, and 
+- `CairoMakie.jl` for visualization.
+
 !!! note
     You only need to do this once. After installation the package is available
     in any Julia session on your machine.

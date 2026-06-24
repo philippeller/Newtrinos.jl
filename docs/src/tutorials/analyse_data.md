@@ -111,9 +111,8 @@ result.values.llh
 # Compute Δllh relative to the maximum (for confidence regions)
 Δllh = result.values.llh .- maximum(result.values.llh)
 
-# For profile results: the optimized nuisance parameter value at each grid point
+# For profile results: can access the optimized nuisance parameter value at each grid point
 result.values.θ₁₃       # best-fit θ₁₃ at each profile point
-result.values.deepcore_ice_absorption  # optimized ice absorption
 ```
 
 The best-fit grid point across the full scan or profile:
@@ -130,12 +129,11 @@ Confidence regions are defined by `Δllh` thresholds: $\Delta(-2\log\mathcal{L})
 ### Saving and Loading Results
 
 ```julia
-# Save to a JLD2 file (produces "my_result.jld2")
-Newtrinos.save_result(result, "my_result")
-
-# Load it back
 using FileIO
-result_loaded = FileIO.load("my_result.jld2", "result")
+# Save to a JLD2 file (produces "my_result_name.jld2")
+FileIO.save("my_result_name" * ".jld2", Dict("result" => result))
+# Load it back
+result_loaded = FileIO.load("my_result_name.jld2", "result")
 ```
 
 ---
@@ -246,7 +244,7 @@ If you want to contribute to the package functionality or have some proposals fo
 
 ## Plotting Results
 
-You can use the built in `plot` function of Newtrinos.jl to visualize your results. For a 1D likelihood scan or profile it plots the $2 \Delta \text{LLH}$ against the scanned parameter values and also adds lines for the confidence levels for $1\sigma, 2\sigma, and 3\sigma$. For a 2D likelihood scan or profile it plots the $1\sigma, 2\sigma, and 3\sigma$ confidence contours for the scan grid values.
+You can use the built in `plot` function of Newtrinos.jl to visualize your results. For a 1D likelihood scan or profile it plots the $2 \Delta \text{LLH}$ against the scanned parameter values and also adds lines for the confidence levels for $1\sigma$, $2\sigma$, and $3\sigma$. For a 2D likelihood scan or profile it plots the $1\sigma$, $2\sigma$, and $3\sigma$ confidence contours for the scan grid values.
 
 For our 2D example from the likelihood profile, plotting the result just takes
 
@@ -255,4 +253,4 @@ using CairoMakie
 plot(result)
 ```
 
-You can modify the appearing of the plot with some options. For more information have a look at the documentation.
+You can modify the appearing of the plot with some options. For more information have a look at the API documentation.
