@@ -33,7 +33,7 @@ const ftype = Float64
 A spherical shell of matter with uniform proton and neutron number densities.
 
 Used to represent concentric layers of the Earth in the PREM density model
-(see [`EarthLayers`](@ref) in `earth_layers.jl`). A neutrino trajectory through the
+(see [`Newtrinos.earth_layers.EarthLayers`](@ref) in `earth_layers.jl`). A neutrino trajectory through the
 Earth is described by a sequence of [`Path`](@ref) segments, each referencing one layer.
 
 # Fields
@@ -1140,7 +1140,7 @@ osc_prob(E::AbstractVector, paths::VectorOfVectors{Path}, layers::StructVector{L
 # Arguments
 - `E`: neutrino energies [GeV].
 - `L`: baselines [km] (vacuum method).
-- `paths`: per-baseline layer traversals (matter method), from [`EarthLayers`](@ref).
+- `paths`: per-baseline layer traversals (matter method), from [`Newtrinos.earth_layers.EarthLayers`](@ref).
 - `layers`: Earth density layers (matter method).
 - `params::NamedTuple`: oscillation parameters (mixing angles, mass splittings, etc.).
 - `anti::Bool = false`: set `true` for antineutrinos (conjugates the PMNS matrix).

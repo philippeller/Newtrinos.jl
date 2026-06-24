@@ -1,37 +1,27 @@
 # Newtrinos.jl
 
-**Newtrinos.jl** is a Julia package for the **global analysis of neutrino data**, fully open source and free to use under the MIT license.
-
-## Overview
+**Newtrinos.jl** is a Julia package for the **global analysis of neutrino data**. It is fully open source and free to use under the MIT license.
 
 The package is built to support flexible and modular analysis of neutrino physics, combining experimental data with physics models and inference tools. It supports both **Frequentist** (profile likelihood) and **Bayesian** (nested sampling, importance sampling) inference methods.
 
-## Key Features
+The key features of the package are: 
 
 - **11 experiments**: IceCube DeepCore, Daya Bay, KamLAND, MINOS, Super-Kamiokande, ORCA, JUNO, TAO, COHERENT CsI/LAr, IceCube Upgrade
 - **Modular physics**: Oscillations (3-flavour, sterile, ADD, dark dimensions), matter effects (SI, NSI), atmospheric fluxes, cross-sections
 - **Fully differentiable**: All code supports ForwardDiff automatic differentiation for gradient-based optimization
 - **Scalable**: Threaded and distributed parallelism for profile likelihood scans
 
-## Quick Example
+## Typical Workflow
+An example of a typical workflow for a global analysis of Newtrinos.jl is visualized in the below picture. The layers communicate through two well-defined interfaces: NamedTuples of parameters and priors, and callable functions stored in structs.
 
-```julia
-using Newtrinos
-using DensityInterface
+![png](Workflow_Diagram.png)
 
-# Configure experiments with default physics
-experiments = (
-    deepcore = Newtrinos.deepcore.configure(),
-    dayabay  = Newtrinos.dayabay.configure(),
-)
+## Julia programming language
 
-# Build joint likelihood
-likelihood = Newtrinos.generate_likelihood(experiments)
-params = Newtrinos.get_params(experiments)
-
-# Evaluate
-logdensityof(likelihood, params)
-```
+The package is written in Julia. If you're not yet familiar with Julia and want to learn more about the language, here are a few resources to get started:
+- the [Julia Website](https://julialang.org/) offers many links to introductory videos and written tutorials. 
+- there also exists a [MATLAB-Python-Julia cheatsheet](https://cheatsheets.quantecon.org/)
+- this [article](https://www.stochasticlifestyle.com/why-numba-and-cython-are-not-substitutes-for-julia/) explains how Julia adresses several fundamental challenges inherent to scientific high-performance computing
 
 ## References
 

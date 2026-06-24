@@ -32,8 +32,15 @@ set_batcontext(ad = adsel)
 """
     NewtrinosResult(; axes, values, meta=Dict())
 
-Container for scan/profile results. `axes` holds the scan grid coordinates,
-`values` holds likelihood values and optimized parameters, `meta` holds execution metadata.
+Container for the results of a [`scan`](@ref) or [`profile`](@ref) run.
+
+# Fields
+- `axes::NamedTuple`: scan grid coordinates, one entry per scanned parameter.
+  Each entry is a vector of grid-point values.
+- `values::NamedTuple`: per-grid-point outputs — likelihood values (`llh`,
+  `log_posterior`) and optimized nuisance parameter arrays.
+- `meta::Dict`: execution metadata (hostname, date, git commit, timing).
+  Populated by [`add_meta!`](@ref).
 """
 @kwdef struct NewtrinosResult
     axes::NamedTuple
@@ -43,6 +50,20 @@ end
 
 # ── Utility Functions ───────────────────────────────────────────────
 
+"""
+    sort_nt(nt::NamedTuple) -> NamedTuple
+
+Return a copy of a named tuple `nt` with keys sorted alphabetically.
+
+Used internally by [`safe_merge`](@ref), [`get_params`](@ref), and
+[`get_priors`](@ref) to ensure a canonical key ordering across modules.
+
+# Arguments
+- `nt::NamedTuple`: input NamedTuple.
+
+# Returns
+A NamedTuple with the same entries as `nt`, sorted alphabetically by key name.
+"""
 function sort_nt(nt::NamedTuple)
     keys_sorted = sort(collect(keys(nt)))
     values_sorted = getindex.(Ref(nt), keys_sorted)
@@ -50,9 +71,26 @@ function sort_nt(nt::NamedTuple)
 end
 
 """
-    safe_merge(nt_list::NamedTuple...)
+    safe_merge(nt_list::NamedTuple...) -> NamedTuple
 
-Merge NamedTuples, checking that duplicate keys have equal values. Result is sorted by key.
+Merge NamedTuples, asserting that any key shared by two or more inputs has the
+same value in all of them.
+
+Raises an `error` if a key conflict is detected. The result is sorted
+alphabetically by key.
+
+# Arguments
+- `nt_list::NamedTuple...`: one or more NamedTuples to merge.
+
+# Returns
+A sorted NamedTuple containing all key-value pairs from the inputs.
+
+# Examples
+```julia
+a = (x = 1.0, y = 2.0)
+b = (y = 2.0, z = 3.0)
+safe_merge(a, b)   # (x = 1.0, y = 2.0, z = 3.0)
+```
 """
 function safe_merge(nt_list::NamedTuple...)
     merged = NamedTuple()
@@ -73,10 +111,29 @@ end
 # Defined before accessors since get_params/get_priors dispatch on it
 
 """
-    Wrapper <: Experiment
+    Wrapper <: Newtrinos.Experiment
 
-Wraps an experiment with parameter name aliases. The forward model and plot functions
-automatically translate between aliased and original parameter names.
+Wraps a [`Newtrinos.Experiment`](@ref) with parameter name aliases.
+
+When two experiments share a physics parameter under different names (e.g.
+`theta13` vs `sin2theta13`), a `Wrapper` renames parameters seen by the
+outer analysis while transparently translating back to the original names
+before calling the inner experiment's `forward_model` and `plot` functions.
+
+Construct with `Wrapper(experiment, aliases)` where `aliases` is a
+`Dict{Symbol,Symbol}` mapping original parameter names to their aliases.
+
+# Fields
+- `x::Newtrinos.Experiment`: the wrapped experiment.
+- `aliases::Dict{Symbol,Symbol}`: map from original name → alias.
+- `translated_keys::Vector{Symbol}`: all parameter keys after alias substitution.
+- `reverse_lookup::Dict{Symbol,Symbol}`: map from alias → original name.
+
+# Examples
+```julia
+aliases = Dict(:dm21_sq => :Dm21)
+wrapped = Wrapper(dayabay_experiment, aliases)
+```
 """
 struct Wrapper <: Newtrinos.Experiment
     x::Newtrinos.Experiment
@@ -85,6 +142,25 @@ struct Wrapper <: Newtrinos.Experiment
     reverse_lookup::Dict{Symbol, Symbol} # alias -> actual
 end
 
+"""
+    Base.getproperty(wrapper::Wrapper, name::Symbol)
+
+Property accessor for [`Wrapper`](@ref) that intercepts `forward_model` and
+`plot` to inject parameter name translation.
+
+When `name` is `:forward_model` or `:plot`, returns a closure that translates
+aliased parameter names back to their original names before delegating to the
+inner experiment. All other property accesses are forwarded directly to the
+wrapped experiment `wrapper.x`.
+
+# Arguments
+- `wrapper::Wrapper`: the wrapping experiment.
+- `name::Symbol`: the property name to access.
+
+# Returns
+The requested property value of `name`, with translation logic applied for
+`:forward_model` and `:plot`.
+"""
 function Base.getproperty(wrapper::Wrapper, name::Symbol)
     if name ∈ (:x, :aliases, :translated_keys, :reverse_lookup)
         return getfield(wrapper, name)
@@ -111,10 +187,23 @@ end
 # ── Parameter & Prior Accessors ─────────────────────────────────────
 
 """
-    get_params(x)
+    get_params(x) -> NamedTuple
 
-Extract nominal parameter values as a sorted NamedTuple. Works on Physics, Experiment,
-Wrapper, or a NamedTuple of modules (merging all with conflict checking).
+Extract nominal parameter values as a sorted NamedTuple.
+
+Dispatches on the type of `x`:
+- `Physics`: returns `x.params` sorted by key.
+- `Experiment`: merges `x.params` with the parameters of its `physics` module.
+- `Wrapper`: applies the alias translation from [`Wrapper`](@ref) to the keys.
+- `NamedTuple` of modules: merges parameters from all modules via
+  [`safe_merge`](@ref), raising an error on conflicts.
+
+# Arguments
+- `x`: a [`Newtrinos.Physics`](@ref), [`Newtrinos.Experiment`](@ref),
+  [`Wrapper`](@ref), or `NamedTuple` of such objects.
+
+# Returns
+A sorted `NamedTuple` of parameter name → nominal value.
 """
 function get_params(x::Newtrinos.Physics)
     sort_nt(x.params)
@@ -134,10 +223,23 @@ function get_params(modules::NamedTuple)
 end
 
 """
-    get_priors(x)
+    get_priors(x) -> NamedTuple
 
-Extract prior distributions as a sorted NamedTuple. Works on Physics, Experiment,
-Wrapper, or a NamedTuple of modules (merging all with conflict checking).
+Extract prior distributions as a sorted NamedTuple.
+
+Dispatches on the type of `x`:
+- `Physics`: returns `x.priors` sorted by key.
+- `Experiment`: merges `x.priors` with priors from its `physics` module.
+- `Wrapper`: applies the alias translation from [`Wrapper`](@ref) to the keys.
+- `NamedTuple` of modules: merges priors from all modules via
+  [`safe_merge`](@ref), raising an error on conflicts.
+
+# Arguments
+- `x`: a [`Newtrinos.Physics`](@ref), [`Newtrinos.Experiment`](@ref),
+  [`Wrapper`](@ref), or `NamedTuple` of such objects.
+
+# Returns
+A sorted `NamedTuple` of parameter name → prior distribution.
 """
 function get_priors(x::Newtrinos.Physics)
     sort_nt(x.priors)
@@ -157,10 +259,33 @@ function get_priors(modules::NamedTuple)
 end
 
 """
-    condition(priors, conditional_vars, params)
+    condition(priors, conditional_vars, params) -> NamedTuple
 
-Fix parameters to specific values by replacing their priors with constants.
-`conditional_vars` can be an Array of symbols (uses values from `params`) or a Dict mapping symbols to values.
+Fix a subset of parameters to specific values by replacing their prior
+distributions with constants (`ConstValueDist`).
+
+Two dispatch methods:
+
+**Array form** (conditional_vars is an array) — fixes each symbol in `conditional_vars` to its value in `params`:
+```julia
+condition(priors, [:theta23, :dm31_sq], params)
+```
+
+**Dict form** (conditional_vars is a dict) — fixes each key to the paired value, or to `params[key]` when the
+value is `nothing`:
+```julia
+condition(priors, Dict(:theta23 => pi/4, :dm31_sq => nothing), params)
+```
+
+# Arguments
+- `priors::NamedTuple`: prior distributions to modify.
+- `conditional_vars`: `AbstractArray{Symbol}` or `AbstractDict{Symbol}` of
+  parameters to fix.
+- `params::NamedTuple`: fallback parameter values used when a dict entry is
+  `nothing` or when using the array form.
+
+# Returns
+The modified `priors` NamedTuple with the specified parameters frozen.
 """
 function condition(priors::NamedTuple, conditional_vars::AbstractArray, p)
     for var in conditional_vars
@@ -180,7 +305,21 @@ function condition(priors::NamedTuple, conditional_vars::AbstractDict, p)
     priors
 end
 
-# Wrapper constructor (needs get_params defined above)
+"""
+    Wrapper(x::Newtrinos.Experiment, aliases::Dict{Symbol,Symbol}) -> Wrapper
+
+Construct a [`Wrapper`](@ref) around `x` with the given parameter name aliases.
+
+Derives `translated_keys` by applying `aliases` to the full key list returned
+by `get_params(x)`, and builds the `reverse_lookup` for inverse translation.
+
+# Arguments
+- `x::Newtrinos.Experiment`: experiment to wrap.
+- `aliases::Dict{Symbol,Symbol}`: map from original parameter name → alias.
+
+# Returns
+A [`Wrapper`](@ref) instance.
+"""
 function Wrapper(x::Newtrinos.Experiment, aliases::Dict{Symbol, Symbol})
     original_keys = keys(get_params(x))
     translated_keys = [get(aliases, k, k) for k in original_keys]
@@ -190,30 +329,92 @@ end
 
 # ── Experiment Utilities ────────────────────────────────────────────
 
+"""
+    get_observed(experiments::NamedTuple) -> NamedTuple
+
+Extract the observed data from each experiment in a NamedTuple of experiments.
+
+# Arguments
+- `experiments::NamedTuple`: named collection of [`Newtrinos.Experiment`](@ref) objects.
+
+# Returns
+A NamedTuple with the same keys as `experiments`, each entry holding the
+corresponding `experiment.assets.observed` data.
+"""
 function get_observed(experiments::NamedTuple)
     NamedTuple{keys(experiments)}(e.assets.observed for e in experiments)
 end
 
+"""
+    get_fwd_model(experiments::NamedTuple) -> Function
+
+Compose the forward models of all experiments into a single joint model.
+
+Builds a `NamedTuple` of per-experiment forward models and composes them
+with `ffanout` and `distprod` so that calling the result with a parameter
+NamedTuple returns a joint product distribution over all experiments.
+
+# Arguments
+- `experiments::NamedTuple`: named collection of [`Newtrinos.Experiment`](@ref) objects.
+
+# Returns
+A callable `params -> joint_distribution`.
+"""
 function get_fwd_model(experiments::NamedTuple)
     fwd_models = NamedTuple{keys(experiments)}(e.forward_model for e in experiments)
     distprod ∘ ffanout(fwd_models)
 end
 
 """
-    generate_likelihood(experiments[, observed])
+    generate_likelihood(experiments[, observed]) -> likelihood
 
 Construct a joint likelihood from a NamedTuple of configured experiments.
-Combines all forward models and observed data into a single likelihood object
-compatible with `DensityInterface.logdensityof`.
+
+Combines all experiment forward models into a product distribution and
+pairs it with the observed data. The returned object supports
+`DensityInterface.logdensityof(likelihood, params)`.
+
+# Arguments
+- `experiments::NamedTuple`: named collection of configured
+  [`Newtrinos.Experiment`](@ref) objects.
+- `observed` (optional): NamedTuple of observed data arrays matching
+  `experiments`. Defaults to the observed data stored in each experiment's
+  `assets.observed` field.
+
+# Returns
+A likelihood object compatible with `DensityInterface.logdensityof`.
+
+# Examples
+```julia
+experiments = (deepcore = Newtrinos.deepcore.configure(),
+               dayabay  = Newtrinos.dayabay.configure())
+llh     = generate_likelihood(experiments)
+logdensityof(llh, params)
+```
 """
 function generate_likelihood(experiments::NamedTuple, observed=get_observed(experiments))
     likelihoodof(get_fwd_model(experiments), observed)
 end
 
 """
-    correlated_priors_vars(priors, vars, dist)
+    correlated_priors_vars(priors, vars, dist) -> (corr_prior, other_prior)
 
-Replace independent priors for `vars` with a correlated multivariate distribution `dist`.
+Replace the independent priors for `vars` with a single correlated
+multivariate distribution, splitting the prior NamedTuple into two parts.
+
+Useful when a set of parameters has a known covariance structure (e.g. from
+an external fit) that cannot be captured by independent marginals.
+
+# Arguments
+- `priors::NamedTuple`: the full prior NamedTuple.
+- `vars::Union{AbstractArray, Tuple}`: parameter names to correlate.
+- `dist::Distributions.Distribution`: a multivariate distribution over `vars`
+  (must match the length of `vars`).
+
+# Returns
+A 2-tuple `(corr_prior, other_prior)` where:
+- `corr_prior`: a callable returning a `ReshapedDist` over `vars`.
+- `other_prior`: a `distprod` of the remaining (uncorrelated) priors.
 """
 function correlated_priors_vars(priors::NamedTuple, vars::Union{AbstractArray, Tuple}, dist::Distribution)
     named_shapes = NamedTuple(var => ValueShapes.ScalarShape{Real}() for var in vars)
@@ -224,10 +425,22 @@ function correlated_priors_vars(priors::NamedTuple, vars::Union{AbstractArray, T
 end
 
 """
-    generate_toy_data(experiment, params)
-    generate_toy_data(experiments::NamedTuple, params)
+    generate_toy_data(experiment, params) -> data
+    generate_toy_data(experiments::NamedTuple, params) -> NamedTuple
 
-Generate random toy data by sampling from the forward model distribution.
+Generate random toy data by sampling from the experiment forward model.
+
+Calls `experiment.forward_model(params)` to obtain the predictive
+distribution and draws one sample from it.
+
+# Arguments
+- `experiment`: a single [`Newtrinos.Experiment`](@ref) or a NamedTuple of them.
+- `params::NamedTuple`: parameter values at which to evaluate the forward model.
+
+# Returns
+- Single-experiment form: one sample from the forward model distribution.
+- Multi-experiment form: a NamedTuple with the same keys as `experiments`,
+  each entry holding one sample.
 """
 function generate_toy_data(experiment::Newtrinos.Experiment, params::NamedTuple)
     dist_obj = experiment.forward_model(params)
@@ -242,11 +455,22 @@ function generate_toy_data(experiments::NamedTuple, params::NamedTuple)
 end
 
 """
-    generate_asimov_data(experiment, params)
-    generate_asimov_data(experiments::NamedTuple, params)
+    generate_asimov_data(experiment, params) -> data
+    generate_asimov_data(experiments::NamedTuple, params) -> NamedTuple
 
-Generate Asimov (expected) data from the forward model at the given parameters.
-Poisson-distributed observables are rounded to integers.
+Generate Asimov (expected-value) data from the experiment forward model.
+
+Evaluates `mean(forward_model(params))`. For Poisson-distributed observables
+the mean is rounded to the nearest integer so that the data type matches what
+a real run would produce.
+
+# Arguments
+- `experiment`: a single [`Newtrinos.Experiment`](@ref) or a NamedTuple of them.
+- `params::NamedTuple`: parameter values at which to evaluate the forward model.
+
+# Returns
+- Single-experiment form: the expected-value data array (or NamedTuple of arrays).
+- Multi-experiment form: a NamedTuple with the same keys as `experiments`.
 """
 function generate_asimov_data(experiment::Newtrinos.Experiment, params::NamedTuple)
     dist_obj = experiment.forward_model(params)
@@ -283,10 +507,26 @@ end
 
 """
     find_mle(likelihood, prior, params; adsel=AutoPolyesterForwardDiff())
+        -> (llh, log_posterior, result)
 
-Find the Maximum Likelihood Estimator using LBFGS optimization via BAT.
-Returns `(llh, log_posterior, optimized_params)`. Parameters with `ConstValueDist`
-priors are held fixed.
+Find the Maximum Likelihood Estimator (MLE) using L-BFGS optimization via BAT.jl.
+
+Parameters whose prior is a `ConstValueDist` are held fixed during optimization.
+If the optimizer raises an `ArgumentError` (e.g. due to a degenerate starting
+point), returns `(NaN, NaN, NaN-filled NamedTuple)` instead of propagating the
+error.
+
+# Arguments
+- `likelihood`: a likelihood object supporting `DensityInterface.logdensityof`.
+- `prior`: a `distprod`-style prior NamedTuple or distribution.
+- `params::NamedTuple`: starting parameter values for the optimizer.
+- `adsel`: AD backend selector (default: `AutoPolyesterForwardDiff()`).
+
+# Returns
+A 3-tuple `(llh, log_posterior, result)` where:
+- `llh::Float64`: log-likelihood at the optimum.
+- `log_posterior::Float64`: log-posterior at the optimum.
+- `result::NamedTuple`: optimized parameter values.
 """
 function find_mle(likelihood, prior, params; adsel = AutoPolyesterForwardDiff())
     try
@@ -317,9 +557,23 @@ end
 
 """
     find_mle_cached(likelihood, prior, params, cache_dir)
+        -> (llh, log_posterior, result)
 
-Like [`find_mle`](@ref) but caches results to `cache_dir` using content hashing.
-Subsequent calls with the same prior and params skip the optimization.
+Like [`find_mle`](@ref) but caches results to disk using content hashing.
+
+A hash of `(prior, params)` is computed with `ContentHashes.hash`; if a
+matching `.jld2` file exists in `cache_dir` the optimization is skipped and
+the cached result is returned. Otherwise the result is computed and saved.
+
+# Arguments
+- `likelihood`: a likelihood object supporting `DensityInterface.logdensityof`.
+- `prior`: prior distribution (same as [`find_mle`](@ref)).
+- `params::NamedTuple`: starting parameter values.
+- `cache_dir::Union{String,Nothing}`: directory for cached `.jld2` files.
+  Pass `nothing` to disable caching.
+
+# Returns
+A 3-tuple `(llh, log_posterior, result)` — see [`find_mle`](@ref).
 """
 function find_mle_cached(likelihood, prior, params, cache_dir)
     opt_result = nothing
@@ -349,6 +603,33 @@ end
 
 # ── Scanning & Profiling ────────────────────────────────────────────
 
+"""
+    _generate_grid(vars_to_scan, priors) -> (vars, values, mesh)
+
+Construct the Cartesian grid used by [`generate_scanpoints`](@ref) and
+[`scan`](@ref).
+
+Grid points for each variable are placed at evenly-spaced quantiles of its
+prior distribution. All combinations are formed via `IterTools.product`.
+
+# Arguments
+- `vars_to_scan::OrderedDict{Symbol,Int}`: maps parameter names to grid sizes.
+- `priors::NamedTuple`: prior distributions used to compute quantiles.
+
+# Returns
+A 3-tuple `(vars, values, mesh)` where:
+- `vars`: `Vector{Symbol}` of scanned parameter names.
+- `values`: vector of grid-point vectors (one per variable).
+- `mesh`: Cartesian product array of grid-point tuples.
+
+# Examples
+```julia
+    priors = (a=Uniform(0.0, 2.0), b=Uniform(-1.0, 1.0))
+    vars_to_scan = OrderedDict(:a => 3, :b => 4)
+    vars, values, mesh = Newtrinos._generate_grid(vars_to_scan, priors)
+    # => mesh is a 3x4 grid of evenly spaced points from within the prior range of a and b 
+```
+"""
 function _generate_grid(vars_to_scan, priors)
     vars = collect(keys(vars_to_scan))
     values = [quantile(priors[var], collect(range(0,1,vars_to_scan[var]))) for var in vars]
@@ -357,11 +638,24 @@ function _generate_grid(vars_to_scan, priors)
 end
 
 """
-    generate_scanpoints(vars_to_scan, priors)
+    generate_scanpoints(vars_to_scan, priors) -> (values, scanpoints)
 
-Create a grid of prior distributions for scanning. `vars_to_scan` is an OrderedDict
-mapping parameter symbols to grid sizes. Grid points are placed at quantiles of the priors.
-Returns `(values, scanpoints)`.
+Build a grid of fixed-parameter priors for a profile likelihood scan.
+
+For each variable in `vars_to_scan`, grid points are placed at evenly-spaced
+quantiles of its prior distribution. All combinations are formed via a
+Cartesian product. At each grid point, the prior for the scanned variables
+is replaced with a `ConstValueDist` fixing them to the grid values.
+
+# Arguments
+- `vars_to_scan::OrderedDict{Symbol,Int}`: maps each parameter name to the
+  desired number of evenly spaced grid points within the prior range.
+- `priors::NamedTuple`: prior distributions for all parameters.
+
+# Returns
+A 2-tuple `(values, scanpoints)` where:
+- `values`: vector of grid-point vectors (one per scanned parameter).
+- `scanpoints`: array of `distprod` priors, one per grid point.
 """
 function generate_scanpoints(vars_to_scan, priors)
     vars, values, mesh = _generate_grid(vars_to_scan, priors)
@@ -382,7 +676,33 @@ function generate_scanpoints(vars_to_scan, priors)
     values, scanpoints
 end
 
-"""Assemble optimization results into a NamedTuple of arrays."""
+"""
+    assemble_profile_results(opt_results, result_size) -> NamedTuple
+
+Collect the 'raw' per-grid-point optimization results and structure them into flat arrays within a NamedTuple.
+
+Stacks the `(llh, log_posterior, params)` 3-tuples returned by
+[`find_mle_cached`](@ref) into a NamedTuple of arrays with shape
+`result_size`.
+
+# Arguments
+- `opt_results`: iterable of `(llh, log_posterior, NamedTuple)` 3-tuples.
+- `result_size`: shape of the output arrays (matching the scan grid).
+
+# Returns
+A `NamedTuple` with one array-entry per parameter (values across the grid) plus
+`:llh` and `:log_posterior` arrays.
+
+# Example
+```julia
+opt_results = [
+    (-10.0, -12.0, (a=1.0, b=2.0)), # llh, log_posterior, params output of find_mle
+    (-5.0,  -7.0,  (a=3.0, b=4.0))
+]
+res = Newtrinos.assemble_profile_results(opt_results, (2,))
+# returns res = (a = [1.0, 3.0], b = [2.0, 4.0], llh = [-10.0, -5.0], log_posterior = [-12.0, -7.0])
+```
+"""
 function assemble_profile_results(opt_results, result_size)
     results = Array{Any}(undef, result_size)
     llhs = Array{Float64}(undef, result_size)
@@ -398,6 +718,26 @@ function assemble_profile_results(opt_results, result_size)
     NamedTuple(s)
 end
 
+"""
+    _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing)
+        -> NamedTuple
+
+Execute [`find_mle_cached`](@ref) at every point in `scanpoints`, collect
+the results, and assemble them into a NamedTuple of result arrays with [`assemble_profile_results`](@ref).
+
+Uses `Threads.@threads` by default. Pass a custom `map_func` (e.g. `pmap`)
+to override the parallelism strategy.
+
+# Arguments
+- `likelihood`: a likelihood object supporting `DensityInterface.logdensityof`.
+- `scanpoints`: array of prior objects, one per grid point.
+- `params::NamedTuple`: starting values for nuisance optimization.
+- `cache_dir::Union{String,Nothing}`: passed to [`find_mle_cached`](@ref).
+- `map_func`: optional custom mapping function; default=`nothing` uses threaded loops.
+
+# Returns
+A NamedTuple of result arrays as produced by [`assemble_profile_results`](@ref).
+"""
 function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing)
     do_work(i) = find_mle_cached(likelihood, scanpoints[i], deepcopy(params), cache_dir)
 
@@ -417,11 +757,29 @@ function _profile(likelihood, scanpoints, params, cache_dir; map_func=nothing)
 end
 
 """
-    profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing)
+    profile(likelihood, priors, vars_to_scan, params;
+            cache_dir=nothing, map_func=nothing) -> NewtrinosResult
 
-Run a profile likelihood scan. At each grid point defined by `vars_to_scan`,
-optimizes over all other parameters. Use `cache_dir` to cache and resume results.
-Use `map_func=pmap` for distributed parallelism (default: `Threads.@threads`).
+Run a profile likelihood scan over a parameter grid.
+
+Creates grid points defined by `vars_to_scan` with [`generate_scanpoints`](@ref).
+At each grid point, all nuisance parameters are optimized with [`_profile`](@ref) , i.e. via [`find_mle_cached`](@ref). 
+If all non-scanned parameters have fixed (`Number`) priors, falls back to [`scan`](@ref) automatically.
+Also collects meta data of the profile process and attaches it the returned object.
+
+# Arguments
+- `likelihood`: a likelihood object supporting `DensityInterface.logdensityof`.
+- `priors::NamedTuple`: prior distributions for all parameters.
+- `vars_to_scan::OrderedDict{Symbol,Int}`: parameters to scan and grid sizes.
+- `params::NamedTuple`: starting values for nuisance parameter optimization.
+- `cache_dir::Union{String,Nothing}`: directory for caching MLE results
+  (created if absent). Pass `nothing` to disable (this is the default).
+- `map_func`: custom mapping function for parallelism (e.g. `pmap` for
+  distributed workers). Defaults to `Threads.@threads`.
+
+# Returns
+A [`NewtrinosResult`](@ref) NewtrinosResult(axes, values, meta) 
+with the scan grid axes, per-point profiling results, and meta data.
 """
 function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, map_func=nothing)
     t1 = time()
@@ -447,11 +805,29 @@ function profile(likelihood, priors, vars_to_scan, params; cache_dir=nothing, ma
 end
 
 """
-    scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
+    scan(likelihood, priors, vars_to_scan, params;
+         gradient_map=false) -> NewtrinosResult
 
-Run a simple likelihood scan on a grid (no optimization over nuisance parameters).
-Faster than [`profile`](@ref) but does not account for nuisance parameter variations.
-Set `gradient_map=true` to also compute gradients at each point.
+Run a simple likelihood scan on a parameter grid (NO nuisance optimization).
+
+Generates grid with [`_generate_grid`](@ref) via `vars_to_scan` and then 
+evaluates `logdensityof(likelihood, params)` at each grid point without
+optimizing over nuisance parameters. Faster than [`profile`](@ref) but
+does not account for nuisance parameter variations. 
+Also collects meta data of the scan process and attaches it the returned object.
+
+# Arguments
+- `likelihood`: a likelihood object supporting `DensityInterface.logdensityof`.
+- `priors::NamedTuple`: prior distributions used to place grid points at
+  quantiles.
+- `vars_to_scan::OrderedDict{Symbol,Int}`: parameters to scan and grid sizes.
+- `params::NamedTuple`: nominal values; non-scanned parameters are held fixed.
+- `gradient_map::Bool`: default=`false`; if `true`, also evaluates `ForwardDiff.gradient` at
+  each grid point and includes per-parameter gradient arrays in the result.
+
+# Returns
+A [`NewtrinosResult`](@ref) NewtrinosResult(axes, values, meta) 
+with the scan grid axes, per-point scan results, and meta data.
 """
 function scan(likelihood, priors, vars_to_scan, params; gradient_map=false)
     t1 = time()
@@ -501,9 +877,21 @@ end
 # ── Results ─────────────────────────────────────────────────────────
 
 """
-    bestfit(result::NewtrinosResult)
+    bestfit(result::NewtrinosResult) -> NamedTuple
 
-Extract the best-fit parameter values from a scan/profile result (maximum log_posterior point).
+Extract the best-fit parameter values from a scan or profile result.
+
+Finds the grid point with the highest `log_posterior` and returns both
+the scanned parameter values (from `result.axes`) and all optimized
+nuisance parameter values at that point.
+
+# Arguments
+- `result::NewtrinosResult`: output of [`scan`](@ref) or [`profile`](@ref).
+
+# Returns
+A `NamedTuple` containing all parameter values at the best-fit point,
+including the scanned axis values, nuisance parameters, `llh`, and
+`log_posterior`.
 """
 function bestfit(result::NewtrinosResult)
     idx = argmax(result.values.log_posterior)
@@ -517,7 +905,24 @@ end
 """
     add_meta!(meta::Dict)
 
-Populate a metadata dictionary with hostname, username, date, git repo path, commit hash, and repo cleanliness.
+Populate a metadata dictionary with execution environment information.
+
+Adds the following keys in-place:
+- `"hostname"`: result of `gethostname()`.
+- `"username"`: from `ENV["USER"]` or `ENV["USERNAME"]`.
+- `"date"`: current date-time formatted as `"yyyy-mm-dd HH:MM:SS"`.
+- `"repo"`: path to the Newtrinos.jl repository root.
+- `"commit_hash"`: current HEAD commit hash.
+- `"repo_clean"`: `true` if the repository has no uncommitted changes.
+
+Called automatically by [`profile`](@ref) and [`scan`](@ref) before
+returning their [`NewtrinosResult`](@ref). 
+
+# Arguments
+- `meta::Dict`: dictionary to populate in-place.
+
+# Returns
+`nothing` (mutates `meta`).
 """
 function add_meta!(meta)
     meta["hostname"] = gethostname()

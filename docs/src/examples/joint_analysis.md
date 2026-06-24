@@ -1,6 +1,6 @@
 # Joint Analysis
 
-This tutorial shows how to combine multiple experiments into a joint likelihood and run profile/scan analyses.
+This example shows how to combine multiple experiments into a joint likelihood and run profile/scan analyses. For simplicity we use the default physics configuration.
 
 ## Combining Experiments
 
@@ -10,7 +10,6 @@ using DensityInterface
 using DataStructures
 
 experiments = (
-    deepcore = Newtrinos.deepcore.configure(),
     dayabay  = Newtrinos.dayabay.configure(),
     kamland  = Newtrinos.kamland.configure(),
     minos    = Newtrinos.minos.configure(),
@@ -31,8 +30,8 @@ Fix parameters to specific values before scanning:
 
 ```julia
 conditional_vars = Dict(
-    :θ₁₂  => params.θ₁₂,
-    :δCP   => -1.89,
+    :θ₁₂   => params.θ₁₂,
+    :δCP   => 0.0,
     :Δm²₂₁ => params.Δm²₂₁,
 )
 priors = Newtrinos.condition(priors, conditional_vars, params)
@@ -49,7 +48,7 @@ using Distributions, Accessors
 @reset priors.Δm²₃₁ = Uniform(0.0018, 0.0028)
 
 vars_to_scan = OrderedDict(:θ₂₃ => 31, :Δm²₃₁ => 31)
-result = Newtrinos.scan(likelihood, priors, vars_to_scan, params)
+result_scan = Newtrinos.scan(likelihood, priors, vars_to_scan, params)
 ```
 
 ## Profile Likelihood
@@ -58,24 +57,32 @@ A profile scan optimizes over nuisance parameters at each grid point:
 
 ```julia
 vars_to_scan = OrderedDict(:θ₂₃ => 11, :Δm²₃₁ => 11)
-result = Newtrinos.profile(likelihood, priors, vars_to_scan, params; cache_dir="my_profile")
+result_profile = Newtrinos.profile(likelihood, priors, vars_to_scan, params; cache_dir="my_profile")
 ```
 
 Results are cached to disk, so interrupted runs can be resumed.
+
+## Extracting Best Fit
+
+```julia
+bf_scan = Newtrinos.bestfit(result_scan)
+bf_profile = Newtrinos.bestfit(result_profile)
+```
 
 ## Plotting Results
 
 ```julia
 using CairoMakie
 
-fig = Figure()
-ax = Axis(fig[1, 1], xlabel="θ₂₃", ylabel="Δm²₃₁")
-plot!(ax, result)
-save("contours.png", fig)
+fig = Figure(size=(800,400))
+ax1 = Axis(fig[1, 1], xlabel="θ₂₃", ylabel="Δm²₃₁", title="scan")
+plot!(ax1, result_scan, levels=[0, 0.68, 0.9, 0.99], filled=true, color=:black,cmap=Reverse(:Blues))
+scatter!(ax1, bf_scan.θ₂₃, bf_scan.Δm²₃₁, marker=:star5, color=:red)
+
+ax2 = Axis(fig[1, 2], xlabel="θ₂₃", ylabel="Δm²₃₁", title="profile")
+plot!(ax2, result_profile, levels=[0, 0.68, 0.9, 0.99], filled=true, color=:black, cmap=Reverse(:Blues))
+scatter!(ax2, bf_profile.θ₂₃, bf_profile.Δm²₃₁, marker=:star5, color=:red)
+fig
 ```
 
-## Extracting Best Fit
-
-```julia
-bf = Newtrinos.bestfit(result)
-```
+![png](./joint_analysis_plot.png)
