@@ -21,7 +21,6 @@ export All, Cut
 export Vacuum, SI, NSI
 export ThreeFlavour, Sterile, ADD, NND, NNM
 #export ThreeFlavour, ThreeFlavourXYCP, Sterile, ADD
-export FullMatrix, EeOnly
 export OscillationConfig
 export configure
 
@@ -71,10 +70,6 @@ struct Vacuum <: InteractionModel end
 struct NSI <: InteractionModel end
 struct SI <: InteractionModel end
 
-abstract type OutputMode end
-struct FullMatrix <: OutputMode end   # default — compute full n×n matrix
-struct EeOnly <: OutputMode end       # fast path — compute only P_ee
-
 abstract type FlavourModel end
 @kwdef struct ThreeFlavour <: FlavourModel 
     ordering::Symbol = :NO                     # ordering 
@@ -110,12 +105,11 @@ end
     N_KK::Int = 5
 end
 
-@kwdef struct OscillationConfig{F<:FlavourModel, I<:InteractionModel, P<:PropagationModel, S<:StateSelector, O<:OutputMode}
+@kwdef struct OscillationConfig{F<:FlavourModel, I<:InteractionModel, P<:PropagationModel, S<:StateSelector}
     flavour::F = ThreeFlavour()
     interaction::I = Vacuum()
     propagation::P = Basic()
     states::S = All()
-    output::O = FullMatrix()
 end
 
 @kwdef struct Osc <: Newtrinos.Physics
@@ -127,13 +121,12 @@ end
 end
 
 function configure(cfg::OscillationConfig=OscillationConfig())
-    matrices_fn = get_matrices(cfg.flavour)
     Osc(
         cfg=cfg,
         params = get_params(cfg),
         priors = get_priors(cfg),
-        matrices = matrices_fn,
-        osc_prob = get_osc_prob(cfg, matrices_fn)
+        matrices = get_matrices(cfg.flavour),
+        osc_prob = get_osc_prob(cfg)
     )
 end
 
@@ -402,31 +395,6 @@ function propagate(U, h, E, L, propagation::Basic)
     p = stack(broadcast((e, l) -> abs2.(osc_kernel(U, h, e, l)), E, L'))
 end
 
-# EeOnly fast path — compute only P_ee = |Σ_k |U[1,k]|² · exp(-i·F·L/E·h_k)|²
-# O(N) per (E,L) pair instead of O(N³) for the full matrix multiply
-function propagate(U, h, E, L, propagation::Basic, ::EeOnly)
-    nE, nL = length(E), length(L)
-    ST = promote_type(eltype(h), eltype(E), eltype(L), Float64)
-    CT = Complex{ST}
-    w = ST[abs2(u) for u in view(U, 1, :)]       # |U[1,k]|² weights
-    p = Array{ST}(undef, 1, 1, nE, nL)
-    s = Ref(zero(CT))
-    for (jl, l) in enumerate(L)
-        for (ie, e) in enumerate(E)
-            s[] = zero(CT)
-            @inbounds for k in eachindex(h)
-                s[] += w[k] * exp(-F_units * 1im * (l / e) * h[k])
-            end
-            p[1, 1, ie, jl] = abs2(s[])
-        end
-    end
-    return p
-end
-
-# FullMatrix fallback — delegates to existing propagation (backward compatible)
-propagate(U, h, E, L, propagation::PropagationModel, ::FullMatrix) =
-    propagate(U, h, E, L, propagation)
-
 function propagate(U, h, E, L, propagation::Damping)
     res = broadcast((e, l) -> osc_kernel(U, h, e, l, propagation.σₑ), E, L')
     p = stack(map(x -> abs2.(first(x)) + abs2.(U) * Diagonal(1 .- abs2.(last(x))) * abs2.(U)', res))
@@ -477,51 +445,37 @@ function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{L
     propagate(U, h, E, L, propagation)
 end
 
-# Vacuum + output mode delegation
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Vacuum, anti::Bool, output::OutputMode)
-    L = [sum([segment.length for segment in path]) for path in paths]
-    propagate(U, h, E, L, propagation, output)
-end
-
 function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool)
     H_eff = U * Diagonal(h) * adjoint(U)
     p = stack(map(e -> matter_osc_per_e(H_eff, e, layers, paths, anti, propagation, interaction), E))
     permutedims(p, (1, 2, 4, 3))
 end
 
-# SI/NSI + output mode — falls through to full matrix (EeOnly not supported for matter effects)
-function propagate(U, h, E, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, propagation::PropagationModel, interaction::Union{SI, NSI}, anti::Bool, output::OutputMode)
-    if output isa EeOnly
-        error("EeOnly output mode is not supported with matter effects (SI/NSI). Use FullMatrix().")
-    end
-    propagate(U, h, E, paths, layers, propagation, interaction, anti)
-end
-
-function get_osc_prob(cfg::OscillationConfig, matrices::Function=get_matrices(cfg.flavour))
+function get_osc_prob(cfg::OscillationConfig)
 
     function osc_prob(E::AbstractVector{<:Real}, L::AbstractVector{<:Real}, params::NamedTuple; anti=false)
-        U, h_raw = matrices(params)
+        U, h_raw = get_matrices(cfg.flavour)(params)
         h = h_raw .- minimum(h_raw)
         Uc = anti ? conj.(U) : U
-
+    
         U, h, rest = select(Uc, h, cfg.states)
-
-        p = propagate(U, h, E, L, cfg.propagation, cfg.output)
-
+        
+        p = propagate(U, h, E, L, cfg.propagation)
+            
         # results
         p = p .+ rest
         return permutedims(p, (3, 4, 1, 2))
     end
 
     function osc_prob(E::AbstractVector{<:Real}, paths::VectorOfVectors{Path}, layers::StructVector{Layer}, params::NamedTuple; anti=false)
-        U, h_raw = matrices(params)
+        U, h_raw = get_matrices(cfg.flavour)(params)
         h = h_raw .- minimum(h_raw)
         Uc = anti ? conj.(U) : U
-
+    
         U, h, rest = select(Uc, h, cfg.states)
-
-        p = propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti, cfg.output)
-
+    
+        p = propagate(U, h, E, paths, layers, cfg.propagation, cfg.interaction, anti)
+        
         # results
         p = p .+ rest
         return permutedims(p, (3, 4, 1, 2))
@@ -835,7 +789,7 @@ function get_params(cfg::NND)  #'New'
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(10)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
 
@@ -861,7 +815,7 @@ function get_params(cfg::NNM)  #'New'
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
+    params[:N] = ftype(10)
     params[:r] = ftype(1)
     params[:η] = ftype(1+1/params[:N])
     
@@ -873,7 +827,7 @@ function get_priors(cfg::NNM)    #'New'
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = LogUniform(ftype(1e-6),ftype(1e-1))#Uniform(ftype(1e-2),ftype(0.4)) #LogUniform(ftype(1e-3),ftype(1))
-    priors[:N] = DiscreteUniform(ftype(2),ftype(5000))
+    priors[:N] = DiscreteUniform(ftype(2),ftype(200))
     priors[:r] = Uniform(ftype(1e-8),ftype(1))
     priors[:η] =  Uniform(ftype(1.01),ftype(100))
 
@@ -1406,47 +1360,38 @@ end
 
 function get_matrices(cfg::NND) #full schur NND
 
-   # Thread-safe cache for core matrix diagonalization results
-   cache = Dict{Tuple{Int, Float64}, Any}()
-   cache_lock = ReentrantLock()
-
    function get_Nnaturalness(params::NamedTuple)
-
-        N_int = round(Int, ForwardDiff.value(params[:N]))
-        N_dual = params[:N]
-        r=params[:r]
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]   
+        r=params[:r]  
         m0= params[:m₀]
         Lambda= 1e4*1e9  #cutoff scale eV
         l=0.05#higgs coupling
 
         b=1/sqrt(N_dual) #choice of b
-
+        
         η=1+1/N_dual #
-
+        
         T = promote_type(
-            typeof(params[:N]),
+            typeof(params[:N]), 
             typeof(params[:m₀]),
-            typeof(params[:r]),
-            typeof(params[:Δm²₂₁]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
             typeof(params[:Δm²₃₁]),
             typeof(params[:δCP]),
             typeof(params[:θ₁₂]),
             typeof(params[:θ₁₃]),
             typeof(params[:θ₂₃])
-        )
-
-        # T_core only depends on N and r, which are grid parameters (never Dual).
-        # This keeps ForwardDiff Duals from m₀ out of the matrix/eigen, avoiding
-        # "no method matching Float64(::ForwardDiff.Dual)" when caching.
-        T_core = promote_type(typeof(params[:N]), typeof(params[:r]))
+        ) 
 
         m1, m2, m3 = get_abs_masses(params)
 
         m1_T = T(m1)
-        m2_T = T(m2)
+        m2_T = T(m2) 
         m3_T = T(m3)
-
-        factor=(η-1) * 2^(1/(N_dual-1))
+        
+        factor=(η-1) * 2^(1/(N_dual-1)) 
         factorN=factor
 
         if r >= zero(T)
@@ -1455,106 +1400,63 @@ function get_matrices(cfg::NND) #full schur NND
             scale_3= (m3_T ^2)/(r*factor)
         end
 
-        # ── Memoized core matrix diagonalization ──
-        # The core N×N matrix depends only on N and r (and η = 1+1/N).
-        # In a profile scan, N and r are fixed at each grid point while L-BFGS
-        # varies nuisance parameters. Caching avoids ~200 redundant diagonalizations.
-        r_float = Float64(ForwardDiff.value(r))
-        cache_key = (N_int, r_float)
+        matrix_e=zeros(T, N_int,N_int)
+        matrix_m=zeros(T, N_int,N_int)
+        matrix_t=zeros(T, N_int,N_int)
+    
+        for i in 1:N_int
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+            
+            for j in 1:N_int
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
-        cached = Base.lock(cache_lock) do
-            get(cache, cache_key, nothing)
-        end
-
-        if cached !== nothing
-            # Cache hit: load Float64 results and convert to working type T
-            eigvals = T.(cached.eigvals)
-            eigvecs = T.(cached.eigvecs)
-            mu_T = T(cached.mu)
-        else
-            # Cache miss: build core matrix, diagonalize, compute Schur μ
-            # Use T_core (N + r types only) so ForwardDiff Duals don't leak in
-
-            # Build single core matrix (identical for all three flavours)
-            matrix_core = zeros(T_core, N_int, N_int)
-            for i in 1:N_int
-                sqrt_i = sqrt(T_core(2*(i-1)) + T_core(r))
-                for j in 1:N_int
-                    sqrt_j = sqrt(T_core(2*(j-1)) + T_core(r))
-                    if i == j
-                        matrix_core[i, j] = sqrt_i * sqrt_j * η
-                    else
-                        matrix_core[i, j] = sqrt_i * sqrt_j
-                    end
+                if i == j
+                    matrix_e[i, j] =sqrt_i * sqrt_j *η
+                    matrix_m[i, j] =sqrt_i * sqrt_j *η
+                    matrix_t[i, j] =sqrt_i * sqrt_j *η
+                else
+                    matrix_e[i, j] =sqrt_i * sqrt_j 
+                    matrix_m[i, j] =sqrt_i * sqrt_j 
+                    matrix_t[i, j] =sqrt_i * sqrt_j 
                 end
-            end
-
-            eigvals, eigvecs = eigen(Hermitian(matrix_core))
-
-            # Schur complement for SM-like state (i=1)
-            if N_int > 1
-                # KK submatrix C = M[2:N, 2:N] — well-conditioned (no tiny eigenvalues)
-                C_sub = matrix_core[2:N_int, 2:N_int]
-                # Coupling vector (with √r factored out): v_rest[i] = √(2i + r) for i=1..N-1
-                v_rest = Vector{T_core}(undef, N_int - 1)
-                for i in 1:(N_int - 1)
-                    v_rest[i] = sqrt(T_core(2*i) + T_core(r))
-                end
-                # Solve C·w = v_rest (stable linear solve, condition number ~ N²)
-                w = C_sub \ v_rest
-                # Schur complement: μ̃ = η − vᵀ_rest C⁻¹ v_rest (dimensionless, O(1))
-                μ_tilde = η - dot(v_rest, w)
-                # SM mass factor: μ = μ̃/factor — this replaces the unstable λ₁/(r·factor)
-                mu_T_core = μ_tilde / factor
-            else
-                # N=1: only SM states, no KK tower
-                mu_T_core = η / factor
-            end
-
-            # Cache Float64 versions for reuse on subsequent calls
-            cached_data = (eigvals=Float64.(eigvals), eigvecs=Float64.(eigvecs), mu=Float64(mu_T_core))
-            # Convert to T for downstream computations that track profiled params
-            mu_T = T(mu_T_core)
-            Base.lock(cache_lock) do
-                cache[cache_key] = cached_data
             end
         end
 
-        # All three flavours share the same eigenvectors
-        V_e = eigvecs
-        V_m = eigvecs
-        V_t = eigvecs
-
-        eigenvalues_e = eigvals
-        eigenvalues_m = eigvals
-        eigenvalues_t = eigvals
-
-        # PMNS matrix
+        # PMNS matrix 
         U = get_PMNS(params)
 
-        eigenvalues = Vector{T}(undef, 3*N_int)
+        eigenvalues_e, V_e = eigen(Hermitian(matrix_e))
+        eigenvalues_m, V_m = eigen(Hermitian(matrix_m))
+        eigenvalues_t, V_t = eigen(Hermitian(matrix_t))
+      
+        eigenvalues= Vector{T}(undef, 3*N_int)
 
         # KK entries (i≥2): eigenvalue × scale is well-conditioned
         for i in 2:N_int
             eigenvalues[3*i-2] = (eigenvalues_e[i])*scale_1
             eigenvalues[3*i-1] = (eigenvalues_m[i])*scale_2
-            eigenvalues[3*i]   = (eigenvalues_t[i])*scale_3
+            eigenvalues[3*i] = (eigenvalues_t[i])*scale_3
         end
 
         # SM entries (i=1): will be set after Schur complement computation below
 
-        # FinalUmatrix = kron(U_PMNS, eigvecs). For EeOnly only the first row is
-        # needed; for GERDA/KATRIN FinalUmatrix is never used. Compute only row 1
-        # in O(N_int) instead of the full (3N)×(3N) matrix multiply in O((3N)³).
-        # U entries may be complex (cis(δCP)); use the promoted type of the product.
-        TU = typeof(U[1, 1] * V_e[1, 1])
-        U1 = Matrix{TU}(undef, 1, 3*N_int)
-        @inbounds for i in 1:N_int
-            U1[1, 3*i-2] = U[1, 1] * V_e[1, i]
-            U1[1, 3*i-1] = U[1, 2] * V_m[1, i]
-            U1[1, 3*i]   = U[1, 3] * V_t[1, i]
+        Vmatrix = zeros(T, 3*N_int, 3*N_int)
+
+        col = 1
+        for i in 1:N_int
+            Vmatrix[1:3:3*N_int, col] = V_e[:, i]
+            col += 1
+            
+            Vmatrix[2:3:3*N_int, col] = V_m[:, i]
+            col += 1
+            
+            Vmatrix[3:3:3*N_int, col] = V_t[:, i]
+            col += 1
         end
-        FinalUmatrix = U1
+
+        bigU = kron(Matrix{T}(I, N_int, N_int), U)
+
+        FinalUmatrix = bigU * Vmatrix 
 
         delta_mass = Vector{T}(undef, 3*N_int)
 
@@ -1566,21 +1468,40 @@ function get_matrices(cfg::NND) #full schur NND
         #   λ₁ × scale_α = m_α²/factor × (η − vᵀ_rest C⁻¹ v_rest)  [r cancels]
         # This avoids the catastrophic loss of precision when r is small.
 
+        if N_int > 1
+            # KK submatrix C = M[2:N, 2:N] — well-conditioned (no tiny eigenvalues)
+            C_sub = matrix_e[2:N_int, 2:N_int]
+            # Coupling vector (with √r factored out): v_rest[i] = √(2i + r) for i=1..N-1
+            v_rest = Vector{T}(undef, N_int - 1)
+            for i in 1:(N_int - 1)
+                v_rest[i] = sqrt(T(2*i) + T(r))
+            end
+            # Solve C·w = v_rest (stable linear solve, condition number ~ N²)
+            w = C_sub \ v_rest
+            # Schur complement: μ̃ = η − vᵀ_rest C⁻¹ v_rest (dimensionless, O(1))
+            μ_tilde = η - dot(v_rest, w)
+            # SM mass factor: μ = μ̃/factor — this replaces the unstable λ₁/(r·factor)
+            μ = μ_tilde / factor
+        else
+            # N=1: only SM states, no KK tower
+            μ = η / factor
+        end
+
         # Update diagnostic eigenvalues array for SM entries (i=1)
-        eigenvalues[1] = mu_T * m1_T^2
-        eigenvalues[2] = mu_T * m2_T^2
-        eigenvalues[3] = mu_T * m3_T^2
+        eigenvalues[1] = μ * m1_T^2
+        eigenvalues[2] = μ * m2_T^2
+        eigenvalues[3] = μ * m3_T^2
 
         # Apply SM correction to last entries to be consistent with NND scaling
         eigenvalues[end-2] = eigenvalues[end-2] * (factor)/(factorN)
         eigenvalues[end-1] = eigenvalues[end-1] * (factor)/(factorN)
-        eigenvalues[end]   = eigenvalues[end]   * (factor)/(factorN)
+        eigenvalues[end] = eigenvalues[end] * (factor)/(factorN)
 
         # SM-like delta_mass: μ × (m_α² − m₁²) — no r, no tiny eigenvalues
-        sm_ref = mu_T * m1_T^2
+        sm_ref = μ * m1_T^2
         delta_mass[1] = zero(T)
-        delta_mass[2] = mu_T * m2_T^2 - sm_ref
-        delta_mass[3] = mu_T * m3_T^2 - sm_ref
+        delta_mass[2] = μ * m2_T^2 - sm_ref
+        delta_mass[3] = μ * m3_T^2 - sm_ref
 
         # ── KK states (i≥2): use eigenvalues from full matrix (well-conditioned for KK) ──
         # KK eigenvalues are O(0.01–large), so eigenvalue × scale is numerically fine.
@@ -1600,7 +1521,7 @@ function get_matrices(cfg::NND) #full schur NND
                 delta_mass[3*i]   = (eigenvalues_t[i])*scale_3 - sm_ref
             end
         end
-
+      
         h = delta_mass
 
         return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t
@@ -1609,142 +1530,105 @@ function get_matrices(cfg::NND) #full schur NND
 end
 
 
-# Module-level shared cache for NNM core matrix diagonalization.
-# Keyed by (N_int, r_float) — the only parameters the N×N core matrix depends on.
-# Persists across all forward-model evaluations, experiments, and grid points.
-const _nnm_cache = Dict{Tuple{Int, Float64}, @NamedTuple{eigvals::Vector{Float64}, eigvecs::Matrix{Float64}, mu::Float64}}()
-const _nnm_cache_lock = ReentrantLock()
-
 function get_matrices(cfg::NNM) #full schur
 
    function get_Nnaturalness(params::NamedTuple)
 
         #@time begin
-
-        N_int = round(Int, ForwardDiff.value(params[:N]))
-        N_dual = params[:N]
-
-        r=params[:r]
+        
+        N_int = round(Int, ForwardDiff.value(params[:N])) 
+        N_dual = params[:N]   
+    
+        r=params[:r]   
 
         m0= params[:m₀]
         Lambda= 1e4*1e9 #cutoff scale eV
         l=0.05#higgs coupling
         ms=100*1e9 #rehaton mass eV
-
+       
         η=1+1/N_dual ##params[:η]##
         #b=(m0*l*N_dual*ms)/(Lambda^2*r*(η-1))  #choice of b
-
-        #b=1/sqrt(N_dual) #choice of b
+       
+        #b=1/sqrt(N_dual) #choice of b 
         #η=1+(m0*l*N_dual*ms)/(Lambda^2*b^2*r)  #(1+ (m0^2 * l * N_dual)/(Lambda^2 * b^2))  #eta parameter
-
-
+        
+        
         T = promote_type(
-            typeof(params[:N]),
+            typeof(params[:N]), 
             typeof(params[:m₀]),
-            typeof(params[:r]),
-            typeof(params[:Δm²₂₁]),
+            typeof(params[:r]), 
+            typeof(params[:Δm²₂₁]), 
             typeof(params[:Δm²₃₁]),
             typeof(params[:δCP]),
             typeof(params[:θ₁₂]),
             typeof(params[:θ₁₃]),
             typeof(params[:θ₂₃])
-        )
-
-        # T_core only depends on N and r, which are grid parameters (never Dual).
-        # This keeps ForwardDiff Duals from m₀ out of the matrix/eigen, avoiding
-        # "no method matching Float64(::ForwardDiff.Dual)" when caching.
-        T_core = promote_type(typeof(params[:N]), typeof(params[:r]))
+        ) 
 
         m1, m2, m3 = get_abs_masses(params)
 
-
+        
         m1_T = T(m1)
-        m2_T = T(m2)
+        m2_T = T(m2) 
         m3_T = T(m3)
-
-
+        
+        
         factor=(η-1) * 2^(1/(N_dual-1)) #first method
         #factor= (1+(η-1)/N_dual)*(η-1) #second methods
-
+      
 
         if r > zero(T)
             scale_1= (m1_T)/(r*factor)
             scale_2= (m2_T)/(r*factor)
             scale_3= (m3_T)/(r*factor)
-
+        
         end
 
-        # ── Memoized core matrix diagonalization ──
-        # The core N×N matrix depends only on N and r (and η = 1+1/N).
-        # In a profile scan, N and r are fixed at each grid point while L-BFGS
-        # varies nuisance parameters. Caching avoids ~200 redundant diagonalizations.
-        r_float = Float64(ForwardDiff.value(r))
-        cache_key = (N_int, r_float)
+       
+        matrix_e=zeros(T, N_int,N_int)
+        matrix_m=zeros(T, N_int,N_int)
+        matrix_t=zeros(T, N_int,N_int)
 
-        cached = Base.lock(_nnm_cache_lock) do
-            get(_nnm_cache, cache_key, nothing)
-        end
+      
+    
+        for i in 1:N_int
+            
+            sqrt_i = sqrt(T(2*(i-1)) + T(params[:r]))
+           
+            
+            for j in 1:N_int
+                
+                sqrt_j =sqrt(T(2*(j-1)) + T(params[:r]))
 
-        if cached !== nothing
-            # Cache hit: load Float64 results and convert to working type T
-            eigvals = T.(cached.eigvals)
-            eigvecs = T.(cached.eigvecs)
-            mu_T = T(cached.mu)
-        else
-            # Cache miss: build core matrix, diagonalize, compute Schur μ
-            # Use T_core (N + r types only) so ForwardDiff Duals don't leak in
+                
+                if i == j
 
-            # Build single core matrix (identical for all three flavours)
-            matrix_core = zeros(T_core, N_int, N_int)
-            for i in 1:N_int
-                sqrt_i = sqrt(T_core(2*(i-1)) + T_core(r))
-                for j in 1:N_int
-                    sqrt_j = sqrt(T_core(2*(j-1)) + T_core(r))
-                    if i == j
-                        matrix_core[i, j] = sqrt_i * sqrt_j * η
-                    else
-                        matrix_core[i, j] = sqrt_i * sqrt_j
-                    end
+                    matrix_e[i, j] =sqrt_i * sqrt_j *η
+                    matrix_m[i, j] =sqrt_i * sqrt_j *η
+                    matrix_t[i, j] =sqrt_i * sqrt_j *η
+                else
+                    matrix_e[i, j] =sqrt_i * sqrt_j 
+                    matrix_m[i, j] =sqrt_i * sqrt_j 
+                    matrix_t[i, j] =sqrt_i * sqrt_j 
                 end
+
+
             end
 
-            eigvals, eigvecs = eigen(Hermitian(matrix_core))
 
-            # Schur complement for SM-like state (i=1)
-            if N_int > 1
-                C_sub = matrix_core[2:N_int, 2:N_int]
-                v_rest = Vector{T_core}(undef, N_int - 1)
-                for i in 1:(N_int - 1)
-                    v_rest[i] = sqrt(T_core(2*i) + T_core(r))
-                end
-                w = C_sub \ v_rest
-                μ_tilde = η - dot(v_rest, w)
-                mu_T = μ_tilde / factor
-            else
-                mu_T = η / factor
-            end
-
-            # Cache Float64 versions for reuse across all evaluations sharing this (N, r)
-            cached_data = (eigvals=Float64.(eigvals), eigvecs=Float64.(eigvecs), mu=Float64(mu_T))
-            Base.lock(_nnm_cache_lock) do
-                _nnm_cache[cache_key] = cached_data
-            end
         end
 
-        # All three flavours share the same eigenvectors
-        V_e = eigvecs
-        V_m = eigvecs
-        V_t = eigvecs
-
-        eigenvalues_e = eigvals
-        eigenvalues_m = eigvals
-        eigenvalues_t = eigvals
-
-        # PMNS matrix
+        
+    
+        # PMNS matrix 
 
         U = get_PMNS(params)
 
-
+       eigenvalues_e, V_e = eigen(Hermitian(matrix_e))
+       eigenvalues_m, V_m = eigen(Hermitian(matrix_m))
+       eigenvalues_t, V_t = eigen(Hermitian(matrix_t))
+      
+     
        eigenvalues= Vector{T}(undef, 3*N_int)
 
         # KK entries (i≥2): eigenvalue × scale is well-conditioned
@@ -1762,19 +1646,30 @@ function get_matrices(cfg::NNM) #full schur
         #EIG=Diagonal(eigenvalues[1: 3*N_int-3])
 
 
-        # FinalUmatrix = kron(U_PMNS, eigvecs). For EeOnly only the first row is
-        # needed; for GERDA/KATRIN FinalUmatrix is never used. Compute only row 1
-        # in O(N_int) instead of the full (3N)×(3N) matrix multiply in O((3N)³).
-        # U entries may be complex (cis(δCP)); use the promoted type of the product
-        TU = typeof(U[1, 1] * eigvecs[1, 1])
-        U1 = Matrix{TU}(undef, 1, 3*N_int)
-        @inbounds for i in 1:N_int
-            v1i = eigvecs[1, i]  # V_e = V_m = V_t = eigvecs
-            U1[1, 3*i-2] = U[1, 1] * v1i
-            U1[1, 3*i-1] = U[1, 2] * v1i
-            U1[1, 3*i]   = U[1, 3] * v1i
+        Vmatrix = zeros(T, 3*N_int, 3*N_int)
+
+        col = 1
+        for i in 1:N_int  # For each eigenvector index i
+            # Column for electron eigenvector i
+            Vmatrix[1:3:3*N_int, col] = V_e[:, i]
+            col += 1
+            
+            # Column for muon eigenvector i
+            Vmatrix[2:3:3*N_int, col] = V_m[:, i]
+            col += 1
+            
+            # Column for tau eigenvector i
+            Vmatrix[3:3:3*N_int, col] = V_t[:, i]
+            col += 1
         end
-        FinalUmatrix = U1
+        
+        #println("Vmatrix size: ", size(Vmatrix))
+
+        bigU = kron(Matrix{T}(I, N_int, N_int), U)
+
+        FinalUmatrix = bigU * Vmatrix 
+
+        #println("FinalUmatrix size: ", size(FinalUmatrix))
 
         delta_mass = Vector{T}(undef, 3*N_int)
 
@@ -1786,16 +1681,35 @@ function get_matrices(cfg::NNM) #full schur
         #   λ₁ × scale_α = m_α/factor × (η − vᵀ_rest C⁻¹ v_rest)  [r cancels]
         # This avoids the catastrophic loss of precision when r is small.
 
+        if N_int > 1
+            # KK submatrix C = M[2:N, 2:N] — well-conditioned (no tiny eigenvalues)
+            C_sub = matrix_e[2:N_int, 2:N_int]
+            # Coupling vector (with √r factored out): v_rest[i] = √(2i + r) for i=1..N-1
+            v_rest = Vector{T}(undef, N_int - 1)
+            for i in 1:(N_int - 1)
+                v_rest[i] = sqrt(T(2*i) + T(r))
+            end
+            # Solve C·w = v_rest (stable linear solve, condition number ~ N²)
+            w = C_sub \ v_rest
+            # Schur complement: μ̃ = η − vᵀ_rest C⁻¹ v_rest (dimensionless, O(1))
+            μ_tilde = η - dot(v_rest, w)
+            # SM mass ratio: μ = μ̃/factor — this replaces the unstable λ₁/(r·factor)
+            μ = μ_tilde / factor
+        else
+            # N=1: only SM states, no KK tower
+            μ = η / factor
+        end
+
         # Update diagnostic eigenvalues array for SM entries (i=1)
-        eigenvalues[1] = (mu_T * m1_T)^2
-        eigenvalues[2] = (mu_T * m2_T)^2
-        eigenvalues[3] = (mu_T * m3_T)^2
+        eigenvalues[1] = (μ * m1_T)^2
+        eigenvalues[2] = (μ * m2_T)^2
+        eigenvalues[3] = (μ * m3_T)^2
 
         # SM-like delta_mass: μ² × (m_α² − m₁²) — no r, no tiny eigenvalues
-        sm_ref = (mu_T * m1_T)^2
+        sm_ref = (μ * m1_T)^2
         delta_mass[1] = zero(T)
-        delta_mass[2] = (mu_T * m2_T)^2 - sm_ref
-        delta_mass[3] = (mu_T * m3_T)^2 - sm_ref
+        delta_mass[2] = (μ * m2_T)^2 - sm_ref
+        delta_mass[3] = (μ * m3_T)^2 - sm_ref
 
         # ── KK states (i≥2): use eigenvalues from full matrix (well-conditioned for KK) ──
         # KK eigenvalues are O(0.01–6400), so eigenvalue × scale is numerically fine.
@@ -1817,17 +1731,17 @@ function get_matrices(cfg::NNM) #full schur
             end
         end
         #println(delta_mass)
-
+      
         h = delta_mass
-
+        
         #H=Diagonal(h[1:N_int-3])
-
+                
 
         #end #time block
 
+        
 
-
-        return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq
+        return FinalUmatrix, h , eigenvalues, V_e, V_m, V_t# H, FinalUmatrix, h, gamma, gamma_sq  
     end
 
 end

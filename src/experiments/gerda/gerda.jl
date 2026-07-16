@@ -403,7 +403,7 @@ function get_forward_model_correct(physics, assets)
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma = 0.01*1e26 #0.1*1e26 #0.01*1e26#
+        sigma = 0.35*1e26 #0.1*1e26 #0.01*1e26#
         #println("Predicted m_nu: ", predicted_value_T)
        
         return Normal(predicted_value_T, sigma)
