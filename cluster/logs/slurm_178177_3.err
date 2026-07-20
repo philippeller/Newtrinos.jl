@@ -1,9 +1,0 @@
-Unloading lrz_setup/1.0 <H:S>
-  ERROR: Unload of sticky module skipped
-
-Unloading tempdir/2.0 <aL:H:S>
-  ERROR: Unload of sticky module skipped
-Loading julia/1.11.7
-  ERROR: Unable to locate a modulefile for 'intel-mpi'
-  ERROR: Load of requirement intel-mpi failed
-/var/slurmd-cm4/job178180/slurm_script: line 28: julia: command not found

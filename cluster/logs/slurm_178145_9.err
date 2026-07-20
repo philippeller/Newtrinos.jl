@@ -1,3 +1,0 @@
-Loading julia/1.11.7
-  Loading requirement: intel/2024.1.0 intel-mpi/2021.12.0
-slurmstepd: error: *** JOB 178154 ON cm4r13c01s01 CANCELLED AT 2026-06-01T12:08:35 ***

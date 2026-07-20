@@ -1,3 +1,0 @@
-Processing point 3 / 961
-Computing point 3: N=$(scanpoint.N.val), r=$(round(scanpoint.r.val, digits=6))
-Saved result to cluster/results/point_3.jld2

@@ -1,0 +1,43 @@
+# ============================================================
+# NEUTRINO PHYSICS SCANNING SYSTEM CONFIGURATION
+# ============================================================
+
+# EXPERIMENT 
+experiments = juno
+
+# OSCILLATION MODEL
+model = NNM
+
+# MASS ORDERING - NO (Normal) or IO (Inverted)
+ordering =NO
+
+# ============================================================
+# SCAN PARAMETERS
+# ============================================================
+
+# Number of points for each scan dimension (higher = finer, slower)
+scan_resolution = 31
+
+# ============================================================
+# FIXED PARAMETERS FOR EACH SCAN
+# ============================================================
+
+# Scan 1: r vs N (fixed m₀)
+m0_scan1 = 0.01
+
+# Scan 2: r vs m₀ (fixed N)
+N_scan2 = 40
+
+# Scan 3: m₀ vs N (fixed r)
+r_scan3 = 1.0
+
+# ============================================================
+# OUTPUT
+# ============================================================
+
+# Output base directory
+output_dir = plots
+
+# Plot smoothing sigma (used by scan.jl). Default: 0.8
+# Set to a different value to change Gaussian smoothing applied to plots.
+sigma = 0

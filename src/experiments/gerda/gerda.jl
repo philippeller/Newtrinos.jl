@@ -42,106 +42,13 @@ function get_assets(physics; datadir = @__DIR__)
 
     assets = (
 
-        observed =1.8 *1e26, #gerda 
-        # 1*1e27,, # #legend 1000
+        observed =1.8 *1e26,  
         
     )
     return assets
 
     
 end
-
-
- 
-function get_neutrinomas_old(cfg=NNM)
-    function NeutrinoMassNNM_old(params::NamedTuple)
-
-        U= Newtrinos.osc.get_PMNS(params)
-
-        N = round(Int,params[:N])
-
-        func=  Newtrinos.osc.get_matrices(cfg)
-
-        final, h, V = func(params)
-        
-        x_e = U[1,:]
-        x_1 = V[1,:]
-
-        masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
-
-        delta_masses_NN = h
-
-        masses_NN_original = masses_SM_sq[1].+delta_masses_NN
-        #masses_NN_original[1] = masses_SM_sq[1]
-        #masses_NN_original[2] = masses_SM_sq[2]
-        #masses_NN_original[3] = masses_SM_sq[3]
-
-        masses_NN = masses_NN_original
-        
-        #=
-        if any(masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
-            # Find all indices where masses exceed threshold
-            indices_above_threshold = findall(masses_NN_original .> 1e6)
-            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
-            
-            #println("Delta masses exceed threshold: $cancelled > 1e6")
-           
-
-            masses_NN = masses_NN_original[masses_NN_original .<= 1e6] #keep only the ones inside the threshold
-            N=round(Int,length(masses_NN)/3) #reduce the N value accordingly
-
-            #unitarity of the new matrix
-
-            A_square = V[1:N, 1:N]
-            x_1=x_1[1:N]
-            # Make it unitary  (write normalization term)
-            #Q, R = qr(A_square)
-            U, S, V = svd(A_square)
-            U_clean = U*V'
-            V_unitary = U_clean
-
-            # Verify
-            @assert isapprox(V_unitary' * V_unitary, I)
-            xcol=V_unitary[:,1]
-            x_1=V_unitary[1,:]
-            sum_norm = Base.sum(abs.(x_1).^2)
-            sum_norm_col=Base.sum(abs.(xcol).^2)
-            @assert isapprox(sum_norm, sum_norm_col)
-
-        end=#
-
-        # Calculate the neutrino mass sum for the SM only
-        sum = abs((x_e[1]*x_1[1])^2* sqrt(masses_SM_sq[1]))+
-              abs((x_e[2]*x_1[1])^2* sqrt(masses_SM_sq[2]))+
-              abs((x_e[3]*x_1[1])^2* sqrt(masses_SM_sq[3]))
-       
-
-        # Calculate the neutrino mass sum for the other sectors      
-        for i in 1:3
-            
-            x_idx = 4 # Start at 4 for x_1
-            delta_idx = 3+i # Start delta_masses_NN
-
-            for j in 1:(N-3)
-
-                mass = sqrt(masses_NN[delta_idx])
-                integrand= abs((x_e[i]*x_1[x_idx])^2 * mass)
-                sum += integrand
-
-                x_idx += 1      # Increment by 1 for x_1
-                delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
-             
-            end
-
-        end
-   
-
-        return sum
-     
-    end
-    return NeutrinoMassNNM
-end
-
 
 
 function get_neutrinomass_SM(cfg=ThreeFlavour())
@@ -255,15 +162,13 @@ function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(order
         func=  Newtrinos.osc.get_matrices(cfg)
 
         final, h, eigen, V_e, V_m, V_t = func(params)
-        #final, h= func(params)
         masses_NN= eigen
 
         x_e = U[1,:]
         x_1_e = V_e[1,1: N]
         x_1_m = V_m[1,1: N]
         x_1_t = V_t[1,1: N]
-        r=params[:r]
-        m1,m2,m3=Newtrinos.osc.get_abs_masses(params)
+        
 
         mass_e =eigen[1:3:end]      
         mass_m = eigen[2:3:end]   
@@ -293,14 +198,12 @@ function get_neutrinomass(cfg=NNM(three_flavour=Newtrinos.osc.ThreeFlavour(order
 
 
 
-                factor=m_e*m_p* (194/5.27) #
+                factor=m_e*m_p* (194/5.27) 
 
                 if mass>= 1e8 && mass <= 1e12
                     integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)*factor/(factor + mass)*0.7
-
-
                 elseif mass> 1e12    
-                 integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)*factor/(factor + mass)*1
+                    integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)*factor/(factor + mass)*1
                 else
                     integrand= abs((X[i][j].*(x_e[i])))^2 * sqrt(mass)
                 end
@@ -324,7 +227,7 @@ function mixing_angles(params::NamedTuple,cfg=NNM)
     N = round(Int, params[:N])
 
     func = Newtrinos.osc.get_matrices(cfg)
-    #final, h, V, eigen= func(params)
+
     final, h, eigen, V_e, V_m, V_t = func(params)
 
 
@@ -333,9 +236,9 @@ function mixing_angles(params::NamedTuple,cfg=NNM)
     x_1_m = V_m[1, 1:N]
     x_1_t = V_t[1, 1:N]
 
-    angles_e=abs.(x_1_e)#abs.(x_e[1]*x_1_e)
-    angles_m=abs.(x_1_m)#abs.(x_e[2]*x_1_m)
-    angles_t=abs.(x_1_t)#abs.(x_e[3]*x_1_t)
+    angles_e=abs.(x_1_e)
+    angles_m=abs.(x_1_m)
+    angles_t=abs.(x_1_t)
 
 
     mass_e = eigen[1:3:end]      
@@ -354,22 +257,15 @@ function get_halftime(cfg= Newtrinos.osc.NNM())
      
      mass=get_neutrinomass(cfg)(params)
      
-     Gg=3.37*(1e-15) #2.363*( 1e-15) #yr^-1
-     g_a=1.27#1.25
+     Gg=3.37*(1e-15) 
+     g_a=1.27
      M_sq=(5.27)^2
      m_e=0.511*(1e6)
-
-    
-
 
      T_inv=(Gg*((g_a)^4)*M_sq*(mass)^2)/(m_e)^2
      Thalf=1/T_inv
      
-     #println(Thalf)
-
-
-
-     return Thalf
+       return Thalf
 
     end
     return halftime
@@ -377,34 +273,20 @@ end
 
 
 
-function comparing_times(physics,experiments, params)
-    # Use the flavour model from the provided physics (respect the global config)
-    cfg = physics.osc.cfg.flavour
-    predicted_value = get_halftime(cfg)(params)
-    observed = experiments.gerda.assets.observed
-    dist_observed = Normal(observed, 0.01*1e27)
-    twosigma_level = quantile(dist_observed, 0.9772)
-
-    return predicted_value, twosigma_level
-end    
-
-
-
 
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
-        # Use the flavour model provided in physics to respect model and ordering from config
+        
         cfg = physics.osc.cfg.flavour
         observed = 1.8 * 1e26# gerda
-        # Use the appropriate neutrinomass/halftime function for this flavour model
+      
         fun = get_halftime(cfg)
         predicted_value_T = fun(params)
 
         if predicted_value_T >= observed 
            predicted_value_T=observed
         end   
-        sigma = 0.35*1e26 #0.1*1e26 #0.01*1e26#
-        #println("Predicted m_nu: ", predicted_value_T)
+        sigma = 0.1*1e26 
        
         return Normal(predicted_value_T, sigma)
        

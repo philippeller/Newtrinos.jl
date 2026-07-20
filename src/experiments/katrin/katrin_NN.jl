@@ -38,25 +38,10 @@ end
 function get_assets(physics; datadir = @__DIR__)
     @info "Loading Katrin data"
 
-    # Read the CSV data
-    data_df = CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-    
-    # Create interpolation function
-    #posterior_m_nu = interpolate((data_df[!, 1],), data_df[!, 2], Gridded(Linear()))
-    #posterior_interp = extrapolate(posterior_m_nu, 0.0)  # Interpolation function
-    
-    # Use original DataFrame for observed data
-    observed = (
-        mass_values = data_df[:, 1],    # x-axis values from DataFrame
-        counts = data_df[:, 2],         # y-axis values from DataFrame
-    )
-    
-    posterior_sample = observed
-    posterior_mean = mean(posterior_sample)
+       
     assets = (
 
-        posterior_sample = observed,
-        mass_values = observed.mass_values,
+       
         observed = -0.14,
        
     )
@@ -67,262 +52,7 @@ end
 
 
 
-# function to get m0 posterior from m_nu posterior in SM 
-
-function get_posterior_SM(params)
-
-        
-    #load m_nu posterior data
-
-    posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-
-    #make the distribution continuous
-    #posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    #posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
-
-
-    m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
-
-    for i in 1:size(posterior_data_m_nu, 1)
-        m_nu_squared = posterior_data_m_nu[!, 1][i] 
-
-        p = params
-        U = Newtrinos.osc.get_PMNS(p)
-
-        sumU = 0.0
-        for j in 1:3 
-            sumU += abs(U[1, j])^2
-        end
-
-        term1 = abs(U[1, 2])^2 * (p[:Δm²₂₁])
-        term2 = abs(U[1, 3])^2 * (p[:Δm²₃₁])  
-        m0_squared = (m_nu_squared - term1 - term2) / sumU
-
-        m0_posterior[i, 1] = m0_squared
-        jacobian = (sumU * sqrt(m0_squared)) / sqrt(m_nu_squared)
-
-        m0_posterior[i, 2] =  posterior_data_m_nu[!, 2][i]  * jacobian
-
-    end
-    return m0_posterior
-
-end    
-
-# function to get m0 posterior from m_nu posterior in NND-NND
-
-
-function get_posterior_NN(params, cfg)
-
-        
-    #load m_nu posterior data
-
-    posterior_data_m_nu=CSV.read("/home/sofialon/Newtrinos.jl/src/experiments/katrin/posterior_m_nu.csv", DataFrame)
-
-    #make the distribution continuous
-    #posterior_m_nu=interpolate((posterior_data_m_nu[!,1],), posterior_data_m_nu[!,2], Gridded(Linear()))
-    #posterior_m_nu = extrapolate(posterior_m_nu, 0.0)  # Extrapolate with 0.0 outside bounds
-
-
-    m0_posterior = zeros(size(posterior_data_m_nu, 1), 2)
-
-    for k in 1:size(posterior_data_m_nu, 1)
-
-        m_nu_squared = posterior_data_m_nu[!,1][k] 
-
-        p= params
-        N = round(Int,params[:N])
-
-        U= Newtrinos.osc.get_PMNS(p)
-
-        func= Newtrinos.osc.get_matrices(cfg)
-        final, h, V = func(params)
-
-        x_e = U[1,:]
-        x_1 = V[1,:]
-
-        
-        delta_masses_NN_original = h
-
-        delta_m_nu_sq = 0.0
-        sumU = 0.0
-        sumV= 0.0
-
-        for i in 1:3
-            sumU += abs(U[1,i])^2
-        end
-
-        for j in 1:N
-            sumV += abs(V[1,j])^2
-        end
-
-        sum=params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2
-        
-        #eliminate masses that exceed the threshold
-        delta_masses_NN= delta_masses_NN_original
-         
-        if any(delta_masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
-            # Find all indices where masses exceed threshold
-            indices_above_threshold = findall(delta_masses_NN_original .> 1e6)
-            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
-            
-            #println("Delta masses exceed threshold: $cancelled > 1e6")
-           
-
-            delta_masses_NN = delta_masses_NN_original[delta_masses_NN_original .<= 1e6] #keep only the ones inside the threshold
-            N=round(Int,length(delta_masses_NN)/3) #reduce the N value accordingly
-
-            #unitarity of the new matrix
-
-            A_square = V[1:N, 1:N]
-            x_1=x_1[1:N]
-            # Make it unitary  (write normalization term)
-            #Q, R = qr(A_square)
-            U, S, V = svd(A_square)
-            U_clean = U*V'
-            V_unitary = U_clean
-
-            # Verify
-            @assert isapprox(V_unitary' * V_unitary, I)
-            xcol=V_unitary[:,1]
-            x_1=V_unitary[1,:]
-            sum_norm = Base.sum(abs.(x_1).^2)
-            sum_norm_col=Base.sum(abs.(xcol).^2)
-            @assert isapprox(sum_norm, sum_norm_col)
-
-        end
-
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2
-
-            x_idx = 4 # Start at 4 for x_1
-            delta_idx = 3+i # Start delta_masses_NN
-            sum_int = 0.0
-            for j in 1:(N-3)
-
-            delta_mass = delta_masses_NN[delta_idx]
-            integrand= squared_x_e * abs(x_1[x_idx])^2 * delta_mass
-            sum_int += integrand
-
-            x_idx += 1      # Increment by 1 for x_1
-            delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
-            end
-
-            delta_m_nu_sq += sum_int
-
-        end
-
-        m0_squared= (m_nu_squared-delta_m_nu_sq-sum) / (sumU*sumV)
-
-        
-       jacobian = (sumU * sumV * sqrt(abs(m0_squared))) / sqrt(m_nu_squared)
-
-        if m0_squared < 0
-            m0_squared = 0.0
-        end
-
-        m0_posterior[k, 1] = m0_squared
-        m0_posterior[k, 2] = posterior_data_m_nu[!, 2][k] * jacobian
-
-
-    end
-    return m0_posterior
-
-end    
-
-
-
-
-function get_neutrinomass_old(cfg=NND)
-    function NeutrinoMassNND_old(params::NamedTuple)
-
-        U= Newtrinos.osc.get_PMNS(params)
-
-        N = round(Int,params[:N])
-
-        func=  Newtrinos.osc.get_matrices(cfg)
-
-        final, h, V, eigen = func(params)
-        
-        
-        x_e = U[1,:]
-        x_1 = V[1,:]
-
-        masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
-
-        delta_masses_NN = h
-
-        masses_NN_original = masses_SM_sq[1].+delta_masses_NN
-        masses_NN_original[1] = masses_SM_sq[1]
-        masses_NN_original[2] = masses_SM_sq[2]
-        masses_NN_original[3] = masses_SM_sq[3]
-        masses_NN = masses_NN_original
-        
-        #=
-        if any(masses_NN_original .> 1e6)   #exclude the masses that exceed the treshold
-            # Find all indices where masses exceed threshold
-            indices_above_threshold = findall(masses_NN_original .> 1e6)
-            #println("Indices of masses exceeding threshold: ", indices_above_threshold)
-            
-            #println("Delta masses exceed threshold: $cancelled > 1e6")
-           
-
-            masses_NN = masses_NN_original[masses_NN_original .<= 1e6] #keep only the ones inside the threshold
-            N=round(Int,length(masses_NN)/3) #reduce the N value accordingly
-
-            #unitarity of the new matrix
-
-            A_square = V[1:N, 1:N]
-            x_1=x_1[1:N]
-            # Make it unitary  (write normalization term)
-            #Q, R = qr(A_square)
-            U, S, V = svd(A_square)
-            U_clean = U*V'
-            V_unitary = U_clean
-
-            # Verify
-            @assert isapprox(V_unitary' * V_unitary, I)
-            xcol=V_unitary[:,1]
-            x_1=V_unitary[1,:]
-            sum_norm = Base.sum(abs.(x_1).^2)
-            sum_norm_col=Base.sum(abs.(xcol).^2)
-            @assert isapprox(sum_norm, sum_norm_col)
-
-        end=#
-
-        #PROBLEMATIC SUM!
-        #sum = masses_SM_sq[1]*(abs(x_e[1])^2*abs(x_1[1])^2 +params[:Δm²₃₁]*abs(x_e[3])^2*abs(x_1[3])^2 + params[:Δm²₂₁]*abs(x_e[2])^2*abs(x_1[2])^2)
-        sum=Float64(0.0)
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2
-
-            x_idx = 1 # Start at 1 for x_1
-            delta_idx = 3+i # Start delta_masses_NN
-
-            for j in 1:(N-3)
-             
-                mass = masses_NN[delta_idx]
-                integrand= squared_x_e * abs(x_1[x_idx])^2 * mass
-                sum += integrand
-
-                x_idx += 1      # Increment by 1 for x_1
-                delta_idx += 3  # Increment by 3 for delta_masses_NN (since you had 3*j)
-             
-            end
-
-        end
-   
-
-        return sum
-     
-    end
-    return NeutrinoMassNND
-end
-
-
-
-
-
-function get_neutrinomass_12_06(cfg=NND)
+function get_neutrinomass_all_modes(cfg=NND)
     function NeutrinoMassNN(params::NamedTuple)
         U = Newtrinos.osc.get_PMNS(params)
   
@@ -337,9 +67,6 @@ function get_neutrinomass_12_06(cfg=NND)
         x_1_t = V_t[1, 1:N]
      
 
-        #norms = sqrt.( Base.sum(abs2, V_t; dims=1))  # 1 × N row vector
-        #println("Norms of V_t: ", norms)
-
 
         mass_e = eigen[1:3:end]      
         mass_m = eigen[2:3:end]   
@@ -350,10 +77,7 @@ function get_neutrinomass_12_06(cfg=NND)
     
        cut=(18.6*1e3)^2
        if any(mass_e .> cut) 
-           #=mass_e = mass_e[mass_e .<= cut]
-            N_e = length(mass_e)
-            x_1_e = V_e[1, 1:N_e]=#
-            
+                   
             mask = mass_e .<= cut
 
             mass_e = mass_e[mask]
@@ -368,10 +92,7 @@ function get_neutrinomass_12_06(cfg=NND)
         end
 
         if any(mass_m .> cut) 
-           #= mass_m = mass_m[mass_m .<= cut]
-            N_m = length(mass_m)
-            x_1_m = V_m[1, 1:N_m]=#
-            
+        
             mask = mass_m .<= cut
 
             mass_m = mass_m[mask]
@@ -386,12 +107,7 @@ function get_neutrinomass_12_06(cfg=NND)
         end
 
         if any(mass_t .> cut) 
-           #= println("Masses in tau exceed cut-off, applying filter.")
-            mass_t = mass_t[mass_t .<= cut]
-            N_t = length(mass_t)
-            x_1_t = V_t[1, 1:N_t]=#
-
-           
+          
             mask = mass_t .<= cut
 
             mass_t = mass_t[mask]
@@ -404,9 +120,6 @@ function get_neutrinomass_12_06(cfg=NND)
 
         end
 
-        
-        #norms = sqrt.(Base.sum(abs2, V_t; dims=2))  # 1 × N row vector
-        #println("Norms of V_t: ", norms)
      
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
@@ -448,11 +161,6 @@ function get_neutrinomass(cfg=NND)
         x_1_m = V_m[1, 1:N]
         x_1_t = V_t[1, 1:N]
      
-
-        #norms = sqrt.( Base.sum(abs2, V_t; dims=1))  # 1 × N row vector
-        #println("Norms of V_t: ", norms)
-
-
         mass_e = eigen[1:3:end]      
         mass_m = eigen[2:3:end]   
         mass_t = eigen[3:3:end]      
@@ -460,13 +168,9 @@ function get_neutrinomass(cfg=NND)
         N_m = length(mass_m)
         N_t = length(mass_t)
     
-       #cut=(18.6*1e3)^2
        cut= (1)^2
        if any(mass_e .> cut) 
-           #=mass_e = mass_e[mass_e .<= cut]
-            N_e = length(mass_e)
-            x_1_e = V_e[1, 1:N_e]=#
-            
+         
             mask = mass_e .<= cut
 
             mass_e = mass_e[mask]
@@ -481,9 +185,7 @@ function get_neutrinomass(cfg=NND)
         end
 
         if any(mass_m .> cut) 
-           #= mass_m = mass_m[mass_m .<= cut]
-            N_m = length(mass_m)
-            x_1_m = V_m[1, 1:N_m]=#
+           
             
             mask = mass_m .<= cut
 
@@ -499,11 +201,7 @@ function get_neutrinomass(cfg=NND)
         end
 
         if any(mass_t .> cut) 
-           #= println("Masses in tau exceed cut-off, applying filter.")
-            mass_t = mass_t[mass_t .<= cut]
-            N_t = length(mass_t)
-            x_1_t = V_t[1, 1:N_t]=#
-
+     
            
             mask = mass_t .<= cut
 
@@ -517,9 +215,7 @@ function get_neutrinomass(cfg=NND)
 
         end
 
-        
-        #norms = sqrt.(Base.sum(abs2, V_t; dims=2))  # 1 × N row vector
-        #println("Norms of V_t: ", norms)
+ 
      
         N = [N_e, N_m, N_t]
         masses_NN = [mass_e, mass_m, mass_t]
@@ -545,97 +241,13 @@ function get_neutrinomass(cfg=NND)
 end
 
 
-
-
-
-function get_neutrinomass_a(cfg=NND)   #with analytical formula for eigenvalues
-    function NeutrinoMassNN(params::NamedTuple)
-        U = Newtrinos.osc.get_PMNS(params)
-  
-        N = round(Int, params[:N])
-
-        func = Newtrinos.osc.get_matrices(cfg)
-        final, h, eigen, V_e, V_m, V_t = func(params)
-
-        x_e = U[1, :]
-        x_1_e = V_e[1, 1:N]
-        x_1_m = V_m[1, 1:N]
-        x_1_t = V_t[1, 1:N]
-
-        r=params[:r]
-        m1,m2,m3=Newtrinos.osc.get_abs_masses(params)
-
-     
-        mass_e = []      
-        mass_m =[]  
-        mass_t =[]    
-         
-
-        for i in 1:N
-            eigenvalue_e =(2(i-1) + r)^2*m1^2/r^2
-
-            eigenvalue_mu=(2(i-1) + r)^2*m2^2/r^2
-
-            eigenvalue_t =(2(i-1) + r)^2*m3^2/r^2
-            push!(mass_e, eigenvalue_e)
-            push!(mass_m, eigenvalue_mu)
-            push!(mass_t, eigenvalue_t)
-        end
-        
-        N_e = length(mass_e)
-        N_m = length(mass_m)
-        N_t = length(mass_t)
-    
-        cut=(1.8*1e3)^2
-        if any(mass_e .> cut) 
-            mass_e = mass_e[mass_e .<= cut]
-            N_e = length(mass_e)
-            x_1_e = V_e[1, 1:N_e]
-        end
-
-        if any(mass_m .> cut) 
-            mass_m = mass_m[mass_m .<= cut]
-            N_m = length(mass_m)
-            x_1_m = V_m[1, 1:N_m]
-        end
-
-        if any(mass_t .> cut) 
-            mass_t = mass_t[mass_t .<= cut]
-            N_t = length(mass_t)
-            x_1_t = V_t[1, 1:N_t]
-        end
-     
-        N = [N_e, N_m, N_t]
-        masses_NN = [mass_e, mass_m, mass_t]
-
-        X = [x_1_e, x_1_m, x_1_t]
-        sum = Float64(0.0)
-
-        for i in 1:3
-            squared_x_e = abs(x_e[i])^2
-        
-            for j in 1:N[i]
-                mass = masses_NN[i][j]
-                integrand = squared_x_e * abs(X[i][j])^2 * mass
-                sum += integrand
-            end
-        end
-        
-       
-        return sum
-            
-    end
-    return NeutrinoMassNN
-end
-
-
 function mixing_angles(params::NamedTuple,cfg=NND)
 
     U = Newtrinos.osc.get_PMNS(params)
     N = round(Int, params[:N])
 
     func = Newtrinos.osc.get_matrices(cfg)
-    #final, h, V, eigen= func(params)
+ 
     final, h, eigen, V_e, V_m, V_t = func(params)
 
 
@@ -656,95 +268,6 @@ function mixing_angles(params::NamedTuple,cfg=NND)
     return mass_e, mass_m, mass_t ,angles_e, angles_m, angles_t
 
 end    
-
-
-function get_neutrinomass_new(cfg=NND)
-    function NeutrinoMassNND_new(params::NamedTuple)
-
-        U= Newtrinos.osc.get_PMNS(params)
-
-        N = round(Int,params[:N])
-
-        func=  Newtrinos.osc.get_matrices(cfg)
-
-        
-        final, h= func(params)
-        
-        x_e = final[1,:]
-        
-
-        masses_SM_sq = Newtrinos.osc.get_abs_masses(params).^2
-
-        delta_masses_NN = h
-        masses_NN_original= h
-
-    
-        masses_NN_original[1] = masses_SM_sq[1]
-        masses_NN_original[2] = masses_SM_sq[2]
-        masses_NN_original[3] = masses_SM_sq[3]
-
-        for i in 2:N
-
-            masses_NN_original[3*i-2]=delta_masses_NN[3*i-2]+ masses_SM_sq[1]
-            masses_NN_original[3*i-1]=delta_masses_NN[3*i-1]+ masses_SM_sq[2]
-            masses_NN_original[3*i]=delta_masses_NN[3*i]+ masses_SM_sq[3] 
-
-
-        end    
-       
-        N_new=N
-
-        if any(masses_NN_original .> 1e6)  
-            
-            indices_above_threshold = findall(masses_NN_original .> 1e6)
-            println("Indices of masses exceeding threshold: ", indices_above_threshold)
-
-            
-            masses_NN = masses_NN_original[masses_NN_original .<= 1e6] #keep only the ones inside the threshold
-            N=round(Int,length(masses_NN)) #reduce the N value accordingly
-
-            #unitarity of the new matrix
-
-            A_square = final[1:N, 1:N]
-            x_e=x_e[1:N]
-            # Make it unitary  (write normalization term)
-            #Q, R = qr(A_square)
-            U, S, V = svd(A_square)
-            U_clean = U*V'
-            V_unitary = U_clean
-
-            # Verify
-            #@assert isapprox(V_unitary' * V_unitary, I)
-            xcol=V_unitary[:,1]
-            x_e=V_unitary[1,:]
-            sum_norm = Base.sum(abs.(x_e).^2)
-            sum_norm_col=Base.sum(abs.(xcol).^2)
-            #@assert isapprox(sum_norm, sum_norm_col)
-           
-            
-            N_new=round(Int,length(masses_NN))
-            
-
-        end   
-        
-        m_nu_sq = 0.0
-
-        for i in 1:N_new
-            squared_x_e = abs(x_e[i])^2*masses_NN_original[i]
-
-            m_nu_sq += squared_x_e
-
-        end
-
-     return m_nu_sq
-
-
-
-     
-    end
-    return NeutrinoMassNND
-end
-
 
 
 function get_neutrinomass_SM(cfg=ThreeFlavour())
@@ -774,56 +297,14 @@ function get_neutrinomass_SM(cfg=ThreeFlavour())
 end
 
 
-
-
-
-
 function get_forward_model_correct(physics, assets)
     function forward_model(params)
-        # Respect global config by using the flavour model provided in physics
         cfg = physics.osc.cfg.flavour
-        predicted_value = get_neutrinomass(cfg)(params) # get_neutrinomass_SM(cfg)(params)
-        # If needed, constrain predicted_value relative to observed
-        # if predicted_value <= assets.observed
-        #    predicted_value = assets.observed
-        # end
-        return Normal(predicted_value, 0.13) #Normal(predicted_value, 0.15)
+        predicted_value = get_neutrinomass(cfg)(params) 
        
-
+        return Normal(predicted_value, 0.13) 
     end
     return forward_model
-end
-
-function comparing_masses(physics,experiments, params)
-    # Respect global config: use the flavour model from provided physics
-    cfg = physics.osc.cfg.flavour
-    predicted_value = get_neutrinomass(cfg)(params)
-    observed= experiments.katrin.assets.observed
-    dist_observed= Normal(observed, 0.15)
-    twosigma_level= quantile(dist_observed, 0.9772)
-
-    return predicted_value, twosigma_level
-end    
-
-
-function create_katrin_likelihood_posteriors(experiments,params)
-    katrin_exp = experiments.katrin
-    posterior_sample = katrin_exp.assets.observed
-    posterior_mean = mean(posterior_sample)
-    posterior_std = std(posterior_sample)
-    katrin_posterior = Normal(posterior_mean, posterior_std)
-    
-    predicted = get_posterior_SM(params)
-    predicted = predicted[:,2]  # Extract the second column (counts)
-    predicted_mean = mean(predicted)
-    predicted_std = std(predicted)
-    #predicted = Normal(predicted_mean, predicted_std)
-    predicted_safe = max.(predicted, 1e-10)  # Avoid log(0) issues
-    posterior_sample_safe = max.(posterior_sample, 1e-10)  # Avoid log(0) issues
-
-    likelihood=-2*sum(log.(predicted_safe).- log.(posterior_sample_safe))
-
-    return likelihood
 end
 
 
