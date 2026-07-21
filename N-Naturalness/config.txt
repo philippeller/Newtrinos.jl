@@ -1,5 +1,5 @@
 # ============================================================
-# NEUTRINO PHYSICS SCANNING SYSTEM CONFIGURATION
+# NEUTRINO PHYSICS CONFIGURATION
 # ============================================================
 
 # EXPERIMENT 

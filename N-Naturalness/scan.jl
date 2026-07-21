@@ -19,7 +19,6 @@ using ColorSchemes
 using ImageFiltering
 import JLD2
 
-# ==================== CONFIG PARSING ====================
 
 """
     parse_config(filename::String) -> Dict

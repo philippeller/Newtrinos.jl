@@ -237,7 +237,7 @@ end
 
 
 
-function get_params(cfg::NND)  #NNaturalness Dirac
+function get_params(cfg::NND)  #N-Naturalness Dirac
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
@@ -248,7 +248,7 @@ function get_params(cfg::NND)  #NNaturalness Dirac
     NamedTuple(params)
 end
 
-function get_priors(cfg::NND)    #NNaturalness Dirac
+function get_priors(cfg::NND)    #N-Naturalness Dirac
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
     priors[:m₀] = LogUniform(ftype(1e-6),ftype(1e-1))
@@ -260,7 +260,7 @@ function get_priors(cfg::NND)    #NNaturalness Dirac
 end
 
    
-function get_params(cfg::NNM)  #NNaturalness Majorana
+function get_params(cfg::NNM)  #N-Naturalness Majorana
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
    
@@ -272,7 +272,7 @@ function get_params(cfg::NNM)  #NNaturalness Majorana
     NamedTuple(params)
 end
 
-function get_priors(cfg::NNM)    #NNaturalness Majorana
+function get_priors(cfg::NNM)    #N-Naturalness Majorana
     std = get_priors(cfg.three_flavour)
     priors = OrderedDict(pairs(std))
     priors = OrderedDict{Symbol, Distribution}(pairs(std))
