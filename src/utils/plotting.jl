@@ -4,6 +4,7 @@ using LinearAlgebra
 using Distributions
 using DataStructures
 using Makie
+using CairoMakie
 import Makie: plot, plot!
 using Makie
 using BAT
