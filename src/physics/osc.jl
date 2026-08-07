@@ -693,9 +693,9 @@ function get_params(cfg::NND)  #N-Naturalness Dirac
     std = get_params(cfg.three_flavour)
     params = OrderedDict(pairs(std))
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
-    params[:r] = ftype(1)
-    params[:η] = ftype(1+1/params[:N])
+    params[:N] = ftype(50)
+    params[:r] = ftype(1e-8)
+    
 
     NamedTuple(params)
 end
@@ -706,8 +706,7 @@ function get_priors(cfg::NND)    #N-Naturalness Dirac
     priors[:m₀] = LogUniform(ftype(1e-6),ftype(1e-1))
     priors[:N] = DiscreteUniform(ftype(2),ftype(5000))
     priors[:r] = LogUniform(ftype(1e-6),ftype(1))
-    priors[:η] =  Uniform(ftype(1.01),ftype(100))
-
+  
     NamedTuple(priors)
 end
 
@@ -717,9 +716,9 @@ function get_params(cfg::NNM)  #N-Naturalness Majorana
     params = OrderedDict(pairs(std))
    
     params[:m₀] = ftype(0.01)
-    params[:N] = ftype(20)
-    params[:r] = ftype(1)
-    params[:η] = ftype(1+1/params[:N])
+    params[:N] = ftype(50)
+    params[:r] = ftype(1e-8)
+  
     
     NamedTuple(params)
 end
@@ -731,7 +730,7 @@ function get_priors(cfg::NNM)    #N-Naturalness Majorana
     priors[:m₀] = LogUniform(ftype(1e-6),ftype(1e-1))
     priors[:N] = DiscreteUniform(ftype(2),ftype(5000))
     priors[:r] = LogUniform(ftype(1e-6),ftype(1))
-    priors[:η] =  Uniform(ftype(1.01),ftype(100))
+   
 
     NamedTuple(priors)
 end
