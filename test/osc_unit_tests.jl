@@ -14,7 +14,7 @@ using StaticArrays
             Newtrinos.osc.Sterile(),
             Newtrinos.osc.ADD(),
             Newtrinos.osc.NND(),
-            Newtrinos.osc.NNM()] #=,
+            Newtrinos.osc.NNM(),] #=,
             Newtrinos.osc.Darkdim_Lambda(),
             Newtrinos.osc.Darkdim_Masses(),
             Newtrinos.osc.Darkdim_cas()]=#
