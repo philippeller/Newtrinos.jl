@@ -96,7 +96,7 @@ function get_assets(datadir = @__DIR__,use_flux_data::Bool = false)
 
     er_edges = collect(3:0.5:300) # keVnr
     isotopes = [
-        (fraction=1.0, mass=37.3e3, Z=18, N=22, Rn_key=:Rn_Ar, Rn_nom=4.1039) # Ar-37
+        (fraction=1.0, mass=37.3e3, Z=18, N=22, Rn_key=:Rn_Ar, Rn_nom=3.6) # Ar-40
     ] # List of isotopes with [fraction, Nuclear mass (GeV), Z, N=A-Z, Rn_key]
     Nt = (1.0/0.039948) * 6.023e+23
     

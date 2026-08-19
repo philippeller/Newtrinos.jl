@@ -54,11 +54,11 @@ function build_params_and_priors(isotopes)
         :cevns_xsec_b => Uniform(-2.0, 1.0),
         :cevns_xsec_c => Uniform(-3000, 3000),
         :cevns_xsec_d => Uniform(-1e6, 1e6),
-        :sin2thetaW => truncated(Normal(0.231, 0.00013), 0.2, 0.26),
+        :sin2thetaW => truncated(Normal(0.2382, 0.0011), 0.2, 0.26),
     )
     for iso in isotopes
         param_dict[iso.Rn_key] = iso.Rn_nom
-        prior_dict[iso.Rn_key] = Uniform(iso.Rn_nom - 0.05*iso.Rn_nom, iso.Rn_nom + 0.05*iso.Rn_nom) # allow up to ±5% expansion from nominal Rn
+        prior_dict[iso.Rn_key] = Uniform(iso.Rn_nom - 0.1*iso.Rn_nom, iso.Rn_nom + 0.1*iso.Rn_nom) # allow up to ±10% expansion from nominal Rn
     end
     return ((; param_dict...), (; prior_dict...))
 end
@@ -117,7 +117,8 @@ Supported models (ASCII symbols):
 function ffsq(er, mn, rn; model::Symbol = :helm, s_fm::Real = 0.9, a_fm::Real = 0.7, sf_a_fm::Real = 0.523)
     if model === :helm
         # Helm-like: F(q) = 3 j1(q r0)/(q r0) * exp(-(q s)^2/4), so F^2 uses exp(-(q s)^2/2)
-        r0 = rn / hcut_c
+        r0_fm = sqrt((5/3)*(rn^2-(3*s_fm^2)))
+        r0 = r0_fm / hcut_c
         q = _q_from_er(er, mn)
         denom = q * r0
         ratio = _three_j1_over_x(denom)
@@ -131,8 +132,8 @@ function ffsq(er, mn, rn; model::Symbol = :helm, s_fm::Real = 0.9, a_fm::Real = 
         # Citation for this parameterization:
         #   S. R. Klein and J. Nystrand, Phys. Rev. C 60, 014903 (1999).
         q = _q_from_er(er, mn)
-        R_fm = sqrt(5 / 3) * rn
-        R = R_fm / hcut_c
+        r0_fm = sqrt((rn^2 - 6*a_fm^2)*(5/3))
+        R = r0_fm / hcut_c
         a = a_fm / hcut_c
         x = q * R
         hard = _three_j1_over_x(x)

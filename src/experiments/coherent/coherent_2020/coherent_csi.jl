@@ -156,8 +156,8 @@ function get_assets(datadir = @__DIR__, sns_flux = nothing)
     # Basic assets that are always loaded
     er_edges = LinRange(3, 200, Int((200 - 3) / 0.5))  # keV
     isotopes = [
-        (fraction=0.49, mass=123.8e3, Z=55, N=78, Rn_key=:Rn_Cs, Rn_nom=5.7242),  # Cs-133
-        (fraction=0.51, mass=118.21e3, Z=53, N=74, Rn_key=:Rn_I, Rn_nom=5.7242)   # I-127
+        (fraction=0.49, mass=123.8e3, Z=55, N=78, Rn_key=:Rn_Cs, Rn_nom=5.0),  # Cs-133
+        (fraction=0.51, mass=118.21e3, Z=53, N=74, Rn_key=:Rn_I, Rn_nom=5.0)   # I-127
     ]  # List of isotopes with [fraction, Nuclear mass (MeV), Z, N=A-Z, Rn_key, Rn_nom (fm)]
     Nt = 2 * (14.6 / 0.25981) * 6.023e+23
     light_yield = 13.35  # PE/keVee
