@@ -136,9 +136,13 @@ You can find tutorials and more examples in the [documentation](https://philippe
 All contributions, bug reports, bug fixes, documentation improvements, enhancements, and ideas are welcome. If you want to contribute, please take a look at the [contribution guidelines](https://philippeller.github.io/Newtrinos.jl/dev/contribution_guidelines/).
 
 ## References
+Software paper:
+* [Newtrinos.jl: A Julia Package for Global Analysis of Neutrino Data](https://arxiv.org/abs/2608.12940) - under review
 
-Newtrinos has been used to produce the results presented in:
-* [Testing the number of neutrino species with a global fit of neutrino data](https://arxiv.org/abs/2402.00490) Published in: Phys.Rev.D 109 (2024) 9, 095016
-* [Constraints on non-unitary neutrino mixing in light of atmospheric and reactor neutrino data](https://arxiv.org/abs/2407.20388) Published in: JHEP 05 (2025) 130
-* [A neutrino data analysis of extra-dimensional theories with massive bulk fields](https://arxiv.org/abs/2508.04274) Published in: Phys.Rev.D 112 (2025) 5, 055009
+Newtrinos.jl has been used to produce the results presented in:
+* [Testing the number of neutrino species with a global fit of neutrino data](https://arxiv.org/abs/2402.00490) - Published in: Phys.Rev.D 109 (2024) 9, 095016
+* [Constraints on non-unitary neutrino mixing in light of atmospheric and reactor neutrino data](https://arxiv.org/abs/2407.20388) - Published in: JHEP 05 (2025) 130
+* [A neutrino data analysis of extra-dimensional theories with massive bulk fields](https://arxiv.org/abs/2508.04274) - Published in: Phys.Rev.D 112 (2025) 5, 055009
+* [Atmospheric Neutrino Oscillations: the Full Picture](https://arxiv.org/abs/2606.09714) - under review 
+* [Searching for the N-naturalness tower of neutrinos](https://arxiv.org/abs/2607.14243) - under review
 
