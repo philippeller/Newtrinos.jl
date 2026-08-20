@@ -126,14 +126,12 @@
 <clipPath id="clip_42">
 <path transform="matrix(.24,0,0,.24,1014.24,721.44)" d="M0 0H201V201H0Z"/>
 </clipPath>
+<clipPath id="clip_sphere_left">
+<path d="M-1000-1000 L448.1-1000 448.1 556.8 674.8 1154.4 900 1500 -1000 1500Z"/>
+</clipPath>
 </defs>
 <g>
-<g clip-path="url(#clip_1)">
-<path transform="matrix(.75,0,0,.75,0,0)" d="M0 0H2000V2000H0Z" fill="#ffffff"/>
-</g>
-<g clip-path="url(#clip_2)">
-<path transform="matrix(.75,0,0,.75,0,0)" d="M0 0H2000V2000H0Z" fill="#2e2e2e"/>
-</g>
+<g clip-path="url(#clip_sphere_left)">
 <g clip-path="url(#clip_3)">
 <g>
 <g clip-path="url(#clip_4)">
@@ -180,16 +178,6 @@
 <path transform="matrix(0,-.7160756,.7160756,0,175.28398,857.21237)" stroke-width="104.737529" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" stroke="#1d71b8" d="M163.40625 .0041280768C73.15947 .0041280768 0 259.12098 0 578.7579 0 898.39468 73.15947 1157.5116 163.40625 1157.5116 253.65302 1157.5116 326.8125 898.39468 326.8125 578.7579 326.8125 259.12098 253.65302 .0041280768 163.40625 .0041280768Z"/>
 </g>
 </g>
-</g>
-</g>
-</g>
-</g>
-<g clip-path="url(#clip_23)">
-<g clip-path="url(#clip_24)">
-<g clip-path="url(#clip_25)">
-<g>
-<g clip-path="url(#clip_26)">
-<path transform="matrix(2.3313754,-.82043299,.82043299,2.3313754,370.7691,156.64014)" d="M0 0H256V475H0Z" fill="#2e2e2e"/>
 </g>
 </g>
 </g>
