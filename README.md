@@ -1,8 +1,9 @@
-[![CI](https://github.com/davschu/Newtrinos.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/davschu/Newtrinos.jl/actions/workflows/CI.yml)
-[![codecov](https://codecov.io/github/davschu/Newtrinos.jl/graph/badge.svg?token=OTXXQIR8GW)](https://codecov.io/github/davschu/Newtrinos.jl)
+<!--- badges of CI, coverage, license, docs(missing)-->
+[![CI](https://github.com/philippeller/Newtrinos.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/philippeller/Newtrinos.jl/actions/workflows/CI.yml)
+[![codecov](https://codecov.io/github/philippeller/Newtrinos.jl/graph/badge.svg)](https://codecov.io/github/philippeller/Newtrinos.jl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://davschu.github.io/Newtrinos.jl/stable/)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://davschu.github.io/Newtrinos.jl/dev/)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://philippeller.github.io/Newtrinos.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://philippeller.github.io/Newtrinos.jl/dev/)
 
 # Newtrinos.jl
 
