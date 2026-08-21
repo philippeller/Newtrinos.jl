@@ -128,9 +128,11 @@ starting points), fits a [`local_MGVI_approx`](@ref) at each mode, and combines
 them into a `MixtureModel`. The mixture model weights are calculated as 
 
 ```math
-\\log \\tilde{w}_i &= \\log p (\\mu_i) - \\log q (\\mu_i) 
-\\tilde{w}_i &= \\exp\\bigl(\\log \\tilde{w}_i - \\max(\\log \\tilde{w})\\bigr) 
-w_i &= \\frac{\\tilde{w}_i}{\\sum_j \\tilde{w}_j} 
+\\begin{aligned}
+\\log \\tilde{w}_i &= \\log p (\\mu_i) - \\log q (\\mu_i) \\\\
+\\tilde{w}_i &= \\exp\\bigl(\\log \\tilde{w}_i - \\max(\\log \\tilde{w})\\bigr) \\\\
+w_i &= \\frac{\\tilde{w}_i}{\\sum_j \\tilde{w}_j}
+\\end{aligned}
 ```
 
 where ``\\mu_i`` is the mode of the ``i``-th component. Importance samples are

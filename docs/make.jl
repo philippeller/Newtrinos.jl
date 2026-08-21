@@ -1,7 +1,7 @@
 using Documenter
 using Newtrinos
 
-gh_repo = get(ENV, "GITHUB_REPOSITORY", "philippeller/Newtrinos.jl")
+gh_repo = get(ENV, "GITHUB_REPOSITORY", "Newtrinos-org/Newtrinos.jl")
 repo_owner = split(gh_repo, "/")[1]
 
 makedocs(
