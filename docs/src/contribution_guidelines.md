@@ -122,7 +122,7 @@ For small fixes (typos, docstrings, one-line bug fixes) you can skip this step a
 ### 2. Fork & Clone
 
 ```bash
-git clone https://github.com/philippeller/Newtrinos.jl.git
+git clone https://github.com/Newtrinos-org/Newtrinos.jl.git
 cd Newtrinos.jl
 ```
 

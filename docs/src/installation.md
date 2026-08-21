@@ -15,7 +15,7 @@ Open a Julia session by running `julia` in your terminal (or launching the Julia
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/philippeller/Newtrinos.jl.git")
+Pkg.add(url="https://github.com/Newtrinos-org/Newtrinos.jl.git")
 ```
 
 Julia will download the package and all its dependencies automatically. This may take a few minutes the first time.
@@ -49,7 +49,7 @@ If you want to modify the source code or contribute to Newtrinos.jl, clone the r
 **Step 1 — Clone the repository:**
 
 ```bash
-git clone https://github.com/philippeller/Newtrinos.jl.git
+git clone https://github.com/Newtrinos-org/Newtrinos.jl.git
 cd Newtrinos.jl
 ```
 

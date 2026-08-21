@@ -1,9 +1,9 @@
 <!--- badges of CI, coverage, license, docs(missing)-->
-[![CI](https://github.com/philippeller/Newtrinos.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/philippeller/Newtrinos.jl/actions/workflows/CI.yml)
-[![codecov](https://codecov.io/github/philippeller/Newtrinos.jl/graph/badge.svg)](https://codecov.io/github/philippeller/Newtrinos.jl)
+[![CI](https://github.com/Newtrinos-org/Newtrinos.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Newtrinos-org/Newtrinos.jl/actions/workflows/CI.yml)
+[![codecov](https://codecov.io/gh/Newtrinos-org/Newtrinos.jl/graph/badge.svg?token=EYXQIQEDUJ)](https://codecov.io/gh/Newtrinos-org/Newtrinos.jl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://philippeller.github.io/Newtrinos.jl/stable/)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://philippeller.github.io/Newtrinos.jl/dev/)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://Newtrinos-org.github.io/Newtrinos.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://Newtrinos-org.github.io/Newtrinos.jl/dev/)
 
 # Newtrinos.jl
 
@@ -55,7 +55,7 @@ Open a Julia session by running `julia` in your terminal (or launching the Julia
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/philippeller/Newtrinos.jl.git")
+Pkg.add(url="https://github.com/Newtrinos-org/Newtrinos.jl.git")
 ```
 
 Julia will download the package and all its dependencies automatically.
@@ -66,7 +66,7 @@ using Newtrinos
 ```
 
 ## Quick example
-This section shows a brief example as entry point. For more detailed tutorials or more complex and specific examples, have a look at the [documentation](https://philippeller.github.io/Newtrinos.jl/dev/).
+This section shows a brief example as entry point. For more detailed tutorials or more complex and specific examples, have a look at the [documentation](https://Newtrinos-org.github.io/Newtrinos.jl/dev/).
 For this example, we want to set up a joint likelihood for the IceCube deepcore and DayaBay experiment, find the maximum likelihood estimator (MLE) for the default 3-flavour neutrino oscillation model, and do a conditional likelihood scan for $\theta_{23}$ and $\Delta m^2_{13}$.
 
 At first, we have to load the package:
@@ -74,7 +74,7 @@ At first, we have to load the package:
 ```julia
 using Newtrinos
 ```
-Now, we usually specify the physics model as described [here](https://philippeller.github.io/Newtrinos.jl/dev/tutorials/physics_model/). But since we're using the default physics model, we can skip this and configure the experiments directly via the `configure` method of each experiment. 
+Now, we usually specify the physics model as described [here](https://Newtrinos-org.github.io/Newtrinos.jl/dev/tutorials/physics_model/). But since we're using the default physics model, we can skip this and configure the experiments directly via the `configure` method of each experiment. 
 
 ```julia
 experiments = (
@@ -110,7 +110,7 @@ llh, log_posterior, mle_result = Newtrinos.find_mle(likelihood, priors_d, params
 ```
     (-707.2266316049163, -691.3791855711287, (atm_flux_delta_spectral_index = -0.011500623620874055, atm_flux_nuenuebar_sigma = 0.42514068413367867, atm_flux_nuenumu_sigma = -0.29854694769791634, atm_flux_numunumubar_sigma = 0.11752534209282282, atm_flux_updown_sigma = -0.011640814282917968, atm_flux_uphorizonzal_sigma = 1.3893974734528725, deepcore_atm_muon_scale = 0.9521734663815058, deepcore_ice_absorption = 1.017162388562784, deepcore_ice_scattering = 0.9743905033077925, deepcore_lifetime = 2.2950629516698573, deepcore_opt_eff_headon = -1.646207102035849, deepcore_opt_eff_lateral = -0.16223412929881892, deepcore_opt_eff_overall = 1.0285859873759597, nc_norm = 1.273987665177003, nutau_cc_norm = 0.9129894342710065, Δm²₂₁ = 8.996846429225628e-5, Δm²₃₁ = 0.0025099423411991256, δCP = 0.00036950742426112925, θ₁₂ = 0.4205343352839651, θ₁₃ = 0.14885419620462434, θ₂₃ = 0.8177926161580809))
 
-Great! Now we have the combined MLE for the combined experiments. The result contains the log-likelihood, log-posterior, and values of all parameters at the MLE. This might take a few minutes if you run it by yourself, because we are optimizing the likelihood over 21 free parameters. In the mean time you could take a look at the [documentation](https://philippeller.github.io/Newtrinos.jl/dev/) and read how to use multithreading or distributed workers for handling larger analyses. 
+Great! Now we have the combined MLE for the combined experiments. The result contains the log-likelihood, log-posterior, and values of all parameters at the MLE. This might take a few minutes if you run it by yourself, because we are optimizing the likelihood over 21 free parameters. In the mean time you could take a look at the [documentation](https://Newtrinos-org.github.io/Newtrinos.jl/dev/) and read how to use multithreading or distributed workers for handling larger analyses. 
 
 We can also run a likelihood analysis to construct confidence contours in the (θ₂₃, Δm²₃₁) parameter space. Here we use a conditional likelihood scan that scans the likelihood values at the (θ₂₃ x Δm²₃₁) grid points. More realistically, you may want to run `Newtrinos.profile` instead for a full profile likelihood.
 
@@ -131,10 +131,10 @@ fig
 
 ## Further Reading / Examples
 
-You can find tutorials and more examples in the [documentation](https://philippeller.github.io/Newtrinos.jl/dev/). You can also look inside the subdirectories of the various experimental datasets under `src/experiments/x/y`. Each of these subdirectories contains a julia script `test.jl` that is aimed at reproducing official results.
+You can find tutorials and more examples in the [documentation](https://Newtrinos-org.github.io/Newtrinos.jl/dev/). You can also look inside the subdirectories of the various experimental datasets under `src/experiments/x/y`. Each of these subdirectories contains a julia script `test.jl` that is aimed at reproducing official results.
 
 ## Contributing to Newtrinos.jl
-All contributions, bug reports, bug fixes, documentation improvements, enhancements, and ideas are welcome. If you want to contribute, please take a look at the [contribution guidelines](https://philippeller.github.io/Newtrinos.jl/dev/contribution_guidelines/).
+All contributions, bug reports, bug fixes, documentation improvements, enhancements, and ideas are welcome. If you want to contribute, please take a look at the [contribution guidelines](https://Newtrinos-org.github.io/Newtrinos.jl/dev/contribution_guidelines/).
 
 ## References
 Software paper:
