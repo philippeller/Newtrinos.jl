@@ -31,7 +31,7 @@ jobs:
         arch:
           - x64
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
@@ -46,7 +46,7 @@ jobs:
       - name: Warn if CODECOV_TOKEN is not set
         if: matrix.version == '1.12' && matrix.os == 'ubuntu-latest' && matrix.arch == 'x64' && env.CODECOV_TOKEN == ''
         run: echo "::warning::CODECOV_TOKEN secret is not set — skipping codecov upload. Add it in repo Settings → Secrets to enable coverage tracking."
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v7
         if: matrix.version == '1.12' && matrix.os == 'ubuntu-latest' && matrix.arch == 'x64' && env.CODECOV_TOKEN != ''
         with:
           fail_ci_if_error: false
