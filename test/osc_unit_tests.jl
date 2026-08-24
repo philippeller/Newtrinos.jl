@@ -806,6 +806,7 @@ using StaticArrays
         # test for NND model
         @testset "NND" begin
             N = NND_Params.N
+            dim= 3*N 
             r=NND_Params.r
             cfg = Newtrinos.osc.NND()
             matrices_fn = Newtrinos.osc.get_matrices(cfg)
@@ -838,22 +839,23 @@ using StaticArrays
             @test h[3] ≈ NND_Params.Δm²₃₁ atol = 1e-8
 
             for i in 2:N-1
-                @test eigenvalues[3*i-2] ≈ (2i+r)*m1_sq atol = 1e-8
-                @test eigenvalues[3*i-1] ≈ (2i+r)*m2_sq atol = 1e-8
-                @test eigenvalues[3*i] ≈ (2i+r)*m3_sq atol = 1e-8
+                @test eigenvalues[3*i-2] ≈ (2*i+r)*m1_sq atol = 1e-8
+                @test eigenvalues[3*i-1] ≈ (2*i+r)*m2_sq atol = 1e-8
+                @test eigenvalues[3*i] ≈ (2*i+r)*m3_sq atol = 1e-8
             end
 
-            @test eigenvalues[N-2] ≈ N^2*(2i+r)*m1_sq atol = 1e-8
-            @test eigenvalues[N-1] ≈ N^2*(2i+r)*m2_sq atol = 1e-8
-            @test eigenvalues[N] ≈ N^2*(2i+r)*m3_sq atol = 1e-8
+            @test eigenvalues[3*N-2] ≈ N^2*(2*N+r)*m1_sq atol = 1e-8
+            @test eigenvalues[3*N-1] ≈ N^2*(2*N+r)*m2_sq atol = 1e-8
+            @test eigenvalues[3*N] ≈ N^2*(2*N+r)*m3_sq atol = 1e-8
 
            
         end
 
         
-        # test for NND model
+        # test for NNM model
         @testset "NNM" begin
             N = NNM_Params.N
+            dim= 3*N 
             r=NNM_Params.r
             cfg = Newtrinos.osc.NNM()
             matrices_fn = Newtrinos.osc.get_matrices(cfg)
@@ -886,14 +888,14 @@ using StaticArrays
             @test h[3] ≈ NNM_Params.Δm²₃₁ atol = 1e-8
 
             for i in 2:N-1
-                @test eigenvalues[3*i-2]^2 ≈ (2i+r)*m1_sq atol = 1e-8
-                @test eigenvalues[3*i-1]^2 ≈ (2i+r)*m2_sq atol = 1e-8
-                @test eigenvalues[3*i]^2 ≈ (2i+r)*m3_sq atol = 1e-8
+                @test eigenvalues[3*i-2]^2 ≈ (2*i+r)*m1_sq atol = 1e-8
+                @test eigenvalues[3*i-1]^2 ≈ (2*i+r)*m2_sq atol = 1e-8
+                @test eigenvalues[3*i]^2 ≈ (2*i+r)*m3_sq atol = 1e-8
             end
 
-            @test eigenvalues[N-2]^2 ≈ N^4*(2i+r)*m1_sq atol = 1e-8
-            @test eigenvalues[N-1]^2 ≈ N^4*(2i+r)*m2_sq atol = 1e-8
-            @test eigenvalues[N]^2 ≈ N^4*(2i+r)*m3_sq atol = 1e-8
+            @test eigenvalues[3*N-2]^2 ≈ N^4*(2*N+r)*m1_sq atol = 1e-8
+            @test eigenvalues[3*N-1]^2 ≈ N^4*(2*N+r)*m2_sq atol = 1e-8
+            @test eigenvalues[3*N]^2 ≈ N^4*(2*N+r)*m3_sq atol = 1e-8
 
            
         end
