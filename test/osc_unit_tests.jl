@@ -805,6 +805,7 @@ using StaticArrays
 
         # test for NND model
         @testset "NND" begin
+            NND_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, N = 50, r=1e-8,))
             N = NND_Params.N
             dim= 3*N 
             r=NND_Params.r
@@ -854,6 +855,7 @@ using StaticArrays
         
         # test for NNM model
         @testset "NNM" begin
+            NNM_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, N = 50, r=1e-8,))
             N = NNM_Params.N
             dim= 3*N 
             r=NNM_Params.r
