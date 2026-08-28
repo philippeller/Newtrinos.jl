@@ -55,4 +55,6 @@ include("experiments/coherent/coherent_2020/coherent_lAr.jl")
 
 include("experiments/juno/juno.jl")
 include("experiments/juno/tao.jl")
+include("experiments/gerda/gerda.jl")
+include("experiments/katrin/katrin.jl")
 end

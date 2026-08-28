@@ -12,7 +12,9 @@ using StaticArrays
             Newtrinos.osc.ThreeFlavour(),
             Newtrinos.osc.ThreeFlavourXYCP(),
             Newtrinos.osc.Sterile(),
-            Newtrinos.osc.ADD()]#=,
+            Newtrinos.osc.ADD(),
+            Newtrinos.osc.NND(),
+            Newtrinos.osc.NNM(),] #=,
             Newtrinos.osc.Darkdim_Lambda(),
             Newtrinos.osc.Darkdim_Masses(),
             Newtrinos.osc.Darkdim_cas()]=#
@@ -37,6 +39,8 @@ using StaticArrays
         ThreeFlavourXYCP_Params = merge(angles, NO_masses, (δCPshell = [1.0, 0.0],))
         Sterile_Params = merge(ThreeFlavour_Params_NO, (Δm²₄₁ = 1.0, θ₁₄ = 0.1, θ₂₄ = 0.1, θ₃₄ = 0.1,))
         ADD_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, ADD_radius = 1e-2,))
+        NND_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, N = 50, r=1e-8,))
+        NNM_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, N = 50, r=1e-8,))
         Darkdim_Lambda_Params = merge(angles, δCP, (Darkdim_radius = 0.1, ca1 = 1e-5, ca2 = 1e-5, ca3 = 1e-5, λ₁ = 1.0, λ₂ = 1.0, λ₃ = 1.0,))
         Darkdim_Masses_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, Darkdim_radius = 0.1, λ₁ = 1.0, λ₂ = 1.0, λ₃ = 1.0,))
         Darkdim_cas_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, Darkdim_radius = 0.1, ca1 = 1e-5, ca2 = 1e-5, ca3 = 1e-5,))
@@ -58,6 +62,14 @@ using StaticArrays
         for key in keys(ADD_Params)
             @test getfield(Newtrinos.osc.get_params(Newtrinos.osc.ADD()), key) ≈ getfield(ADD_Params, key) atol = 1e-4
         end
+
+         for key in keys(NND_Params)
+            @test getfield(Newtrinos.osc.get_params(Newtrinos.osc.NND()), key) ≈ getfield(NND_Params, key) atol = 1e-4
+        end
+
+         for key in keys(NNM_Params)
+            @test getfield(Newtrinos.osc.get_params(Newtrinos.osc.NNM()), key) ≈ getfield(NNM_Params, key) atol = 1e-4
+        end
         # darkdim not yet exported from osc file
         #= for key in keys(Darkdim_Lambda_Params)
             @test getfield(Newtrinos.osc.get_params(Newtrinos.osc.Darkdim_Lambda()), key) ≈ getfield(Darkdim_Lambda_Params, key) atol = 1e-4
@@ -76,6 +88,8 @@ using StaticArrays
         priors_ThreeFlavourXYCP = Newtrinos.osc.get_priors(Newtrinos.osc.ThreeFlavourXYCP())
         priors_Sterile = Newtrinos.osc.get_priors(Newtrinos.osc.Sterile())
         priors_ADD = Newtrinos.osc.get_priors(Newtrinos.osc.ADD())
+        priors_NND = Newtrinos.osc.get_priors(Newtrinos.osc.NND())
+        priors_NNM = Newtrinos.osc.get_priors(Newtrinos.osc.NNM()) 
         # priors_Darkdim_Lambda = Newtrinos.osc.get_priors(Newtrinos.osc.Darkdim_Lambda())
         # priors_Darkdim_Masses = Newtrinos.osc.get_priors(Newtrinos.osc.Darkdim_Masses())
         # priors_Darkdim_cas = Newtrinos.osc.get_priors(Newtrinos.osc.Darkdim_cas())
@@ -95,6 +109,14 @@ using StaticArrays
         # ADD
         @test getfield(priors_ADD, :m₀) isa LogUniform
         @test getfield(priors_ADD, :ADD_radius) isa LogUniform
+        # NND
+        @test getfield(priors_NND, :m₀) isa LogUniform
+        @test getfield(priors_NND, :N) isa DiscreteUniform
+        @test getfield(priors_NND, :r) isa LogUniform
+        # NNM
+        @test getfield(priors_NNM, :m₀) isa LogUniform
+        @test getfield(priors_NNM, :N) isa DiscreteUniform
+        @test getfield(priors_NNM, :r) isa LogUniform
         # Darkdim_Lambda
         #= @test getfield(priors_Darkdim_Lambda, :Darkdim_radius) isa LogUniform
         @test !haskey(priors_Darkdim_Lambda, :Δm²₂₁)
@@ -779,6 +801,110 @@ using StaticArrays
             @test length(h_3) == dim_3
         end
 
+
+
+        # test for NND model
+        @testset "NND" begin
+            NND_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, N = 50, r=1e-8,))
+            N = NND_Params.N
+            dim= 3*N 
+            r=NND_Params.r
+            cfg = Newtrinos.osc.NND()
+            matrices_fn = Newtrinos.osc.get_matrices(cfg)
+            U, h, eigenvalues, V_e, V_m, V_t= matrices_fn(NND_Params)
+
+            # Shape and size
+            @test size(U) == (dim, dim)
+            @test length(h) == dim
+
+            # Eigenvalues sorted and non-negative (from Hermitian M†M)
+            @test issorted(h)
+            @test all(h .>= -1e-10)
+
+            # Unitarity
+            @test U' * U ≈ I(dim) atol = 1e-8
+            @test U * U' ≈ I(dim) atol = 1e-8
+
+            # Compare eigenvalues with expected values from NND_Params in the SM limit 
+
+            m1_sq = NND_Params.m₀^2
+            m2_sq = NND_Params.Δm²₂₁ + NND_Params.m₀^2
+            m3_sq = NND_Params.Δm²₃₁ + NND_Params.m₀^2
+
+            @test eigenvalues[1] ≈ m1_sq atol = 1e-8
+            @test eigenvalues[2] ≈ m2_sq atol = 1e-8
+            @test eigenvalues[3] ≈ m3_sq atol = 1e-8
+
+            @test h[1] ≈ 0.0 atol = 1e-8
+            @test h[2] ≈ NND_Params.Δm²₂₁ atol = 1e-8
+            @test h[3] ≈ NND_Params.Δm²₃₁ atol = 1e-8
+
+            for i in 2:N-1
+                @test eigenvalues[3*i-2] ≈ (2*i+r)*m1_sq atol = 1e-8
+                @test eigenvalues[3*i-1] ≈ (2*i+r)*m2_sq atol = 1e-8
+                @test eigenvalues[3*i] ≈ (2*i+r)*m3_sq atol = 1e-8
+            end
+
+            @test eigenvalues[3*N-2] ≈ N^2*(2*N+r)*m1_sq atol = 1e-8
+            @test eigenvalues[3*N-1] ≈ N^2*(2*N+r)*m2_sq atol = 1e-8
+            @test eigenvalues[3*N] ≈ N^2*(2*N+r)*m3_sq atol = 1e-8
+
+           
+        end
+
+        
+        # test for NNM model
+        @testset "NNM" begin
+            NNM_Params = merge(ThreeFlavour_Params_NO, (m₀ = 0.01, N = 50, r=1e-8,))
+            N = NNM_Params.N
+            dim= 3*N 
+            r=NNM_Params.r
+            cfg = Newtrinos.osc.NNM()
+            matrices_fn = Newtrinos.osc.get_matrices(cfg)
+            U, h, eigenvalues, V_e, V_m, V_t= matrices_fn(NNM_Params)
+
+            # Shape and size
+            @test size(U) == (dim, dim)
+            @test length(h) == dim
+
+            # Eigenvalues sorted and non-negative (from Hermitian M†M)
+            @test issorted(h)
+            @test all(h .>= -1e-10)
+
+            # Unitarity
+            @test U' * U ≈ I(dim) atol = 1e-8
+            @test U * U' ≈ I(dim) atol = 1e-8
+
+            # Compare eigenvalues with expected values from NNM_Params in the SM limit 
+
+            m1_sq = NNM_Params.m₀^2
+            m2_sq = NNM_Params.Δm²₂₁ + NNM_Params.m₀^2
+            m3_sq = NNM_Params.Δm²₃₁ + NNM_Params.m₀^2
+
+            @test eigenvalues[1]^2 ≈ m1_sq atol = 1e-8
+            @test eigenvalues[2]^2 ≈ m2_sq atol = 1e-8
+            @test eigenvalues[3]^2 ≈ m3_sq atol = 1e-8
+
+            @test h[1] ≈ 0.0 atol = 1e-8
+            @test h[2] ≈ NNM_Params.Δm²₂₁ atol = 1e-8
+            @test h[3] ≈ NNM_Params.Δm²₃₁ atol = 1e-8
+
+            for i in 2:N-1
+                @test eigenvalues[3*i-2]^2 ≈ (2*i+r)*m1_sq atol = 1e-8
+                @test eigenvalues[3*i-1]^2 ≈ (2*i+r)*m2_sq atol = 1e-8
+                @test eigenvalues[3*i]^2 ≈ (2*i+r)*m3_sq atol = 1e-8
+            end
+
+            @test eigenvalues[3*N-2]^2 ≈ N^4*(2*N+r)*m1_sq atol = 1e-8
+            @test eigenvalues[3*N-1]^2 ≈ N^4*(2*N+r)*m2_sq atol = 1e-8
+            @test eigenvalues[3*N]^2 ≈ N^4*(2*N+r)*m3_sq atol = 1e-8
+
+           
+        end
+
+
     end
 
 end
+
+
