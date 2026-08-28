@@ -21,7 +21,12 @@ using Interpolations
       forward_model::Function 
 end
 
-function configure(physics)
+function default_physics()
+    osc = Newtrinos.osc.configure()
+    (; osc,)
+end
+
+function configure(physics=default_physics())
     physics = (;physics.osc)
     assets = get_assets(physics)
 
